@@ -65,12 +65,20 @@ control design issues such as:
   the simultaneous variation of bandwidth and delays in "low Earth orbit" satellite
   networks?
 
-We will need to build a series of
-simulation scenarios, probably using the simulation tools in the Picoquic test suite.
-We can measure performance using the QUIC PERF tools for QUIC, and their
-extensions to simulate real time traffic. We can tests these issues with existing
-algorithms like BBR or Cubic, and maybe with a version
-of Cubic incorporating the mechanisms of TCP-Vegas and L4S. The first step is
-to build a robust set of simulation scenarios to investigate our list of issues,
-and refine our series of documents. Once we have these documents and simulations,
-we can start developping "Christian's Congestion Control Code".
+We can test these scenarios using the simulation tools in the Picoquic test suite,
+through the `pico_sim` tool. The tool will execute a simulation scenario, and
+compute qlog traces for the connections in that scenario. The simulation
+scenario is specified in a text file. Some examples of simulation scenarios are provided
+in the `sim_specs` folder.
+
+The qlog traces produced by the simulation scenarios can be visualized with the
+Python script `qlogparse.py`, which produces a graphs showing how key parameters
+like congestion window or RTT vary for the simulated connections.
+
+Our first goal is to collect a robust set of simulation scenarios to investigate
+our list of issues, and refine our series of documents. This may require some
+updates to the simulation tool, for example to simulate various AQM policies,
+or to incorporate the simulations of Wi-Fi links. 
+
+Once we have these documents and simulations, we can start developping
+"Christian's Congestion Control Code".

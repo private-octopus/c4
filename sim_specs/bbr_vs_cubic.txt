@@ -1,0 +1,13 @@
+main_cc_algo: bbr
+main_start_time: 0
+main_scenario_text: =b1:*1:397:5000000;
+nb_connections: 2
+background_cc_algo: cubic
+background_start_time: 0
+background_scenario_text: =b1:*1:397:10000000;
+main_target_time: 10000000
+data_rate_in_gbps: 0.02
+latency: 40000
+queue_delay_max: 80000
+icid: ccc0bbcb
+qlog_dir: cclog

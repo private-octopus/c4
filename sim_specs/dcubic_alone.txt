@@ -1,0 +1,10 @@
+main_cc_algo: dcubic
+main_start_time: 0
+main_scenario_text: =b1:*1:397:10000000;
+nb_connections: 1
+main_target_time: 10000000
+data_rate_in_gbps: 0.02
+latency: 40000
+queue_delay_max: 80000
+icid: ccc0dc00
+qlog_dir: cclog

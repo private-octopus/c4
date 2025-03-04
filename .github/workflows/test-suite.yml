@@ -1,0 +1,40 @@
+---
+name: "TestSuite"
+
+on:
+  push
+
+jobs:
+  analyze:
+    name: TestSuite
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # We must fetch at least the immediate parents so that if this is
+          # a pull request then we can checkout the head.
+          fetch-depth: 2
+          submodules: 'recursive'
+
+      # Build picotls and picoquic.
+      - run: |
+          sudo apt-get install -y libssl-dev
+          ls -l ./ci
+          ./ci/build_picotls.sh
+          ./ci/build_picoquic.sh
+     
+      # Build pico_sim and run tests
+      - run: |
+          mkdir build
+          cd build
+          cmake ..
+          cmake --build .
+          make
+          ulimit -c unlimited -S
+          #TODO: iterate through all the scenarios
+          ./pico_sim -S ../../picoquic ../sim_specs/dcubic_vs_cubic.txt && QDRESULT=$? 
+          if [ ${QDRESULT} == 0 ]; then exit 0; fi;
+          exit 1
+

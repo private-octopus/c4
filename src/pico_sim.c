@@ -16,43 +16,75 @@ int parse_spec_file(picoquic_ns_spec_t* spec, FILE* F);
 void release_spec_data(picoquic_ns_spec_t* spec);
 
 #ifdef _WINDOWS
+#include "../pico_sim_vs/pico_sim_vs/getopt.h"
 #ifdef _WINDOWS64
 #define PICOQUIC_DIR "../../../../picoquic"
 #else
 #define PICOQUIC_DIR "../../../picoquic"
 #endif
 #else
-/* Not defining PICOQUIC_DIR for now */
+#define PICOQUIC_DIR "../picoquic"
 #endif
+
+void usage()
+{
+    fprintf(stderr, "Pico_sim, picoquic network simularor\n\n");
+    fprintf(stderr, "Usage: pico_sim [options] simulation_specification\n\n");
+    fprintf(stderr, "Examples of simulation specifications are found in the\n");
+    fprintf(stderr, "folder \"sim_specs\"\n");
+    fprintf(stderr, "Pico_sim options:\n");
+    fprintf(stderr, "  -S path  Path to the picoquic source directory, where the\n");
+    fprintf(stderr, "           code will find the key and certificates used for\n");
+    fprintf(stderr, "           setting test connections.\n");
+    fprintf(stderr, "  -h       Print this message.\n");
+}
 
 int main(int argc, char** argv)
 {
     int ret = 0;
     picoquic_ns_spec_t spec = { 0 };
     FILE* F = NULL;
+    char const * spec_file_name = NULL;
+    char const* source_dir = PICOQUIC_DIR;
+    char const* option_string = "S:h";
+    int opt;
 
-#ifdef PICOQUIC_DIR
-    picoquic_set_solution_dir(PICOQUIC_DIR);
-#endif
+    /* Get the parameters */
+    while ((opt = getopt(argc, argv, option_string)) != -1) {
+        switch (opt) {
+        case 'S':
+            source_dir = optarg;
+            break;
+        case 'h':
+            usage();
+            exit(0);
+        default:
+            usage();
+            exit(-1);
+        }
+    }
+    picoquic_set_solution_dir(source_dir);
 
-    if (argc < 2) {
-        fprintf(stderr, "Usage: pico_sim <spec-file>\n");
+    if (optind >= argc || optind + 1 < argc) {
+        fprintf(stderr, "Unexpected arguments.\n");
+        usage();
         ret = -1;
     }
-    else if ((F = picoquic_file_open(argv[1], "r")) == NULL) {
-        fprintf(stderr, "Cannot open file <%s>\n", argv[1]);
+    else if ((F = picoquic_file_open((spec_file_name = argv[optind]), "r")) == NULL) {
+        fprintf(stderr, "Cannot open file <%s>\n", spec_file_name);
         ret = -1;
     }
     else
     {
         if (parse_spec_file(&spec, F) != 0) {
-            fprintf(stderr, "Error when processing file <%s>\n", argv[1]);
+            fprintf(stderr, "Error when processing file <%s>\n", spec_file_name);
         }
         else {
             ret = picoquic_ns(&spec);
-            printf("picoquic_ns (%s) returns %d\n", argv[1], ret);
+            printf("picoquic_ns (%s) returns %d\n", spec_file_name, ret);
         }
         F = picoquic_file_close(F);
+        release_spec_data(&spec);
     }
     return ret;
 }
@@ -259,7 +291,7 @@ int parse_int(int* x, char const* val)
     int ret = parse_u64(&v, val);
 
     if (ret == 0) {
-        if (v > INT_MAX) {
+        if (v > 0x7ffffff) {
             ret = -1;
         }
         else {
@@ -439,7 +471,7 @@ int parse_file_name(char const** x, char const* val)
 void release_text(char const** text)
 {
     if (*text != NULL) {
-        free(*text);
+        free((void*)*text);
         *text = NULL;
     }
 }

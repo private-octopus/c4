@@ -660,10 +660,6 @@ int picoquic_ns_register_test_algorithm(picoquic_congestion_algorithm_t const* t
 {
     int ret = 0;
 
-    /* Acquire the list of already registered algorithms */
-    picoquic_congestion_algorithm_t const** alg_list = picoquic_congestion_control_algorithms;
-    size_t alg_nb = picoquic_nb_congestion_control_algorithms;
-
     if (picoquic_nb_congestion_control_algorithms > TEST_ALG_MAX_NB) {
         ret = -1;
     }
@@ -673,12 +669,12 @@ int picoquic_ns_register_test_algorithm(picoquic_congestion_algorithm_t const* t
 
         new_alg_list[0] = test_alg;
         for (size_t i = 0; i < picoquic_nb_congestion_control_algorithms; i++) {
-            if (strcmp(alg_list[i]->congestion_algorithm_id, test_alg->congestion_algorithm_id) != 0) {
+            if (strcmp(picoquic_congestion_control_algorithms[i]->congestion_algorithm_id, test_alg->congestion_algorithm_id) != 0) {
                 if (alg_copied >= TEST_ALG_MAX_NB) {
                     ret = -1;
                     break;
                 }
-                new_alg_list[alg_copied] = alg_list[i];
+                new_alg_list[alg_copied] = picoquic_congestion_control_algorithms[i];
                 alg_copied++;
             }
         }

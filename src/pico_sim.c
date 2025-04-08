@@ -62,7 +62,7 @@ int main(int argc, char** argv)
         return -1;
     }
 #endif
-
+  
     /* Get the parameters */
     while ((opt = getopt(argc, argv, option_string)) != -1) {
         switch (opt) {
@@ -650,7 +650,7 @@ void release_text(char const** text)
     }
 }
 
-/* Add a test algorihtm to the list of registered algorithms.
+/* Add a test algorithm to the list of registered algorithms.
  */
 #define TEST_ALG_MAX_NB 16
 

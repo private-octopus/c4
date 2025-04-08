@@ -11,48 +11,94 @@
 #include "picoquic.h"
 #include "picoquic_ns.h"
 #include "picoquic_utils.h"
+/*
+Declare here the algorithm[s] that we want to test
+*/
+#include "c4.h"
 
+int picoquic_ns_register_test_algorithm(picoquic_congestion_algorithm_t const* test_alg);
 int parse_spec_file(picoquic_ns_spec_t* spec, FILE* F);
 void release_spec_data(picoquic_ns_spec_t* spec);
 
 #ifdef _WINDOWS
+#include "../pico_sim_vs/pico_sim_vs/getopt.h"
 #ifdef _WINDOWS64
 #define PICOQUIC_DIR "../../../../picoquic"
 #else
 #define PICOQUIC_DIR "../../../picoquic"
 #endif
 #else
-/* Not defining PICOQUIC_DIR for now */
+#define PICOQUIC_DIR "../picoquic"
 #endif
+
+void usage()
+{
+    fprintf(stderr, "Pico_sim, picoquic network simulator\n\n");
+    fprintf(stderr, "Usage: pico_sim [options] simulation_specification\n\n");
+    fprintf(stderr, "Examples of simulation specifications are found in the\n");
+    fprintf(stderr, "folder \"sim_specs\"\n");
+    fprintf(stderr, "Pico_sim options:\n");
+    fprintf(stderr, "  -S path  Path to the picoquic source directory, where the\n");
+    fprintf(stderr, "           code will find the key and certificates used for\n");
+    fprintf(stderr, "           setting test connections.\n");
+    fprintf(stderr, "  -h       Print this message.\n");
+}
 
 int main(int argc, char** argv)
 {
     int ret = 0;
     picoquic_ns_spec_t spec = { 0 };
     FILE* F = NULL;
+    char const * spec_file_name = NULL;
+    char const* source_dir = PICOQUIC_DIR;
+    char const* option_string = "S:h";
+    int opt;
 
-#ifdef PICOQUIC_DIR
-    picoquic_set_solution_dir(PICOQUIC_DIR);
+    /* Load the available set of congestion control algorithms */
+    picoquic_register_all_congestion_control_algorithms();
+#ifdef C4_H
+    if (picoquic_ns_register_test_algorithm(c4_algorithm) != 0) {
+        fprintf(stderr, "Could not register the C4 algorithm.\n");
+        return -1;
+    }
 #endif
 
-    if (argc < 2) {
-        fprintf(stderr, "Usage: pico_sim <spec-file>\n");
+    /* Get the parameters */
+    while ((opt = getopt(argc, argv, option_string)) != -1) {
+        switch (opt) {
+        case 'S':
+            source_dir = optarg;
+            break;
+        case 'h':
+            usage();
+            exit(0);
+        default:
+            usage();
+            exit(-1);
+        }
+    }
+    picoquic_set_solution_dir(source_dir);
+
+    if (optind >= argc || optind + 1 < argc) {
+        fprintf(stderr, "Unexpected arguments.\n");
+        usage();
         ret = -1;
     }
-    else if ((F = picoquic_file_open(argv[1], "r")) == NULL) {
-        fprintf(stderr, "Cannot open file <%s>\n", argv[1]);
+    else if ((F = picoquic_file_open((spec_file_name = argv[optind]), "r")) == NULL) {
+        fprintf(stderr, "Cannot open file <%s>\n", spec_file_name);
         ret = -1;
     }
     else
     {
         if (parse_spec_file(&spec, F) != 0) {
-            fprintf(stderr, "Error when processing file <%s>\n", argv[1]);
+            fprintf(stderr, "Error when processing file <%s>\n", spec_file_name);
         }
         else {
             ret = picoquic_ns(&spec);
-            printf("picoquic_ns (%s) returns %d\n", argv[1], ret);
+            printf("picoquic_ns (%s) returns %d\n", spec_file_name, ret);
         }
         F = picoquic_file_close(F);
+        release_spec_data(&spec);
     }
     return ret;
 }
@@ -63,7 +109,9 @@ typedef enum {
     e_main_scenario_text,
     e_background_scenario_text,
     e_main_cc_algo,
+    e_main_cc_options,
     e_background_cc_algo,
+    e_background_cc_options,
     e_nb_connections,
     e_main_target_time,
     e_data_rate_in_gbps,
@@ -73,6 +121,7 @@ typedef enum {
     e_l4s_max,
     e_icid,
     e_qlog_dir,
+    e_link_scenario,
     e_error
 } spec_param_enum;
 
@@ -89,7 +138,9 @@ spec_param_t params[] = {
     { e_main_scenario_text, "main_scenario_text", 18  },
     { e_background_scenario_text, "background_scenario_text", 24 },
     { e_main_cc_algo, "main_cc_algo", 12 },
+    { e_main_cc_options, "main_cc_options", 15 },
     { e_background_cc_algo, "background_cc_algo", 18 },
+    { e_background_cc_options, "background_cc_options", 21 },
     { e_nb_connections, "nb_connections", 14 },
     { e_data_rate_in_gbps, "data_rate_in_gbps", 17 },
     { e_latency, "latency" , 7},
@@ -97,7 +148,8 @@ spec_param_t params[] = {
     { e_queue_delay_max, "queue_delay_max", 15 },
     { e_l4s_max, "l4s_max", 7 },
     { e_icid, "icid", 4 },
-    { e_qlog_dir, "qlog_dir", 8 }
+    { e_qlog_dir, "qlog_dir", 8 },
+    { e_link_scenario, "link_scenario", 13 }
 };
 
 const size_t nb_params = sizeof(params) / sizeof(spec_param_t);
@@ -123,7 +175,7 @@ int parse_spec_file(picoquic_ns_spec_t * spec, FILE* F)
         }
 
         if (len > 0) {
-            for (int i = 0; i < nb_params; i++) {
+            for (size_t i = 0; i < nb_params; i++) {
                 if (len > params[i].p_len &&
                     strncmp(line, params[i].p_name, params[i].p_len) == 0)
                 {
@@ -149,10 +201,11 @@ int parse_spec_file(picoquic_ns_spec_t * spec, FILE* F)
 int parse_u64(uint64_t* x, char const* val);
 int parse_int(int* x, char const* val);
 int parse_double(double* x, char const* val);
-int parse_cc_algo(picoquic_congestion_algorithm_t** x, char const* val);
+int parse_cc_algo(picoquic_congestion_algorithm_t const ** x, char const* val);
 int parse_cid(picoquic_connection_id_t* x, char const* val);
 int parse_text(char const** x, char const* val);
 int parse_file_name(char const** x, char const* val);
+int parse_link_scenario(picoquic_ns_spec_t* link_scenario, char const* val);
 void release_text(char const** text);
 
 int parse_param(picoquic_ns_spec_t* spec, spec_param_enum p_e, char const* line)
@@ -190,8 +243,14 @@ int parse_param(picoquic_ns_spec_t* spec, spec_param_enum p_e, char const* line)
         case e_main_cc_algo:
             ret = parse_cc_algo(&spec->main_cc_algo, line);
             break;
+        case e_main_cc_options:
+            ret = parse_text(&spec->main_cc_options, line);
+            break;
         case e_background_cc_algo:
             ret = parse_cc_algo(&spec->background_cc_algo, line);
+            break;
+        case e_background_cc_options:
+            ret = parse_text(&spec->background_cc_options, line);
             break;
         case e_nb_connections:
             ret = parse_int(&spec->nb_connections, line);
@@ -217,6 +276,9 @@ int parse_param(picoquic_ns_spec_t* spec, spec_param_enum p_e, char const* line)
         case e_qlog_dir:
             ret = parse_file_name(&spec->qlog_dir, line);
             break;
+        case e_link_scenario:
+            ret = parse_link_scenario(spec, line);
+            break;
         default:
             fprintf(stderr, "Incorrect specification line: %s\n", line);
             break;
@@ -231,6 +293,10 @@ void release_spec_data(picoquic_ns_spec_t* spec)
     release_text(&spec->main_scenario_text);
     release_text(&spec->background_scenario_text);
     release_text(&spec->qlog_dir);
+    if (spec->link_scenario == link_scenario_none && spec->vary_link_spec != NULL) {
+        free(spec->vary_link_spec);
+        spec->vary_link_spec = NULL;
+    }
 }
 
 int parse_u64(uint64_t* x, char const* val)
@@ -259,7 +325,7 @@ int parse_int(int* x, char const* val)
     int ret = parse_u64(&v, val);
 
     if (ret == 0) {
-        if (v > INT_MAX) {
+        if (v > 0x7ffffff) {
             ret = -1;
         }
         else {
@@ -298,33 +364,14 @@ int parse_double(double* x, char const* val)
     return ret;
 }
 
-int parse_cc_algo(picoquic_congestion_algorithm_t** x, char const* val)
+int parse_cc_algo(picoquic_congestion_algorithm_t const ** x, char const* val)
 {
     int ret = 0;
-    if (strcmp(val, picoquic_newreno_algorithm->congestion_algorithm_id) == 0) {
-        *x = picoquic_newreno_algorithm;
-    }
-    else if (strcmp(val, picoquic_cubic_algorithm->congestion_algorithm_id) == 0) {
-        *x = picoquic_cubic_algorithm;
-    }
-    else if (strcmp(val, picoquic_dcubic_algorithm->congestion_algorithm_id) == 0) {
-        *x = picoquic_dcubic_algorithm;
-    }
-    else if (strcmp(val, picoquic_fastcc_algorithm->congestion_algorithm_id) == 0) {
-        *x = picoquic_fastcc_algorithm;
-    }
-    else if (strcmp(val, picoquic_bbr_algorithm->congestion_algorithm_id) == 0) {
-        *x = picoquic_bbr_algorithm;
-    }
-    else if (strcmp(val, picoquic_prague_algorithm->congestion_algorithm_id) == 0) {
-        *x = picoquic_prague_algorithm;
-    }
-    else if (strcmp(val, picoquic_bbr1_algorithm->congestion_algorithm_id) == 0) {
-        *x = picoquic_bbr1_algorithm;
-    }
-    else {
+
+    if ((*x = picoquic_get_congestion_algorithm(val)) == NULL) {
         ret = -1;
     }
+
     return ret;
 }
 
@@ -436,10 +483,216 @@ int parse_file_name(char const** x, char const* val)
 #endif
 }
 
+typedef struct st_link_scenario_spec_t {
+    picoquic_ns_link_scenario_enum v;
+    char const* n;
+    size_t l;
+}link_scenario_spec_t;
+
+static const link_scenario_spec_t link_scenarios[] = {
+    { link_scenario_none, "none", 4 },
+    { link_scenario_black_hole, "black_hole", 10  },
+    { link_scenario_drop_and_back, "drop_and_back", 13 },
+    { link_scenario_low_and_up, "low_and_up", 10 },
+    { link_scenario_wifi_fade, "wifi_fade", 5 },
+    { link_scenario_wifi_suspension, "wifi_suspension", 15 }
+};
+
+size_t nb_link_scenarios = sizeof(link_scenarios) / sizeof(link_scenario_spec_t);
+int parse_specified_link_scenario(picoquic_ns_spec_t* spec, char const* val);
+
+int parse_link_scenario(picoquic_ns_spec_t* spec, char const* val)
+{
+    int ret = -1;
+    spec->link_scenario = link_scenario_none;
+    for (size_t i = 0; i < nb_link_scenarios; i++) {
+        if (strcmp(val, link_scenarios[i].n) == 0) {
+            spec->link_scenario = link_scenarios[i].v;
+            ret = 0;
+            break;
+        }
+    }
+    if (ret < 0) {
+        /* Not a stock link scenario. Parse the details */
+        ret = parse_specified_link_scenario(spec, val);
+    }
+
+    return ret;
+}
+
+
+size_t count_char(char const* val, char target);
+char const* parse_link_spec_item(picoquic_ns_link_spec_t* line_spec, char const* val);
+
+int parse_specified_link_scenario(picoquic_ns_spec_t * spec, char const * val)
+{
+    int ret = -1;
+    size_t vary_link_max = count_char(val, ';') + 1;
+    picoquic_ns_link_spec_t* vary_link_spec = (picoquic_ns_link_spec_t*)malloc(sizeof(picoquic_ns_link_spec_t) * vary_link_max);
+
+    if (vary_link_spec != NULL) {
+        char const* next_val = val;
+        size_t vary_link_nb = 0;
+        memset(vary_link_spec, 0, sizeof(picoquic_ns_link_spec_t) * vary_link_max);
+
+        while (vary_link_nb < vary_link_max) {
+            next_val = parse_link_spec_item(&vary_link_spec[vary_link_nb], next_val);
+            if (next_val == NULL) {
+                /* Found an error in the text */
+                break;
+            }
+            else {
+                vary_link_nb++;
+                if (*next_val == 0) {
+                    /* parsed the last spec element */
+                    ret = 0;
+                    break;
+                }
+            }
+        }
+        if (ret < 0) {
+            free(vary_link_spec);
+        }
+        else {
+            spec->link_scenario = link_scenario_none;
+            spec->vary_link_nb = vary_link_nb;
+            spec->vary_link_spec = vary_link_spec;
+        }
+    }
+    return ret;
+}
+
+size_t count_char(char const* val, char target)
+{
+    char const * x = val;
+    size_t n = 0;
+
+    while (*x != 0) {
+        if (*x == target) {
+            n++;
+        }
+        x++;
+    }
+    return n;
+}
+
+char const* parse_link_spec_item(picoquic_ns_link_spec_t * line_spec, char const* val)
+{
+    int is_first = 1;
+    int ret = 0;
+    char const* next_val = val;
+
+    while (*next_val != 0 && *next_val != ';' && ret == 0) {
+        char intermediate[256];
+        size_t copied = 0;
+
+        while (*next_val != 0 && *next_val != ':' && *next_val != ';' && copied < 255) {
+            intermediate[copied] = *next_val;
+            copied++;
+            next_val++;
+        }
+        intermediate[copied] = 0;
+        if (*next_val == ':') {
+            next_val++;
+        }
+        else if (*next_val != 0 && *next_val != ';') {
+            /* malformed parameter ! */
+            ret = -1;
+            break;
+        }
+        if (is_first) {
+            /* parse the duration */
+            ret = parse_u64(&line_spec->duration, intermediate);
+            is_first = 0;
+        }
+        else
+        {
+            switch (intermediate[0]) {
+            case 'U':
+                ret = parse_double(&line_spec->data_rate_in_gbps_up, &intermediate[1]);
+                break;
+            case 'D':
+                ret = parse_double(&line_spec->data_rate_in_gbps_down, &intermediate[1]);
+                break;
+            case 'L':
+                ret = parse_u64(&line_spec->latency, &intermediate[1]);
+                break;
+            case 'J':
+                ret = parse_u64(&line_spec->jitter, &intermediate[1]);
+                break;
+            case 'Q':
+                ret = parse_u64(&line_spec->queue_delay_max, &intermediate[1]);
+                break;
+            case 'S':
+                ret = parse_u64(&line_spec->l4s_max, &intermediate[1]);
+                break;
+            default:
+                /* unknown parameter */
+                ret = -1;
+                break;
+            }
+        }
+    }
+    if (ret < 0) {
+        next_val = NULL;
+    }
+    else if (*next_val == ';') {
+        next_val++;
+    }
+    return next_val;
+}
+
 void release_text(char const** text)
 {
     if (*text != NULL) {
-        free(*text);
+        free((void*)*text);
         *text = NULL;
     }
+}
+
+/* Add a test algorihtm to the list of registered algorithms.
+ */
+#define TEST_ALG_MAX_NB 16
+
+picoquic_congestion_algorithm_t const* picoquic_ns_test_algo_list[TEST_ALG_MAX_NB];
+
+int picoquic_ns_register_test_algorithm(picoquic_congestion_algorithm_t const* test_alg)
+{
+    int ret = 0;
+
+    /* Acquire the list of already registered algorithms */
+    picoquic_congestion_algorithm_t const** alg_list = picoquic_congestion_control_algorithms;
+    size_t alg_nb = picoquic_nb_congestion_control_algorithms;
+
+    if (picoquic_nb_congestion_control_algorithms > TEST_ALG_MAX_NB) {
+        ret = -1;
+    }
+    else {
+        picoquic_congestion_algorithm_t const* new_alg_list[TEST_ALG_MAX_NB];
+        size_t alg_copied = 1;
+
+        new_alg_list[0] = test_alg;
+        for (size_t i = 0; i < picoquic_nb_congestion_control_algorithms; i++) {
+            if (strcmp(alg_list[i]->congestion_algorithm_id, test_alg->congestion_algorithm_id) != 0) {
+                if (alg_copied >= TEST_ALG_MAX_NB) {
+                    ret = -1;
+                    break;
+                }
+                new_alg_list[alg_copied] = alg_list[i];
+                alg_copied++;
+            }
+        }
+        if (ret == 0) {
+            /* The list was prepared properly. Now, commit it. */
+            for (size_t i = 0; i < alg_copied; i++) {
+                picoquic_ns_test_algo_list[i] = new_alg_list[i];
+            }
+            for (size_t i = alg_copied; i < alg_copied; i++) {
+                picoquic_ns_test_algo_list[i] = NULL;
+            }
+
+            picoquic_register_congestion_control_algorithms(picoquic_ns_test_algo_list, alg_copied);
+        }
+    }
+    return ret;
 }

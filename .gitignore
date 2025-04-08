@@ -4,4 +4,11 @@
 
 /pico_sim_vs/.vs/pico_sim_vs
 /tmp
-/pico_sim_vs
+
+/pico_sim_vs/.vs
+/pico_sim_vs/pico_sim_vs/x64
+/pico_sim_vs/x64
+/pico_sim_vs/pico_sim_vs/Debug
+/pico_sim_vs/pico_sim_vs/Release
+/pico_sim_vs/Debug
+/pico_sim_vs/Release

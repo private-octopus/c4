@@ -33,6 +33,7 @@ include_directories(include lib tests
 
 add_executable(pico_sim
     src/pico_sim.c
+    src/c4.c
 )
 
 target_link_libraries(pico_sim

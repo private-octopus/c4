@@ -53,6 +53,7 @@
 #define C4_ALPHA_RECOVER_1024 921 /* 90% */
 #define C4_ALPHA_CRUISE_1024 1003 /* 98% */
 #define C4_ALPHA_PUSH_1024 1280 /* 125 % */
+#define C4_NB_PUSH_BEFORE_RESET 3
 
 /* States of C4:
 * 
@@ -115,7 +116,7 @@ typedef struct st_c4_state_t {
     uint64_t era_sequence; /* sequence number of first packet in era */
     uint64_t cruise_bytes_ack; /* accumulate bytes count in cruise state */
     uint64_t cruise_bytes_target; /* expected bytes count until end of cruise */
-
+    int nb_push_no_congestion; /* Number of successive 25% pushes with no congestion */
 
     uint64_t rtt_min;
     uint64_t delay_threshold;
@@ -160,19 +161,22 @@ static void c4_era_reset(
     c4_state->era_time_stamp = current_time; /* time of last RTT */
 }
 
+static void c4_enter_initial(picoquic_cnx_t* cnx, picoquic_path_t* path_x, c4_state_t* c4_state, uint64_t current_time)
+{
+    c4_state->alg_state = c4_initial;
+    c4_state->nb_push_no_congestion = 0;
+    c4_state->delay_threshold = c4_delay_threshold(c4_state->rtt_min);
+    path_x->cwin = c4_state->nominal_cwin;
+    c4_era_reset(path_x->cnx, path_x, c4_state, current_time);
+}
 
 void c4_reset(c4_state_t* c4_state, picoquic_path_t* path_x, uint64_t current_time)
 {
     memset(c4_state, 0, sizeof(c4_state_t));
-    c4_state->alg_state = c4_initial;
     c4_state->rtt_min = path_x->smoothed_rtt;
     c4_state->rolling_rtt_min = c4_state->rtt_min;
-
-    c4_state->delay_threshold = c4_delay_threshold(c4_state->rtt_min);
-
-    path_x->cwin = PICOQUIC_CWIN_INITIAL;
     c4_state->nominal_cwin = PICOQUIC_CWIN_INITIAL;
-    c4_era_reset(path_x->cnx, path_x, c4_state, current_time);
+    c4_enter_initial(path_x->cnx, path_x, c4_state, current_time);
 }
 
 void c4_seed_cwin(c4_state_t* c4_state, picoquic_path_t* path_x, uint64_t bytes_in_flight)
@@ -197,13 +201,8 @@ void c4_init(picoquic_cnx_t * cnx, picoquic_path_t* path_x, char const* option_s
         c4_state = (c4_state_t*)malloc(sizeof(c4_state_t));
     }
     
-    if (c4_state != NULL) {
-        memset(c4_state, 0, sizeof(c4_state_t));
-        c4_state->alg_state = c4_initial;
-        c4_state->rtt_min = path_x->smoothed_rtt;
-        c4_state->rolling_rtt_min = c4_state->rtt_min;
-        c4_state->delay_threshold = c4_delay_threshold(c4_state->rtt_min);
-        path_x->cwin = PICOQUIC_CWIN_INITIAL;
+    if (c4_state != NULL){
+        c4_reset(c4_state, path_x, current_time);
     }
 
     path_x->congestion_alg_state = (void*)c4_state;
@@ -229,6 +228,7 @@ static void c4_enter_recovery(
         c4_state->last_freeze_was_timeout = 0;
     }
     else {
+        c4_state->nb_push_no_congestion = 0;
         c4_state->last_freeze_was_not_delay = !is_delay;
         c4_state->last_freeze_was_timeout = is_timeout;
     }
@@ -266,9 +266,13 @@ static void c4_enter_push(
     c4_state_t* c4_state,
     uint64_t current_time)
 {
+    c4_state->nb_push_no_congestion++;
     path_x->cwin = MULT1024(C4_ALPHA_PUSH_1024, c4_state->nominal_cwin);
+    if (path_x->cwin < c4_state->nominal_cwin + path_x->send_mtu) {
+        path_x->cwin = c4_state->nominal_cwin + path_x->send_mtu;
+    }
     c4_era_reset(cnx, path_x, c4_state, current_time);
-    c4_state->alg_state = c4_cruising;
+    c4_state->alg_state = c4_pushing;
 }
 
 uint64_t c4_compute_corrected_era_bytes(c4_state_t* c4_state, uint64_t current_time)
@@ -325,7 +329,12 @@ void c4_handle_ack(picoquic_cnx_t* cnx, picoquic_path_t* path_x, c4_state_t* c4_
     }
     if (c4_state->alg_state == c4_cruising &&
         c4_state->cruise_bytes_ack >= c4_state->cruise_bytes_target) {
-        c4_enter_push(cnx, path_x, c4_state, current_time);
+        if (c4_state->nb_push_no_congestion >= C4_NB_PUSH_BEFORE_RESET) {
+            c4_enter_initial(cnx, path_x, c4_state, current_time);
+        }
+        else {
+            c4_enter_push(cnx, path_x, c4_state, current_time);
+        }
     }
 }
 

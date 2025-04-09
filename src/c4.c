@@ -49,6 +49,11 @@
 #define c4_PERIOD 1000000
 #define PICOQUIC_CC_ALGO_NUMBER_C4 8
 
+#define MULT1024(c, v) (((v)*(c)) >> 10)
+#define C4_ALPHA_RECOVER_1024 921 /* 90% */
+#define C4_ALPHA_CRUISE_1024 1003 /* 98% */
+#define C4_ALPHA_PUSH_1024 1280 /* 125 % */
+
 /* States of C4:
 * 
 * Initial.   Probably use Hystart for now, as a place holder.
@@ -104,13 +109,14 @@ typedef enum {
 
 typedef struct st_c4_state_t {
     c4_alg_state_t alg_state;
-    uint64_t end_of_freeze; /* When to exit the freeze state */
-    uint64_t last_ack_time;
-    uint64_t ack_interval;
-    uint64_t nb_bytes_ack;
-    uint64_t nb_bytes_ack_since_rtt; /* accumulate byte count until RTT measured */
-    uint64_t end_of_epoch;
-    uint64_t recovery_sequence;
+    uint64_t nominal_cwin;
+    uint64_t era_bytes_ack; /* accumulate byte count until RTT measured */
+    uint64_t era_time_stamp; /* time of last RTT */
+    uint64_t era_sequence; /* sequence number of first packet in era */
+    uint64_t cruise_bytes_ack; /* accumulate bytes count in cruise state */
+    uint64_t cruise_bytes_target; /* expected bytes count until end of cruise */
+
+
     uint64_t rtt_min;
     uint64_t delay_threshold;
     uint64_t rolling_rtt_min; /* Min RTT measured for this epoch */
@@ -131,15 +137,42 @@ uint64_t c4_delay_threshold(uint64_t rtt_min)
     return delay;
 }
 
+/* End of round trip.
+* Happens if packet waited for is acked.
+* Add bandwidth measurement to bandwidth barrel.
+ */
+static int c4_era_check(
+    picoquic_cnx_t* cnx,
+    picoquic_path_t* path_x,
+    c4_state_t* c4_state)
+{
+    return (picoquic_cc_get_ack_number(cnx, path_x) >= c4_state->era_sequence);
+}
+
+static void c4_era_reset(
+    picoquic_cnx_t* cnx,
+    picoquic_path_t* path_x,
+    c4_state_t* c4_state,
+    uint64_t current_time)
+{
+    c4_state->era_sequence = picoquic_cc_get_sequence_number(cnx, path_x);
+    c4_state->era_bytes_ack = 0; /* accumulate byte count until RTT measured */
+    c4_state->era_time_stamp = current_time; /* time of last RTT */
+}
+
+
 void c4_reset(c4_state_t* c4_state, picoquic_path_t* path_x, uint64_t current_time)
 {
     memset(c4_state, 0, sizeof(c4_state_t));
     c4_state->alg_state = c4_initial;
     c4_state->rtt_min = path_x->smoothed_rtt;
     c4_state->rolling_rtt_min = c4_state->rtt_min;
+
     c4_state->delay_threshold = c4_delay_threshold(c4_state->rtt_min);
-    c4_state->end_of_epoch = current_time + c4_PERIOD;
+
     path_x->cwin = PICOQUIC_CWIN_INITIAL;
+    c4_state->nominal_cwin = PICOQUIC_CWIN_INITIAL;
+    c4_era_reset(path_x->cnx, path_x, c4_state, current_time);
 }
 
 void c4_seed_cwin(c4_state_t* c4_state, picoquic_path_t* path_x, uint64_t bytes_in_flight)
@@ -170,18 +203,139 @@ void c4_init(picoquic_cnx_t * cnx, picoquic_path_t* path_x, char const* option_s
         c4_state->rtt_min = path_x->smoothed_rtt;
         c4_state->rolling_rtt_min = c4_state->rtt_min;
         c4_state->delay_threshold = c4_delay_threshold(c4_state->rtt_min);
-        c4_state->end_of_epoch = current_time + c4_PERIOD;
         path_x->cwin = PICOQUIC_CWIN_INITIAL;
     }
 
     path_x->congestion_alg_state = (void*)c4_state;
 }
 
+/*
+* Enter recovery.
+* CWIN is set to C4_ALPHA_RECOVER of nominal value (90%)
+* Remember the first no ACK packet -- recovery will end when that
+* packet is acked.
+*/
+static void c4_enter_recovery(
+    picoquic_cnx_t* cnx,
+    picoquic_path_t* path_x,
+    c4_state_t* c4_state,
+    int is_congested,
+    int is_delay,
+    int is_timeout,
+    uint64_t current_time)
+{
+    if (!is_congested) {
+        c4_state->last_freeze_was_not_delay = 0;
+        c4_state->last_freeze_was_timeout = 0;
+    }
+    else {
+        c4_state->last_freeze_was_not_delay = !is_delay;
+        c4_state->last_freeze_was_timeout = is_timeout;
+    }
+    c4_state->alg_state = c4_recovery;
+    path_x->cwin = MULT1024(C4_ALPHA_RECOVER_1024, c4_state->nominal_cwin);
+    c4_era_reset(cnx, path_x, c4_state, current_time);
+    c4_state->alg_state = c4_recovery;
+}
+
+/* Enter cruise.
+* CWIN is set C4_ALPHA_CRUISE of nominal value (98%?)
+* Ack target if set to nominal cwin times log2 of cwin.
+*/
+static void c4_enter_cruise(
+    picoquic_cnx_t* cnx,
+    picoquic_path_t* path_x,
+    c4_state_t* c4_state,
+    uint64_t current_time)
+{
+    c4_era_reset(cnx, path_x, c4_state, current_time);
+    c4_state->cruise_bytes_ack = 0;
+    /* TODO-SHARING: use the x*log(x) formula. */
+    c4_state->cruise_bytes_target = 5 * c4_state->nominal_cwin;
+    path_x->cwin = MULT1024(C4_ALPHA_CRUISE_1024, c4_state->nominal_cwin);
+    c4_state->alg_state = c4_cruising;
+}
+
+/* Enter push.
+* CWIN is set C4_ALPHA_PUSH of nominal value (125%?)
+* Ack target if set to nominal cwin times log2 of cwin.
+*/
+static void c4_enter_push(
+    picoquic_cnx_t* cnx,
+    picoquic_path_t* path_x,
+    c4_state_t* c4_state,
+    uint64_t current_time)
+{
+    path_x->cwin = MULT1024(C4_ALPHA_PUSH_1024, c4_state->nominal_cwin);
+    c4_era_reset(cnx, path_x, c4_state, current_time);
+    c4_state->alg_state = c4_cruising;
+}
+
+uint64_t c4_compute_corrected_era_bytes(c4_state_t* c4_state, uint64_t current_time)
+{
+    uint64_t era_bytes = c4_state->era_bytes_ack;
+    uint64_t era_duration = current_time - c4_state->era_time_stamp;
+    uint64_t duration_max = MULT1024(1024 + 102, c4_state->rtt_min);
+
+    if (c4_state->rtt_min_is_trusted && era_duration > duration_max) {
+        uint64_t ratio_1024 = (duration_max * 1024) / era_duration;
+        era_bytes = MULT1024(ratio_1024, era_bytes);
+    }
+    return era_bytes;
+}
+
+/* Handle data ack event.
+ */
+void c4_handle_ack(picoquic_cnx_t* cnx, picoquic_path_t* path_x, c4_state_t* c4_state, uint64_t current_time, uint64_t nb_bytes_acknowledged)
+{
+    c4_state->era_bytes_ack += nb_bytes_acknowledged;
+    c4_state->cruise_bytes_ack += nb_bytes_acknowledged;
+    if (c4_state->alg_state == c4_initial) {
+        c4_state->nominal_cwin += nb_bytes_acknowledged;
+        path_x->cwin = c4_state->nominal_cwin;
+        /* TODO-LIMITED there should be a limit, not increasing if already larger than bytes in flight. */
+    }
+
+    if (c4_era_check(cnx, path_x, c4_state)) {
+        if (c4_state->era_bytes_ack > c4_state->nominal_cwin) {
+            /* This should only happen in the era that follows a pushing attempt. */
+            uint64_t corrected_era_bytes = c4_compute_corrected_era_bytes(c4_state, current_time);
+            if (corrected_era_bytes > c4_state->nominal_cwin) {
+                c4_state->nominal_cwin = corrected_era_bytes;
+                path_x->cwin = c4_state->nominal_cwin;
+            }
+        }
+
+        /* we could set a bandwidth estimate, but we would rather use the main code's estimate */
+
+        switch (c4_state->alg_state) {
+        case c4_recovery:
+            c4_enter_cruise(cnx, path_x, c4_state, current_time);
+            break;
+        case c4_cruising:
+            c4_era_reset(cnx, path_x, c4_state, current_time);
+            break;
+        case c4_pushing:
+            c4_enter_recovery(cnx, path_x, c4_state, 0, 0, 0, current_time);
+            break;
+        default:
+            c4_era_reset(cnx, path_x, c4_state, current_time);
+            break;
+        }
+    }
+    if (c4_state->alg_state == c4_cruising &&
+        c4_state->cruise_bytes_ack >= c4_state->cruise_bytes_target) {
+        c4_enter_push(cnx, path_x, c4_state, current_time);
+    }
+}
+
 /* Reaction to ECN/CE or sustained losses.
  * This is more or less the same code as added to bbr.
- *
  * This code is called if an ECN/EC event is received, or a timeout
- * event, or a lost event indicating a high loss rate
+ * event, or a lost event indicating a high loss rate,
+ * or a delay event.
+ * 
+ * TODO: proper treatment of ECN per L4S
  */
 static void c4_notify_congestion(
     picoquic_cnx_t* cnx,
@@ -197,23 +351,21 @@ static void c4_notify_congestion(
         /* Do not treat additional events during same freeze interval */
         return;
     }
-    c4_state->last_freeze_was_not_delay = !is_delay;
-    c4_state->last_freeze_was_timeout = is_timeout;
-    c4_state->alg_state = c4_recovery;
-    c4_state->end_of_freeze = current_time + c4_state->rtt_min;
-    c4_state->recovery_sequence = picoquic_cc_get_sequence_number(cnx, path_x);
+
     c4_state->nb_cc_events = 0;
 
-    if (is_delay) {
-        path_x->cwin -= (uint64_t)(c4_BETA * (double)path_x->cwin);
+    if (is_delay && c4_state->alg_state != c4_initial) {
+        c4_state->nominal_cwin -= (uint64_t)(c4_BETA * (double)c4_state->nominal_cwin);
     }
     else {
-        path_x->cwin = path_x->cwin / 2;
+        c4_state->nominal_cwin = c4_state->nominal_cwin / 2;
     }
 
-    if (is_timeout || path_x->cwin < PICOQUIC_CWIN_MINIMUM) {
-        path_x->cwin = PICOQUIC_CWIN_MINIMUM;
+    if (is_timeout || c4_state->nominal_cwin < PICOQUIC_CWIN_MINIMUM) {
+        c4_state->nominal_cwin = PICOQUIC_CWIN_MINIMUM;
     }
+
+    c4_enter_recovery(cnx, path_x, c4_state, 1, is_delay, is_timeout, current_time);
 
     picoquic_update_pacing_data(cnx, path_x, 0);
 
@@ -236,9 +388,13 @@ void c4_notify(
     path_x->is_cc_data_updated = 1;
 
     if (c4_state != NULL) {
+        /* TODO: commented out code below will trigger either "initial" or "pushing" depending 
+        * whether recovery was entered on timeout or other wise. Move to "exit recovery".
+        */
+#if 0
         if (c4_state->alg_state == c4_recovery && 
             (current_time > c4_state->end_of_freeze ||
-                c4_state->recovery_sequence <= picoquic_cc_get_ack_number(cnx, path_x))) {
+                c4_state->era_sequence <= picoquic_cc_get_ack_number(cnx, path_x))) {
             if (c4_state->last_freeze_was_timeout) {
                 c4_state->alg_state = c4_initial;
             }
@@ -249,20 +405,19 @@ void c4_notify(
             c4_state->last_freeze_was_timeout = 0;
 
             c4_state->nb_cc_events = 0;
-            c4_state->nb_bytes_ack_since_rtt = 0;
+            c4_state->era_bytes_ack = 0;
         }
+#endif
 
         switch (notification) {
-        case picoquic_congestion_notification_acknowledgement: 
-            if (c4_state->alg_state != c4_recovery) {
-                /* Count the bytes since last RTT measurement */
-                c4_state->nb_bytes_ack_since_rtt += ack_state->nb_bytes_acknowledged;
-                /* Compute pacing data. */
-                picoquic_update_pacing_data(cnx, path_x, 0);
-            }
+        case picoquic_congestion_notification_acknowledgement:
+            /* Handle path transition, etc. */
+            c4_handle_ack(cnx, path_x, c4_state, current_time, ack_state->nb_bytes_acknowledged);
+            /* Compute pacing data. */
+            picoquic_update_pacing_data(cnx, path_x, 0);
             break;
-
         case picoquic_congestion_notification_ecn_ec:
+            /* TODO: ECN is special? Implement the prague logic */
             c4_notify_congestion(cnx, path_x, c4_state, current_time, 0, 0);
             break;
         case picoquic_congestion_notification_repeat:
@@ -286,23 +441,7 @@ void c4_notify(
             if (c4_state->rtt_filter.is_init) {
                 /* We use the maximum of the last samples as the candidate for the
                  * min RTT, in order to filter the rtt jitter */
-                if (current_time > c4_state->end_of_epoch) {
-                    /* If end of epoch, reset the min RTT to min of remembered periods,
-                     * and roll the period. */
-                    c4_state->rtt_min = UINT64_MAX;
-                    for (int i = c4_NB_PERIOD - 1; i > 0; i--) {
-                        c4_state->last_rtt_min[i] = c4_state->last_rtt_min[i - 1];
-                        if (c4_state->last_rtt_min[i] > 0 &&
-                            c4_state->last_rtt_min[i] < c4_state->rtt_min) {
-                            c4_state->rtt_min = c4_state->last_rtt_min[i];
-                        }
-                    }
-                    c4_state->delay_threshold = c4_delay_threshold(c4_state->rtt_min);
-                    c4_state->last_rtt_min[0] = c4_state->rolling_rtt_min;
-                    c4_state->rolling_rtt_min = c4_state->rtt_filter.sample_max;
-                    c4_state->end_of_epoch = current_time + c4_PERIOD;
-                }
-                else if (c4_state->rtt_filter.sample_max < c4_state->rolling_rtt_min || c4_state->rolling_rtt_min == 0) {
+                if (c4_state->rtt_filter.sample_max < c4_state->rolling_rtt_min || c4_state->rolling_rtt_min == 0) {
                     /* If not end of epoch, update the rolling minimum */
                     c4_state->rolling_rtt_min = c4_state->rtt_filter.sample_max;
                     if (c4_state->rolling_rtt_min < c4_state->rtt_min) {
@@ -326,19 +465,7 @@ void c4_notify(
                 }
 
                 if (delta_rtt < c4_state->delay_threshold) {
-                    double alpha = 1.0;
                     c4_state->nb_cc_events = 0;
-
-                    if (c4_state->alg_state != c4_initial) {
-                        alpha -= ((double)delta_rtt / (double)c4_state->delay_threshold);
-                        alpha *= c4_pushing_ALPHA;
-                    }
-
-                    /* Increase the window if it is not frozen */
-                    if (path_x->last_time_acked_data_frame_sent > path_x->last_sender_limited_time) {
-                        path_x->cwin += (uint64_t)(alpha * (double)c4_state->nb_bytes_ack_since_rtt);
-                    }
-                    c4_state->nb_bytes_ack_since_rtt = 0;
                 }
                 else {
                     /* May well be congested */

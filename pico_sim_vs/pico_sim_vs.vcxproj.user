@@ -11,12 +11,12 @@
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <LocalDebuggerCommandArguments>$(SolutionDir)..\sim_specs\dcubic_alone.txt</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>$(SolutionDir)..\sim_specs\c4_alone.txt</LocalDebuggerCommandArguments>
     <LocalDebuggerWorkingDirectory>$(OutDir)</LocalDebuggerWorkingDirectory>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <LocalDebuggerCommandArguments>$(SolutionDir)..\sim_specs\dcubic_vs_cubic.txt</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>$(SolutionDir)..\sim_specs\c4_alone.txt</LocalDebuggerCommandArguments>
     <LocalDebuggerWorkingDirectory>$(OutDir)</LocalDebuggerWorkingDirectory>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
   </PropertyGroup>

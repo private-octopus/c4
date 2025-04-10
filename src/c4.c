@@ -38,22 +38,16 @@
  */
 
 
-#define c4_MIN_ACK_DELAY_FOR_BANDWIDTH 5000
-#define c4_BANDWIDTH_FRACTION 0.5
-#define c4_REPEAT_THRESHOLD 4
-#define c4_BETA 0.125
-#define c4_BETA_HEAVY_LOSS 0.5
-#define c4_pushing_ALPHA 0.25
-#define c4_DELAY_THRESHOLD_MAX 25000
-#define c4_NB_PERIOD 6
-#define c4_PERIOD 1000000
 #define PICOQUIC_CC_ALGO_NUMBER_C4 8
-
+#define C4_DELAY_THRESHOLD_MAX 25000
 #define MULT1024(c, v) (((v)*(c)) >> 10)
 #define C4_ALPHA_RECOVER_1024 921 /* 90% */
 #define C4_ALPHA_CRUISE_1024 1003 /* 98% */
 #define C4_ALPHA_PUSH_1024 1280 /* 125 % */
+#define C4_BETA_1024 128 /* 0.125 */
+#define C4_BETA_LOSS_1024 256 /* 25%, 1/4th */
 #define C4_NB_PUSH_BEFORE_RESET 3
+#define C4_REPEAT_THRESHOLD 4
 
 /* States of C4:
 * 
@@ -121,7 +115,6 @@ typedef struct st_c4_state_t {
     uint64_t rtt_min;
     uint64_t delay_threshold;
     uint64_t rolling_rtt_min; /* Min RTT measured for this epoch */
-    uint64_t last_rtt_min[c4_NB_PERIOD];
     int nb_cc_events;
     unsigned int last_freeze_was_timeout : 1;
     unsigned int last_freeze_was_not_delay : 1;
@@ -129,13 +122,75 @@ typedef struct st_c4_state_t {
     picoquic_min_max_rtt_t rtt_filter;
 } c4_state_t;
 
+/* Compute the delay threshold for declaring congestion,
+* as the min of RTT/8 and c4_DELAY_THRESHOLD_MAX (25 ms) 
+ */
+
 uint64_t c4_delay_threshold(uint64_t rtt_min)
 {
     uint64_t delay = rtt_min / 8;
-    if (delay > c4_DELAY_THRESHOLD_MAX) {
-        delay = c4_DELAY_THRESHOLD_MAX;
+    if (delay > C4_DELAY_THRESHOLD_MAX) {
+        delay = C4_DELAY_THRESHOLD_MAX;
     }
     return delay;
+}
+
+/* Compute the base 2 logarithm of an uint64 number. 
+* This is used to compute the number of bytes to wait for until
+* exit cruising
+ */
+uint64_t c4_uint64_log(uint64_t v)
+{
+    uint64_t l = 0;
+    if (v > 0xFFFFFFFFull) {
+        l += 32;
+        v >>= 32;
+    }
+    if (v > 0xFFFFull) {
+        l += 16;
+        v >>= 16;
+    }
+    if (v > 0xFFull) {
+        l += 8;
+        v >>= 8;
+    }
+    if (v > 0x0Full) {
+        l += 4;
+        v >>= 4;
+    }
+    if (v > 0x3ull) {
+        l += 2;
+        v >>= 2;
+    }
+    if (v > 0x1ull) {
+        l += 1;
+    }
+    return l;
+}
+
+/* Compute the cruising interval, as a function of the window.
+* We want the number of RTT to grow as the log of the window,
+* with an extreme coefficient 1 if the window is < 2096 and 
+* 8 if the window is > 2^28 bytes.
+* the formula is 1 + 7*(x-11)/(28 -11)
+* we compute using 7*1024/(28 -11) ~= 422
+ */
+uint64_t c4_cruise_bytes_target(uint64_t w)
+{
+    uint64_t x_1024;
+    uint64_t l = c4_uint64_log(w);
+    uint64_t target = w;
+
+
+    if (l > 28) {
+        l = 28;
+    }
+    else if (l < 11) {
+        l = 11;
+    }
+    x_1024 = (l - 11) * 422;
+    target += MULT1024(x_1024, w);
+    return target;
 }
 
 /* End of round trip.
@@ -251,7 +306,11 @@ static void c4_enter_cruise(
     c4_era_reset(cnx, path_x, c4_state, current_time);
     c4_state->cruise_bytes_ack = 0;
     /* TODO-SHARING: use the x*log(x) formula. */
+#if 1
+    c4_state->cruise_bytes_target = c4_cruise_bytes_target(c4_state->nominal_cwin);
+#else
     c4_state->cruise_bytes_target = 5 * c4_state->nominal_cwin;
+#endif
     path_x->cwin = MULT1024(C4_ALPHA_CRUISE_1024, c4_state->nominal_cwin);
     c4_state->alg_state = c4_cruising;
 }
@@ -314,6 +373,7 @@ void c4_handle_ack(picoquic_cnx_t* cnx, picoquic_path_t* path_x, c4_state_t* c4_
 
         switch (c4_state->alg_state) {
         case c4_recovery:
+            c4_state->nb_cc_events = 0;
             c4_enter_cruise(cnx, path_x, c4_state, current_time);
             break;
         case c4_cruising:
@@ -327,12 +387,12 @@ void c4_handle_ack(picoquic_cnx_t* cnx, picoquic_path_t* path_x, c4_state_t* c4_
             break;
         }
     }
-    if (c4_state->alg_state == c4_cruising &&
-        c4_state->cruise_bytes_ack >= c4_state->cruise_bytes_target) {
+
+    if (c4_state->alg_state == c4_cruising){
         if (c4_state->nb_push_no_congestion >= C4_NB_PUSH_BEFORE_RESET) {
             c4_enter_initial(cnx, path_x, c4_state, current_time);
         }
-        else {
+        else if(c4_state->cruise_bytes_ack >= c4_state->cruise_bytes_target) {
             c4_enter_push(cnx, path_x, c4_state, current_time);
         }
     }
@@ -354,6 +414,8 @@ static void c4_notify_congestion(
     int is_delay,
     int is_timeout)
 {
+    c4_state->nb_push_no_congestion = 0;
+
     if (c4_state->alg_state == c4_recovery &&
         (!is_timeout || !c4_state->last_freeze_was_timeout) &&
         (!is_delay || !c4_state->last_freeze_was_not_delay)) {
@@ -364,10 +426,10 @@ static void c4_notify_congestion(
     c4_state->nb_cc_events = 0;
 
     if (is_delay && c4_state->alg_state != c4_initial) {
-        c4_state->nominal_cwin -= (uint64_t)(c4_BETA * (double)c4_state->nominal_cwin);
+        c4_state->nominal_cwin -= MULT1024(C4_BETA_1024, c4_state->nominal_cwin);
     }
     else {
-        c4_state->nominal_cwin = c4_state->nominal_cwin / 2;
+        c4_state->nominal_cwin -= MULT1024(C4_BETA_LOSS_1024, c4_state->nominal_cwin);
     }
 
     if (is_timeout || c4_state->nominal_cwin < PICOQUIC_CWIN_MINIMUM) {
@@ -458,31 +520,28 @@ void c4_notify(
                     }
                 }
             }
+            if (ack_state->rtt_measurement < c4_state->rtt_min) {
+                c4_state->delay_threshold = c4_delay_threshold(c4_state->rtt_min);
+            }
+            else if (c4_state->rtt_min_is_trusted){
+                delta_rtt = ack_state->rtt_measurement - c4_state->rtt_min;
+            }
+            else {
+                c4_state->rtt_min = ack_state->rtt_measurement; 
+                c4_state->rolling_rtt_min = ack_state->rtt_measurement;
+                c4_state->rtt_min_is_trusted = 1;
+                delta_rtt = 0;
+            }
 
-            if (c4_state->alg_state != c4_recovery) {
-                if (ack_state->rtt_measurement < c4_state->rtt_min) {
-                    c4_state->delay_threshold = c4_delay_threshold(c4_state->rtt_min);
-                }
-                else if (c4_state->rtt_min_is_trusted){
-                    delta_rtt = ack_state->rtt_measurement - c4_state->rtt_min;
-                }
-                else {
-                    c4_state->rtt_min = ack_state->rtt_measurement; 
-                    c4_state->rolling_rtt_min = ack_state->rtt_measurement;
-                    c4_state->rtt_min_is_trusted = 1;
-                    delta_rtt = 0;
-                }
-
-                if (delta_rtt < c4_state->delay_threshold) {
-                    c4_state->nb_cc_events = 0;
-                }
-                else {
-                    /* May well be congested */
-                    c4_state->nb_cc_events++;
-                    if (c4_state->nb_cc_events >= c4_REPEAT_THRESHOLD) {
-                        /* Too many events, reduce the window */
-                        c4_notify_congestion(cnx, path_x, c4_state, current_time, 1, 0);
-                    }
+            if (delta_rtt < c4_state->delay_threshold) {
+                c4_state->nb_cc_events = 0;
+            }
+            else {
+                /* May well be congested */
+                c4_state->nb_cc_events++;
+                if (c4_state->nb_cc_events >= C4_REPEAT_THRESHOLD) {
+                    /* Too many events, reduce the window */
+                    c4_notify_congestion(cnx, path_x, c4_state, current_time, 1, 0);
                 }
             }
         }

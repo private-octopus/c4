@@ -52,7 +52,7 @@
 
 /* States of C4:
 * 
-* Initial.   Probably use Hystart for now, as a place holder.
+* Initial.   Similar to Hystart for now, as a place holder.
 * Recovery.  After an event, freeze the parameters for one RTT. This is the time
 *            to measure whether a previous push was a success.
 * Cruising.  For N intervals. Be ready to notice congestion, or change in conditions.
@@ -78,9 +78,8 @@
 *            any state to suspended -- if suspension event.
 *            to competing -- if some number of entering recovery because delay too high?
 *            competing to recovery? or to initial? if the delay decreases enough?
+*            if 3 successful push pahses -- transit to initial
 * 
-* Control variable:
-*            when competing, largest data rate of last N periods times RTT
 * 
 * State variables:
 * - CWIN. Main control variable.
@@ -90,7 +89,9 @@
 * - Average rate of EC marking
 * - Average rate of Packet loss
 * - Average rate of excess delay
-* - Number of cruising epochs / number of cruising bytes sent.
+* - Number of cruising bytes sent.
+* - Cruising bytes target before transition to push
+* - value of nominal CWIN before suspension
 * - RTT min
  */
 
@@ -116,6 +117,8 @@ typedef struct st_c4_state_t {
     uint64_t rtt_min;
     uint64_t delay_threshold;
     uint64_t rolling_rtt_min; /* Min RTT measured for this epoch */
+    uint64_t suspended_nominal_cwin;
+    uint64_t suspended_nominal_state;
     int nb_cc_events;
     unsigned int last_freeze_was_timeout : 1;
     unsigned int last_freeze_was_not_delay : 1;
@@ -258,6 +261,7 @@ void c4_init(picoquic_cnx_t * cnx, picoquic_path_t* path_x, char const* option_s
     }
     
     if (c4_state != NULL){
+        cnx->is_lost_feedback_notification_required = 1;
         c4_reset(c4_state, path_x, current_time);
     }
 
@@ -330,6 +334,36 @@ static void c4_enter_push(
     c4_state->alg_state = c4_pushing;
 }
 
+/* Enter and exit suspension.
+* When entering suspension, we set the cwin to the bytes in flight,
+* which will stop transmission of new packets on the path. We remember
+* the nominal CWIN so it could be restored. On exit, we enter the
+* recovery state with the new CWIN */
+static void c4_enter_suspended(
+    picoquic_path_t* path_x,
+    c4_state_t* c4_state)
+{
+    c4_state->suspended_nominal_cwin = c4_state->nominal_cwin;
+    c4_state->suspended_nominal_state = c4_state->alg_state;
+    c4_state->alg_state = c4_suspended;
+    path_x->cwin = path_x->bytes_in_transit;
+}
+
+static void c4_exit_suspended(
+    picoquic_cnx_t* cnx,
+    picoquic_path_t* path_x,
+    c4_state_t* c4_state,
+    uint64_t current_time)
+{
+    c4_state->nominal_cwin = c4_state->suspended_nominal_cwin;
+    c4_enter_recovery(cnx, path_x, c4_state, 0, 0, 0, current_time);
+}
+
+/* On ACK event and on congestion event, we may want to trim the window
+* to match the number of bytes actually in flight. We do that here
+* based on the ratio of observed RTT to min RTT
+ */
+
 uint64_t c4_compute_corrected_era_bytes(c4_state_t* c4_state, uint64_t current_time)
 {
     uint64_t era_bytes = c4_state->era_bytes_ack;
@@ -378,6 +412,9 @@ void c4_handle_ack(picoquic_cnx_t* cnx, picoquic_path_t* path_x, c4_state_t* c4_
         case c4_pushing:
             c4_enter_recovery(cnx, path_x, c4_state, 0, 0, 0, current_time);
             break;
+        case c4_suspended:
+            c4_exit_suspended(cnx, path_x, c4_state, current_time);
+            break;
         default:
             c4_era_reset(cnx, path_x, c4_state, current_time);
             break;
@@ -418,6 +455,10 @@ static void c4_notify_congestion(
         (!is_timeout || !c4_state->last_freeze_was_timeout) &&
         (!is_delay || !c4_state->last_freeze_was_not_delay)) {
         /* Do not treat additional events during same freeze interval */
+        return;
+    }
+
+    if (c4_state->alg_state == c4_suspended /* && !is_timeout */) {
         return;
     }
 
@@ -549,6 +590,9 @@ void c4_notify(
             }
         }
         break;
+        case picoquic_congestion_notification_lost_feedback:
+            c4_enter_suspended(path_x, c4_state);
+            break;
         case picoquic_congestion_notification_cwin_blocked:
             break;
         case picoquic_congestion_notification_reset:

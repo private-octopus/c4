@@ -148,15 +148,6 @@ uint64_t c4_delay_threshold(uint64_t rtt_min)
     return delay;
 }
 
-static uint64_t c4_delay_threshold_initial(uint64_t rtt_min)
-{
-    uint64_t delay = rtt_min / 8;
-    if (delay > C4_DELAY_THRESHOLD_MAX) {
-        delay = C4_DELAY_THRESHOLD_MAX;
-    }
-    return delay;
-}
-
 /* Compute the base 2 logarithm of an uint64 number. 
 * This is used to compute the number of bytes to wait for until
 * exit cruising
@@ -311,7 +302,7 @@ static void c4_initial_handle_rtt(picoquic_path_t* path_x, c4_state_t* c4_state,
     }
 }
 
-void c4_initial_handle_loss(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_congestion_notification_t notification, uint64_t lost_packet_number, uint64_t current_time)
+static void c4_initial_handle_loss(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_congestion_notification_t notification, uint64_t lost_packet_number, uint64_t current_time)
 {
     path_x->cwin = MULT1024(C4_BETA_INITIAL_1024, path_x->cwin);
     c4_exit_initial(path_x, c4_state, notification, current_time);
@@ -443,7 +434,7 @@ static void c4_exit_suspended(
 * based on the ratio of observed RTT to min RTT
  */
 
-uint64_t c4_compute_corrected_era_bytes(c4_state_t* c4_state, uint64_t current_time)
+static uint64_t c4_compute_corrected_era_bytes(c4_state_t* c4_state, uint64_t current_time)
 {
     uint64_t era_bytes = c4_state->era_bytes_ack;
     uint64_t era_duration = current_time - c4_state->era_time_stamp;

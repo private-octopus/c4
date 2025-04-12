@@ -3,25 +3,36 @@ capacity, so transmission can start at full speed, without causing too much queu
 
 State of the art:
 
-* slow start, Van Jacobson, 1988. RFC 5681. Increase CWIN by 1 for each packet ACKed, i.e., double every RTT.
+* slow start, Van Jacobson, 1988. [RFC 5681](https://www.rfc-editor.org/rfc/rfc5681).
+  Increase CWIN by 1 for each packet ACKed, i.e., double every RTT.
   Stop on first packet loss -- i.e., after filling the network buffers.
   Simple, discovers the network capacity in logarithmic time.
   Downside: filling the buffers creates huge queues and make the network bad for everybody.
   Also, at the time of the first loss, a full CWIN of packets is in flight.
   Since the buffers are full, most will be lost, and will have to be resent later.
 
-* Hystart, Sangtae Ha, Injong Rhee, 2011. Monitor RTT and uses increase in RTT as a signal to exit slow
+* Hystart, Sangtae Ha, Injong Rhee, 2011,
+  [Taming the elephants: New TCP slow start](https://www.sciencedirect.com/science/article/abs/pii/S1389128611000363).
+  Monitor RTT and uses increase in RTT as a signal to exit slow
   start before potential packet loss occurs. Still creates some big queues, because there is a full
   CWIN of packets is in flight at the time of detection, typically one bandwidth delay product,
   but the queues will at most double the RTT. Will avoid losses if buffers are large enough and
   if the detection happens soon enough, but not always. Specific issue is that RTT is a noisy
   signal, due to delay jitter, so Hystart will sometimes exit too soon.
 
-* Hystart++, Praveen Balasubramanian et al, 2023, RFC 9406. Try to address the delay-jitters issue
+* Filtering RTT for Hystart, Christian Huitema, 2017,
+  [Implementing Cubic congestion control in Quic](https://privateoctopus.com/2019/11/11/implementing-cubic-congestion-control-in-quic/).
+  Demonstrates that Hystart can exit too early on link susceptible to delay jitter.
+  Proposes to remedy that by filtering the RTT measurements.
+
+* Hystart++, Praveen Balasubramanian et al, 2023,
+  [RFC 9406](https://www.rfc-editor.org/rfc/rfc9406). Try to address the delay-jitters issue
   of Hystart by adding a "retry" period at a lower increase rate after Hystart exits on delay increase.
   Does not solve the queuing and potential losses issue.
 
-* BBR Start up, BBR team, probably around 2018. Use rate control instead of delay control.
+* BBR Start up, Neal cardwell et al., 2017,
+  [BBR Draft version 00](https://datatracker.ietf.org/doc/html/draft-cardwell-iccrg-bbr-congestion-control-00).
+  Use rate control instead of delay control.
   Monitor the bandwidth from ACKs, set the pacing rate to twice the bandwidth, stops if the measured
   bandwidth does not increase for 3 RTT. In theory, avoids losses. Also, observing absence of growth
   for 3 RTT protects against a nework event slowing the transmission for 1 RTT and leading to
@@ -29,18 +40,23 @@ State of the art:
   sending at twice the nominal bandwidth, which will create large queues and delay increase
   (double the RTT) for 3 RTT -- or packet losses if the network does not have enough buffers to absorb the queues.
 
-* Packet pairs (Maybe Jean Bolot, 1993 -- but I have also heard it attrbuted to Hari Balakhrisnan).
+* Packet pairs, Srinivasan Keshav, 1991,
+  [A Control-Theoretic Approach to Flow Control](https://dl.acm.org/doi/pdf/10.1145/205447.205463)).
   Send two packets back to back. measure the interval when they are received. It measures the time it took
   the network to forward one packet. You can then estimate the network speed, and use that to tune the slow
   start algorithm. Neat idea, but terribly imprecise -- the delay between two packets can be affected
   by jitter for all kinds of reasons.
 
-* Paced Chirping (Bob Briscoe, 2019): instead of just sending packet pairs, send a "train" of packets
+* Paced Chirping, Bob Briscoe, 2019, 
+  [Paced Chirping: Rapid flow start with very low queuing delay](https://ieeexplore.ieee.org/abstract/document/8845072) ).
+  Instead of just sending packet pairs, send a "train" of packets
   at a high rate. Make the train small enough to not create a big queue, but large enough so that measuring
   the arrival delay of the train can give a good idea of the network bandwidth. Cool idea, mostly works,
   but measures more the "instant capacity" than the actual share that a user can safely use.
 
-* Careful Resume (draft in progress): remember the data rate and RTT of a previous connection, reuse
+* Careful Resume, G. Fairhurst et al.,
+  [Convergence of Congestion Control from Retained State](https://datatracker.ietf.org/doc/draft-ietf-tsvwg-careful-resume/).
+  Remember the data rate and RTT of a previous connection, reuse
   it with caution to speed up slow start.
 
 The challenge is to combine all that. Maybe, start with slow start, but tweak the scheduling to create "trains"

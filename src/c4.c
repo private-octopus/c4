@@ -126,11 +126,29 @@ typedef struct st_c4_state_t {
     picoquic_min_max_rtt_t rtt_filter;
 } c4_state_t;
 
+static void c4_enter_recovery(
+    picoquic_cnx_t* cnx,
+    picoquic_path_t* path_x,
+    c4_state_t* c4_state,
+    int is_congested,
+    int is_delay,
+    int is_timeout,
+    uint64_t current_time);
+
 /* Compute the delay threshold for declaring congestion,
 * as the min of RTT/8 and c4_DELAY_THRESHOLD_MAX (25 ms) 
  */
 
 uint64_t c4_delay_threshold(uint64_t rtt_min)
+{
+    uint64_t delay = rtt_min / 8;
+    if (delay > C4_DELAY_THRESHOLD_MAX) {
+        delay = C4_DELAY_THRESHOLD_MAX;
+    }
+    return delay;
+}
+
+static uint64_t c4_delay_threshold_initial(uint64_t rtt_min)
 {
     uint64_t delay = rtt_min / 8;
     if (delay > C4_DELAY_THRESHOLD_MAX) {
@@ -224,7 +242,6 @@ static void c4_enter_initial(picoquic_cnx_t* cnx, picoquic_path_t* path_x, c4_st
 {
     c4_state->alg_state = c4_initial;
     c4_state->nb_push_no_congestion = 0;
-    c4_state->delay_threshold = c4_delay_threshold(c4_state->rtt_min);
     path_x->cwin = c4_state->nominal_cwin;
     c4_era_reset(path_x->cnx, path_x, c4_state, current_time);
 }
@@ -244,6 +261,69 @@ void c4_seed_cwin(c4_state_t* c4_state, picoquic_path_t* path_x, uint64_t bytes_
         if (path_x->cwin < bytes_in_flight) {
             path_x->cwin = bytes_in_flight;
         }
+    }
+}
+
+static void c4_exit_initial(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_congestion_notification_t notification, uint64_t current_time)
+{
+    /* We assume that any required correction is done prior to calling this */
+    c4_state->nominal_cwin = path_x->cwin;
+    c4_enter_recovery(path_x->cnx, path_x, c4_state, 0, 0, 0, current_time);
+}
+
+static void c4_initial_handle_rtt(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_congestion_notification_t notification, uint64_t rtt_measurement, uint64_t current_time)
+{
+    /* if in slow start, increase the window for long delay RTT */
+    c4_state->rtt_min = path_x->rtt_min;
+
+    if (path_x->rtt_min > PICOQUIC_TARGET_RENO_RTT /* && cubic_state->ssthresh == UINT64_MAX */ ) {
+        path_x->cwin = picoquic_cc_update_cwin_for_long_rtt(path_x);
+    }
+
+    /* HyStart. */
+    /* Using RTT increases as congestion signal. This is used
+     * for getting out of slow start, but also for ending a cycle
+     * during congestion avoidance */
+    if (picoquic_cc_hystart_test(&c4_state->rtt_filter, rtt_measurement,
+        path_x->pacing.packet_time_microsec, current_time, 0)) {
+
+        if (c4_state->rtt_filter.rtt_filtered_min > PICOQUIC_TARGET_RENO_RTT) {
+            uint64_t beta_1024;
+
+            if (c4_state->rtt_filter.rtt_filtered_min > PICOQUIC_TARGET_SATELLITE_RTT) {
+                beta_1024 = ((uint64_t)PICOQUIC_TARGET_SATELLITE_RTT*1024) / c4_state->rtt_filter.rtt_filtered_min;
+            }
+            else {
+                beta_1024 = ((uint64_t)PICOQUIC_TARGET_RENO_RTT*1024) / c4_state->rtt_filter.rtt_filtered_min;
+            }
+
+            uint64_t base_window = MULT1024(beta_1024, path_x->cwin);
+            uint64_t delta_window = path_x->cwin - base_window;
+            path_x->cwin -= (delta_window / 2);
+        }
+        else {
+            /* In the general case, compensate for the growth of the window after the acknowledged packet was sent. */
+            path_x->cwin /= 2;
+        }
+
+
+        c4_exit_initial(path_x, c4_state, notification, current_time);
+    }
+}
+
+void c4_initial_handle_loss(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_congestion_notification_t notification, uint64_t lost_packet_number, uint64_t current_time)
+{
+    path_x->cwin = MULT1024(C4_BETA_INITIAL_1024, path_x->cwin);
+    c4_exit_initial(path_x, c4_state, notification, current_time);
+}
+
+static void c4_initial_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, uint64_t nb_bytes_acknowledged)
+{
+    /* Increase cwin based on bandwidth estimation. */
+    path_x->cwin = picoquic_cc_update_target_cwin_estimation(path_x);
+
+    if (path_x->last_time_acked_data_frame_sent > path_x->last_sender_limited_time) {
+        path_x->cwin += picoquic_cc_slow_start_increase_ex(path_x, nb_bytes_acknowledged, 0);
     }
 }
 
@@ -295,7 +375,6 @@ static void c4_enter_recovery(
     c4_state->alg_state = c4_recovery;
     path_x->cwin = MULT1024(C4_ALPHA_RECOVER_1024, c4_state->nominal_cwin);
     c4_era_reset(cnx, path_x, c4_state, current_time);
-    c4_state->alg_state = c4_recovery;
 }
 
 /* Enter cruise.
@@ -384,49 +463,48 @@ void c4_handle_ack(picoquic_cnx_t* cnx, picoquic_path_t* path_x, c4_state_t* c4_
     c4_state->era_bytes_ack += nb_bytes_acknowledged;
     c4_state->cruise_bytes_ack += nb_bytes_acknowledged;
     if (c4_state->alg_state == c4_initial) {
-        c4_state->nominal_cwin += nb_bytes_acknowledged;
-        path_x->cwin = c4_state->nominal_cwin;
-        /* TODO-LIMITED there should be a limit, not increasing if already larger than bytes in flight. */
+        c4_initial_handle_ack(path_x, c4_state, nb_bytes_acknowledged);
     }
+    else {
+        if (c4_era_check(cnx, path_x, c4_state)) {
+            if (c4_state->era_bytes_ack > c4_state->nominal_cwin) {
+                /* This should only happen in the era that follows a pushing attempt. */
+                uint64_t corrected_era_bytes = c4_compute_corrected_era_bytes(c4_state, current_time);
+                if (corrected_era_bytes > c4_state->nominal_cwin) {
+                    c4_state->nominal_cwin = corrected_era_bytes;
+                    path_x->cwin = c4_state->nominal_cwin;
+                }
+            }
 
-    if (c4_era_check(cnx, path_x, c4_state)) {
-        if (c4_state->era_bytes_ack > c4_state->nominal_cwin) {
-            /* This should only happen in the era that follows a pushing attempt. */
-            uint64_t corrected_era_bytes = c4_compute_corrected_era_bytes(c4_state, current_time);
-            if (corrected_era_bytes > c4_state->nominal_cwin) {
-                c4_state->nominal_cwin = corrected_era_bytes;
-                path_x->cwin = c4_state->nominal_cwin;
+            /* we could set a bandwidth estimate, but we would rather use the main code's estimate */
+
+            switch (c4_state->alg_state) {
+            case c4_recovery:
+                c4_state->nb_cc_events = 0;
+                c4_enter_cruise(cnx, path_x, c4_state, current_time);
+                break;
+            case c4_cruising:
+                c4_era_reset(cnx, path_x, c4_state, current_time);
+                break;
+            case c4_pushing:
+                c4_enter_recovery(cnx, path_x, c4_state, 0, 0, 0, current_time);
+                break;
+            case c4_suspended:
+                c4_exit_suspended(cnx, path_x, c4_state, current_time);
+                break;
+            default:
+                c4_era_reset(cnx, path_x, c4_state, current_time);
+                break;
             }
         }
 
-        /* we could set a bandwidth estimate, but we would rather use the main code's estimate */
-
-        switch (c4_state->alg_state) {
-        case c4_recovery:
-            c4_state->nb_cc_events = 0;
-            c4_enter_cruise(cnx, path_x, c4_state, current_time);
-            break;
-        case c4_cruising:
-            c4_era_reset(cnx, path_x, c4_state, current_time);
-            break;
-        case c4_pushing:
-            c4_enter_recovery(cnx, path_x, c4_state, 0, 0, 0, current_time);
-            break;
-        case c4_suspended:
-            c4_exit_suspended(cnx, path_x, c4_state, current_time);
-            break;
-        default:
-            c4_era_reset(cnx, path_x, c4_state, current_time);
-            break;
-        }
-    }
-
-    if (c4_state->alg_state == c4_cruising){
-        if (c4_state->nb_push_no_congestion >= C4_NB_PUSH_BEFORE_RESET) {
-            c4_enter_initial(cnx, path_x, c4_state, current_time);
-        }
-        else if(c4_state->cruise_bytes_ack >= c4_state->cruise_bytes_target) {
-            c4_enter_push(cnx, path_x, c4_state, current_time);
+        if (c4_state->alg_state == c4_cruising) {
+            if (c4_state->nb_push_no_congestion >= C4_NB_PUSH_BEFORE_RESET) {
+                c4_enter_initial(cnx, path_x, c4_state, current_time);
+            }
+            else if (c4_state->cruise_bytes_ack >= c4_state->cruise_bytes_target) {
+                c4_enter_push(cnx, path_x, c4_state, current_time);
+            }
         }
     }
 }
@@ -487,6 +565,55 @@ static void c4_notify_congestion(
     path_x->is_ssthresh_initialized = 1;
 }
 
+
+static void c4_handle_rtt(
+    picoquic_cnx_t* cnx,
+    picoquic_path_t* path_x,
+    c4_state_t* c4_state,
+    uint64_t rtt_measurement,
+    uint64_t current_time)
+{
+    uint64_t delta_rtt = 0;
+
+    picoquic_cc_filter_rtt_min_max(&c4_state->rtt_filter, rtt_measurement);
+
+    if (c4_state->rtt_filter.is_init) {
+        /* We use the maximum of the last samples as the candidate for the
+         * min RTT, in order to filter the rtt jitter */
+        if (c4_state->rtt_filter.sample_max < c4_state->rolling_rtt_min || c4_state->rolling_rtt_min == 0) {
+            /* If not end of epoch, update the rolling minimum */
+            c4_state->rolling_rtt_min = c4_state->rtt_filter.sample_max;
+            if (c4_state->rolling_rtt_min < c4_state->rtt_min) {
+                c4_state->rtt_min = c4_state->rolling_rtt_min;
+            }
+        }
+    }
+    if (rtt_measurement < c4_state->rtt_min) {
+        c4_state->delay_threshold = c4_delay_threshold(c4_state->rtt_min);
+    }
+    else if (c4_state->rtt_min_is_trusted) {
+        delta_rtt = rtt_measurement - c4_state->rtt_min;
+    }
+    else {
+        c4_state->rtt_min = rtt_measurement;
+        c4_state->rolling_rtt_min = rtt_measurement;
+        c4_state->rtt_min_is_trusted = 1;
+        delta_rtt = 0;
+    }
+
+    if (delta_rtt < c4_state->delay_threshold) {
+        c4_state->nb_cc_events = 0;
+    }
+    else {
+        /* May well be congested */
+        c4_state->nb_cc_events++;
+        if (c4_state->nb_cc_events >= C4_REPEAT_THRESHOLD) {
+            /* Too many events, reduce the window */
+            c4_notify_congestion(cnx, path_x, c4_state, current_time, rtt_measurement, 1, 0);
+        }
+    }
+}
+
 /*
  * Properly implementing c4 requires managing a number of
  * signals, such as packet losses or acknowledgements. We attempt
@@ -503,43 +630,32 @@ void c4_notify(
     path_x->is_cc_data_updated = 1;
 
     if (c4_state != NULL) {
-        /* TODO: commented out code below will trigger either "initial" or "pushing" depending 
-        * whether recovery was entered on timeout or other wise. Move to "exit recovery".
-        */
-#if 0
-        if (c4_state->alg_state == c4_recovery && 
-            (current_time > c4_state->end_of_freeze ||
-                c4_state->era_sequence <= picoquic_cc_get_ack_number(cnx, path_x))) {
-            if (c4_state->last_freeze_was_timeout) {
-                c4_state->alg_state = c4_initial;
-            }
-            else {
-                c4_state->alg_state = c4_pushing;
-            }
-            c4_state->last_freeze_was_not_delay = 0;
-            c4_state->last_freeze_was_timeout = 0;
-
-            c4_state->nb_cc_events = 0;
-            c4_state->era_bytes_ack = 0;
-        }
-#endif
-
         switch (notification) {
         case picoquic_congestion_notification_acknowledgement:
             /* Handle path transition, etc. */
             c4_handle_ack(cnx, path_x, c4_state, current_time, ack_state->nb_bytes_acknowledged);
-            /* Compute pacing data. */
-            picoquic_update_pacing_data(cnx, path_x, 0);
+            picoquic_update_pacing_data(cnx, path_x, c4_state->alg_state == c4_initial);
             break;
         case picoquic_congestion_notification_ecn_ec:
             /* TODO: ECN is special? Implement the prague logic */
-            c4_notify_congestion(cnx, path_x, c4_state, current_time, 0, 0, 0);
+            if (c4_state->alg_state == c4_initial) {
+                c4_initial_handle_loss(path_x, c4_state, notification, 0, current_time);
+            }
+            else {
+                c4_notify_congestion(cnx, path_x, c4_state, current_time, 0, 0, 0);
+            }
             break;
         case picoquic_congestion_notification_repeat:
         case picoquic_congestion_notification_timeout:
             if (picoquic_cc_hystart_loss_test(&c4_state->rtt_filter, notification, ack_state->lost_packet_number, PICOQUIC_SMOOTHED_LOSS_THRESHOLD)) {
-                c4_notify_congestion(cnx, path_x, c4_state, current_time, 0, 0,
-                    (notification == picoquic_congestion_notification_timeout) ? 1 : 0);
+
+                if (c4_state->alg_state == c4_initial) {
+                    c4_initial_handle_loss(path_x, c4_state, notification, 0, current_time);
+                }
+                else {
+                    c4_notify_congestion(cnx, path_x, c4_state, current_time, 0, 0,
+                        (notification == picoquic_congestion_notification_timeout) ? 1 : 0);
+                }
             }
             break;
         case picoquic_congestion_notification_spurious_repeat:
@@ -548,50 +664,17 @@ void c4_notify(
             }
             break;
         case picoquic_congestion_notification_rtt_measurement:
-        {
-            uint64_t delta_rtt = 0;
-
-            picoquic_cc_filter_rtt_min_max(&c4_state->rtt_filter, ack_state->rtt_measurement);
-
-            if (c4_state->rtt_filter.is_init) {
-                /* We use the maximum of the last samples as the candidate for the
-                 * min RTT, in order to filter the rtt jitter */
-                if (c4_state->rtt_filter.sample_max < c4_state->rolling_rtt_min || c4_state->rolling_rtt_min == 0) {
-                    /* If not end of epoch, update the rolling minimum */
-                    c4_state->rolling_rtt_min = c4_state->rtt_filter.sample_max;
-                    if (c4_state->rolling_rtt_min < c4_state->rtt_min) {
-                        c4_state->rtt_min = c4_state->rolling_rtt_min;
-                    }
-                }
-            }
-            if (ack_state->rtt_measurement < c4_state->rtt_min) {
-                c4_state->delay_threshold = c4_delay_threshold(c4_state->rtt_min);
-            }
-            else if (c4_state->rtt_min_is_trusted){
-                delta_rtt = ack_state->rtt_measurement - c4_state->rtt_min;
+            if (c4_state->alg_state == c4_initial) {
+                c4_initial_handle_rtt(path_x, c4_state, notification, ack_state->rtt_measurement, current_time);
             }
             else {
-                c4_state->rtt_min = ack_state->rtt_measurement; 
-                c4_state->rolling_rtt_min = ack_state->rtt_measurement;
-                c4_state->rtt_min_is_trusted = 1;
-                delta_rtt = 0;
+                c4_handle_rtt(cnx, path_x, c4_state, ack_state->rtt_measurement, current_time);
             }
-
-            if (delta_rtt < c4_state->delay_threshold) {
-                c4_state->nb_cc_events = 0;
-            }
-            else {
-                /* May well be congested */
-                c4_state->nb_cc_events++;
-                if (c4_state->nb_cc_events >= C4_REPEAT_THRESHOLD) {
-                    /* Too many events, reduce the window */
-                    c4_notify_congestion(cnx, path_x, c4_state, current_time, ack_state->rtt_measurement, 1, 0);
-                }
-            }
-        }
-        break;
+            break;
         case picoquic_congestion_notification_lost_feedback:
-            c4_enter_suspended(path_x, c4_state);
+            if (c4_state->rtt_min_is_trusted && c4_state->alg_state != c4_initial && c4_state->alg_state != c4_suspended) {
+                c4_enter_suspended(path_x, c4_state);
+            }
             break;
         case picoquic_congestion_notification_cwin_blocked:
             break;

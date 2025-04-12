@@ -30,7 +30,7 @@ State of the art:
   of Hystart by adding a "retry" period at a lower increase rate after Hystart exits on delay increase.
   Does not solve the queuing and potential losses issue.
 
-* BBR Start up, Neal cardwell et al., 2017,
+* BBR Start up, Neal Cardwell et al., 2017,
   [BBR Draft version 00](https://datatracker.ietf.org/doc/html/draft-cardwell-iccrg-bbr-congestion-control-00).
   Use rate control instead of delay control.
   Monitor the bandwidth from ACKs, set the pacing rate to twice the bandwidth, stops if the measured

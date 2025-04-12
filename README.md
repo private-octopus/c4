@@ -11,11 +11,24 @@ control design issues such as:
 * how to quickly drive connection from a cold start to sending at network speed? Is
   Hystart ()? What about [Hystart++](https://www.ietf.org/rfc/rfc9406.html)? Maybe a
   helping of [Careful Resume]( https://datatracker.ietf.org/doc/draft-ietf-tsvwg-careful-resume/)?
+  See the [start up discussion paper](./papers/Start-up_challenge.md).
 
 * how to combine multiple signals like delays, ECN marks and packet losses to detect
   congestion? Should there be a differential behavior, such as slowing down faster if
   packet losses are detected than if delay increases? Does that affect the "recovery"
-  mechanism introduced in TCP Reno?
+  mechanism introduced in TCP Reno? We propose a specific "most restrictive signal"
+  rule in the paper on
+  [Combining congestion signals](./papers/combine_congestion_signals.md).
+
+* algorithms that try to minimize delay tend to be too polite. That's the main reason why
+  [TCP Vegas](https://sites.cs.ucsb.edu/~almeroth/classes/F05.276/papers/vegas.pdf)
+  can only be deployed in controlled environments. TCP Vegas notices delay increases
+  before losses happen, backs off first, and eventually yields most of the network capacity to
+  the competing connection using loss based algorithms like Reno or Cubic.
+  A deployable algorithm will have to
+  deal with that issue, maybe by adopting a polite delay minimizing attitude by default, but
+  switching to a more aggressive posture when competing with Reno or Cubic. This is easier said
+  than done. See the discussion paper on [vegas like competion issues](./papers/vegas_like_compete.md)
 
 * fair sharing between connections requires that connections using
   lots of bandwidth back off faster than slower connections. But algorithms have to scale
@@ -27,25 +40,15 @@ control design issues such as:
 * If we accept to not guarantee fairness, we will need to at least guarantee that
   other connections do not "starve". How do we do that?
 
+* In competitive scenarios, connections can only increase their share of bandwidth
+  by forcing some other connections to yield. How do they do that? Are slow increases
+  sufficient, or do we need "push" events with sizeable increase, maybe at least 25%?
+
 * Real time connections are often application limited. For example, video transmission
   will alternate
   between periodic refresh that may require lots of bandwidth, and differential
   updates that require very little. Can that interact well with bandwidth seeking
   congestion control algorithms?
-
-* In competitive scenarios, connections can only increase their share of bandwidth
-  by forcing some other connections to yield. How do they do that? Are slow increases
-  sufficient, or do we need "push" events with sizeable increase, maybe at least 25%?
-
-* algorithms that try to minimize delay tend to be too polite. That's the main reason why
-  [TCP Vegas](https://sites.cs.ucsb.edu/~almeroth/classes/F05.276/papers/vegas.pdf)
-  can only be deployed in controlled environments. TCP Vegas notices delay increases
-  before losses happen, backs off first, and eventually yields most of the network capacity to
-  the competing connection using loss based algorithms like Reno or Cubic.
-  A deployable algorithm will have to
-  deal with that issue, maybe by adopting a polite delay minimizing attitude by default, but
-  switching to a more aggressive posture when competing with Reno or Cubic. This is easier said
-  than done.
 
 * delay based algorithms have to compare measurements with a reference "min RTT". A classic
   implementation is to consider the min RTT since the beginning of the connection, but

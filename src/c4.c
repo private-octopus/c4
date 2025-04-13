@@ -152,7 +152,7 @@ uint64_t c4_delay_threshold(uint64_t rtt_min)
 * This is used to compute the number of bytes to wait for until
 * exit cruising
  */
-uint64_t c4_uint64_log(uint64_t v)
+static uint64_t c4_uint64_log_exp(uint64_t v)
 {
     uint64_t l = 0;
     if (v > 0xFFFFFFFFull) {
@@ -181,27 +181,74 @@ uint64_t c4_uint64_log(uint64_t v)
     return l;
 }
 
+static uint64_t c4_uint64_log_decpart(uint64_t dec_1024)
+{
+    uint64_t log_decpart = 0;
+
+    dec_1024 += 1024;
+
+    if (dec_1024 >= 1449) {
+        log_decpart += 512;
+        dec_1024 = (dec_1024 * 1024) / 1449;
+    }
+    if (dec_1024 >= 1218) {
+        log_decpart += 256;
+        dec_1024 = (dec_1024 * 1024) / 1218;
+    }
+    if (dec_1024 >= 1117) {
+        log_decpart += 128;
+        dec_1024 = (dec_1024 * 1024) / 1117;
+    }
+    if (dec_1024 >= 1070) {
+        log_decpart += 64;
+        dec_1024 = (dec_1024 * 1024) / 1070;
+    }
+    if (dec_1024 >= 1047) {
+        log_decpart += 32;
+        dec_1024 = (dec_1024 * 1024) / 1047;
+    }
+    dec_1024 += (((dec_1024 - 1024) * 1477) / 1024);
+    return dec_1024;
+}
+
+uint64_t c4_uint64_log_1024(uint64_t v)
+{
+    uint64_t l_exp = c4_uint64_log_exp(v);
+    uint64_t decimal_part = v;
+    uint64_t l_1024 = l_exp << 10;
+
+    if (l_exp > 10) {
+        decimal_part >>= (l_exp - 10);
+    }
+    else if (l_exp < 10) {
+        decimal_part <<= (10 - l_exp);
+    }
+    decimal_part &= 1023;
+
+    l_1024 += c4_uint64_log_decpart(decimal_part);
+
+    return l_1024;
+}
+
 /* Compute the cruising interval, as a function of the window.
 * We want the number of RTT to grow as the log of the window,
 * with an extreme coefficient 1 if the window is < 2096 and 
 * 8 if the window is > 2^28 bytes.
 * the formula is 1 + 7*(x-11)/(28 -11)
-* we compute using 7*1024/(28 -11) ~= 422
  */
 uint64_t c4_cruise_bytes_target(uint64_t w)
 {
     uint64_t x_1024;
-    uint64_t l = c4_uint64_log(w);
+    uint64_t l_1024 = c4_uint64_log_1024(w);
     uint64_t target = w;
 
-
-    if (l > 28) {
-        l = 28;
+    if (l_1024 > 28*1024) {
+        l_1024 = 28*1024;
     }
-    else if (l < 11) {
-        l = 11;
+    else if (l_1024 < 11*1024) {
+        l_1024 = 11*1024;
     }
-    x_1024 = (l - 11) * 422;
+    x_1024 = 1024 + (7*(l_1024 - 11*1024))/((28-11)*1024);
     target += MULT1024(x_1024, w);
     return target;
 }

@@ -75,11 +75,3 @@ to use a combination rule:
   it would have reduce CWIN.
 * if that newly computed CWIN is lower than the current, consider
   something like "re-entering recovery" and pick the lower CWIN value.
-
-
-   still monitors the bottleneck bandwidth, but comine that with reaction to packet losses
-   and ECN marks.
-how to combine multiple signals like delays, ECN marks and packet losses to detect
-  congestion? Should there be a differential behavior, such as slowing down faster if
-  packet losses are detected than if delay increases? Does that affect the "recovery"
-  mechanism introduced in TCP Reno?

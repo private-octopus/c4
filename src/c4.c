@@ -241,8 +241,6 @@ uint64_t c4_cruise_bytes_target(uint64_t w)
     uint64_t x_1024;
     uint64_t l_1024 = c4_uint64_log_1024(w);
     uint64_t target = w;
-    int x;
-
 
     if (l_1024 > 28*1024) {
         l_1024 = 28*1024;
@@ -250,7 +248,7 @@ uint64_t c4_cruise_bytes_target(uint64_t w)
     else if (l_1024 < 11*1024) {
         l_1024 = 11*1024;
     }
-    x_1024 = (7*(l_1024 - 11*1024))/((28-11)*1024);
+    x_1024 = 1024 + (7*(l_1024 - 11*1024))/((28-11)*1024);
     target += MULT1024(x_1024, w);
     return target;
 }

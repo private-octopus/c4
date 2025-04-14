@@ -374,9 +374,15 @@ static void c4_initial_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state,
         }
         c4_era_reset(path_x, c4_state);
     }
-    /* TODO: handle possible information about bandwodth seed, peak bandwidth */
+    /* TODO: handle possible information about bandwidth seed, peak bandwidth, careful resume,
+     * as required to support geo satellites.
+     */
     if (c4_state->nb_eras_no_increase >= 3) {
         c4_exit_initial(path_x, c4_state, picoquic_congestion_notification_acknowledgement);
+    }
+    else {
+        /* Increase cwin based on bandwidth estimation. */
+        path_x->cwin = picoquic_cc_update_target_cwin_estimation(path_x);
     }
 }
 
@@ -642,7 +648,7 @@ static void c4_handle_rtt(
         c4_state->nb_cc_events++;
         if (c4_state->nb_cc_events >= C4_REPEAT_THRESHOLD) {
             /* Too many events, reduce the window */
-            c4_notify_congestion(path_x, c4_state, current_time, rtt_measurement, 1, 0);
+            c4_notify_congestion(path_x, c4_state, rtt_measurement, 1, 0);
         }
     }
 }

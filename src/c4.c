@@ -500,7 +500,6 @@ static void c4_exit_suspended(
  */
 void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_ack_state_t* ack_state, uint64_t current_time)
 {
-    int is_new_era = 0;
     uint64_t corrected_delivered_bytes = c4_compute_corrected_delivered_bytes(c4_state, ack_state->nb_bytes_delivered_since_packet_sent, ack_state->rtt_measurement);
 
     if (corrected_delivered_bytes > c4_state->nominal_cwin) {

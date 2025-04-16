@@ -1,0 +1,15 @@
+main_cc_algo: bbr
+main_start_time: 0
+main_scenario_text: =a1:d50:p2:S:n250:80;=vlow:s30:p4:S:n150:3750:G30:I37500;=vmid:s30:p6:S:n150:6250:G30:I62500:D250000;
+nb_connections: 1
+main_target_time: 10000000
+data_rate_in_gbps: 0.1
+latency: 15000
+queue_delay_max: 100000
+icid: ed1abb00
+qlog_dir: cclog
+qperf_log: bbr_media_qperflog.csv
+media_stats_start: 200000
+media_latency_average: 32000
+media_latency_max: 112000
+media_excluded: vhigh, vmid, vlast

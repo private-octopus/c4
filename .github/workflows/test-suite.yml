@@ -33,8 +33,23 @@ jobs:
           cmake --build .
           make
           ulimit -c unlimited -S
-          #TODO: iterate through all the scenarios
-          ./pico_sim -S ../../picoquic ../sim_specs/dcubic_vs_cubic.txt && QDRESULT=$? 
-          if [ ${QDRESULT} == 0 ]; then exit 0; fi;
-          exit 1
+          # Iterate through all the scenarios
+          ./pico_sim -S ../../picoquic ../sim_specs/c4_alone.txt && QDRESULT=$? 
+          if [ ${QDRESULT} != 0 ]; then exit 1; fi;
+          ./pico_sim -S ../../picoquic ../sim_specs/c4_alone_200.txt && QDRESULT=$? 
+          if [ ${QDRESULT} != 0 ]; then exit 1; fi;
+          ./pico_sim -S ../../picoquic ../sim_specs/c4_vs_c4.txt && QDRESULT=$? 
+          if [ ${QDRESULT} != 0 ]; then exit 1; fi;
+          ./pico_sim -S ../../picoquic ../sim_specs/c4_after_c4.txt && QDRESULT=$? 
+          if [ ${QDRESULT} != 0 ]; then exit 1; fi;
+          ./pico_sim -S ../../picoquic ../sim_specs/c4_before_c4.txt && QDRESULT=$? 
+          if [ ${QDRESULT} != 0 ]; then exit 1; fi;
+          ./pico_sim -S ../../picoquic ../sim_specs/c4_vs_cubic.txt && QDRESULT=$? 
+          if [ ${QDRESULT} != 0 ]; then exit 1; fi;
+          ./pico_sim -S ../../picoquic ../sim_specs/c4_wifi_fade.txt && QDRESULT=$? 
+          if [ ${QDRESULT} != 0 ]; then exit 1; fi;
+          ./pico_sim -S ../../picoquic ../sim_specs/c4_wifi_suspension.txt && QDRESULT=$? 
+          if [ ${QDRESULT} != 0 ]; then exit 1; fi;
+          exit 0
+          
 

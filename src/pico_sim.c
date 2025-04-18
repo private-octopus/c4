@@ -12,12 +12,15 @@
 #include "picoquic_ns.h"
 #include "picoquic_utils.h"
 
+ /*
+ Declare here the algorithm[s] that we want to test
+ */
+#include "c4.h"
+
+int picoquic_ns_register_test_algorithm(picoquic_congestion_algorithm_t const* test_alg);
+
 int parse_spec_file(picoquic_ns_spec_t* spec, FILE* F);
 void release_spec_data(picoquic_ns_spec_t* spec);
-/*
-Declare here the algorithm[s] that we want to test
-*/
-#include "c4.h"
 
 int picoquic_ns_register_test_algorithm(picoquic_congestion_algorithm_t const* test_alg);
 
@@ -680,8 +683,6 @@ void release_text(char const** text)
         *text = NULL;
     }
 }
-
-
 
 /* Add a test algorithm to the list of registered algorithms.
  */

@@ -94,7 +94,7 @@ int main(int argc, char** argv)
             fprintf(stderr, "Error when processing file <%s>\n", spec_file_name);
         }
         else {
-            ret = picoquic_ns(&spec);
+            ret = picoquic_ns(&spec, stderr);
             printf("picoquic_ns (%s) returns %d\n", spec_file_name, ret);
         }
         F = picoquic_file_close(F);

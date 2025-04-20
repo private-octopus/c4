@@ -11,14 +11,18 @@
 #include "picoquic.h"
 #include "picoquic_ns.h"
 #include "picoquic_utils.h"
-/*
-Declare here the algorithm[s] that we want to test
-*/
+
+ /*
+ Declare here the algorithm[s] that we want to test
+ */
 #include "c4.h"
 
 int picoquic_ns_register_test_algorithm(picoquic_congestion_algorithm_t const* test_alg);
+
 int parse_spec_file(picoquic_ns_spec_t* spec, FILE* F);
 void release_spec_data(picoquic_ns_spec_t* spec);
+
+int picoquic_ns_register_test_algorithm(picoquic_congestion_algorithm_t const* test_alg);
 
 #ifdef _WINDOWS
 #include "../pico_sim_vs/pico_sim_vs/getopt.h"
@@ -33,7 +37,7 @@ void release_spec_data(picoquic_ns_spec_t* spec);
 
 void usage()
 {
-    fprintf(stderr, "Pico_sim, picoquic network simulator\n\n");
+    fprintf(stderr, "Pico_sim, picoquic network simularor\n\n");
     fprintf(stderr, "Usage: pico_sim [options] simulation_specification\n\n");
     fprintf(stderr, "Examples of simulation specifications are found in the\n");
     fprintf(stderr, "folder \"sim_specs\"\n");
@@ -62,7 +66,7 @@ int main(int argc, char** argv)
         return -1;
     }
 #endif
-  
+
     /* Get the parameters */
     while ((opt = getopt(argc, argv, option_string)) != -1) {
         switch (opt) {
@@ -95,7 +99,7 @@ int main(int argc, char** argv)
         }
         else {
             ret = picoquic_ns(&spec, stderr);
-            printf("picoquic_ns (%s) returns %d\n", spec_file_name, ret);
+            fprintf(stderr, "picoquic_ns (%s) returns %d\n", spec_file_name, ret);
         }
         F = picoquic_file_close(F);
         release_spec_data(&spec);
@@ -122,6 +126,11 @@ typedef enum {
     e_icid,
     e_qlog_dir,
     e_link_scenario,
+    e_qperf_log,
+    e_media_stats_start,
+    e_media_excluded,
+    e_media_latency_average,
+    e_media_latency_max,
     e_error
 } spec_param_enum;
 
@@ -149,7 +158,12 @@ spec_param_t params[] = {
     { e_l4s_max, "l4s_max", 7 },
     { e_icid, "icid", 4 },
     { e_qlog_dir, "qlog_dir", 8 },
-    { e_link_scenario, "link_scenario", 13 }
+    { e_link_scenario, "link_scenario", 13 },
+    { e_qperf_log, "qperf_log", 9},
+    { e_media_stats_start, "media_stats_start", 17},
+    { e_media_excluded, "media_excluded", 14},
+    { e_media_latency_average, "media_latency_average", 21},
+    { e_media_latency_max, "media_latency_max", 17},
 };
 
 const size_t nb_params = sizeof(params) / sizeof(spec_param_t);
@@ -175,7 +189,7 @@ int parse_spec_file(picoquic_ns_spec_t * spec, FILE* F)
         }
 
         if (len > 0) {
-            for (size_t i = 0; i < nb_params; i++) {
+            for (int i = 0; i < nb_params; i++) {
                 if (len > params[i].p_len &&
                     strncmp(line, params[i].p_name, params[i].p_len) == 0)
                 {
@@ -279,9 +293,27 @@ int parse_param(picoquic_ns_spec_t* spec, spec_param_enum p_e, char const* line)
         case e_link_scenario:
             ret = parse_link_scenario(spec, line);
             break;
-        default:
-            fprintf(stderr, "Incorrect specification line: %s\n", line);
+        case e_qperf_log:
+            ret = parse_file_name(&spec->qperf_log, line);
             break;
+        case e_media_stats_start:
+            ret = parse_u64(&spec->media_stats_start, line);
+            break;
+        case e_media_excluded:
+            ret = parse_text(&spec->media_excluded, line);
+            break;
+        case e_media_latency_average:
+            ret = parse_u64(&spec->media_latency_average, line);
+            break;
+        case e_media_latency_max:
+            ret = parse_u64(&spec->media_latency_max, line);
+            break;
+        default:
+            ret = -1;
+            break;
+        }
+        if (ret != 0) {
+            fprintf(stderr, "Error parsing param %d: %s\n", p_e, line);
         }
     }
 
@@ -297,6 +329,8 @@ void release_spec_data(picoquic_ns_spec_t* spec)
         free(spec->vary_link_spec);
         spec->vary_link_spec = NULL;
     }
+    release_text(&spec->qperf_log);
+    release_text(&spec->media_excluded);
 }
 
 int parse_u64(uint64_t* x, char const* val)

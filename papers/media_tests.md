@@ -85,13 +85,13 @@ The test simulates WiFi suspension.
 
 | Queuing (ms)  |av/max| C4 | Cubic | BBR |
 |------|----|-------|-------|-------|
-| Audio | av | 10 | 36 | 10 |
-| Audio | max | 198 | 168 | 186 |
-| Video Low | av | 13 | 73 | 13 |
-| Video Low | max | 199 | 453 | 186 |
-| Video High | av | 22 | 25 | 16 |
-| Video High | max | 248 | 791 | 198 |
+| Audio | av | 10 | 10 | 10 |
+| Audio | max | 189 | 188 | 186 |
+| Video Low | av | 13 | 13 | 13 |
+| Video Low | max | 191 | 188| 186 |
+| Video High | av | 23 | 23 | 16 |
+| Video High | max | 251 | 222 | 198 |
 
-C4 performs better than Cubic and almost as well as BBR for this scenario, which is
+C4 performs better than Cubic on average and almost as well as BBR for this scenario, which is
 encouraging because we did lot of work to improve BBR for this scenario. The difference
 with BBR needs to be analyzed, and could probably be fixed. 

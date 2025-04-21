@@ -54,7 +54,9 @@ line rate is lower and the latency a bit higher:
 | Video High | av | 13 | 13 | 17 |
 | Video High | max | 82 | 86 | 117 |
 
-In this test, we see C4 performing better than either Cubic or BBR.
+In this test, we see C4 performing better than Cubic for audio and for mid def 
+video, on par with Cubic and slightly worse than BBR for low def video. Need
+analysis of the difference with BBR!
 
 ## WiFi fading test
 

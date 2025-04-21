@@ -50,6 +50,14 @@ jobs:
           if [ ${QDRESULT} != 0 ]; then exit 1; fi;
           ./pico_sim -S ../../picoquic ../sim_specs/c4_wifi_suspension.txt && QDRESULT=$? 
           if [ ${QDRESULT} != 0 ]; then exit 1; fi;
+          ./pico_sim -S ../../picoquic ../sim_specs/c4_media.txt && QDRESULT=$? 
+          if [ ${QDRESULT} != 0 ]; then exit 1; fi;
+          ./pico_sim -S ../../picoquic ../sim_specs/c4_media10.txt && QDRESULT=$? 
+          if [ ${QDRESULT} != 0 ]; then exit 1; fi;
+          ./pico_sim -S ../../picoquic ../sim_specs/c4_media_wf.txt && QDRESULT=$? 
+          if [ ${QDRESULT} != 0 ]; then exit 1; fi;
+          ./pico_sim -S ../../picoquic ../sim_specs/c4_media_ws.txt && QDRESULT=$? 
+          if [ ${QDRESULT} != 0 ]; then exit 1; fi;
           exit 0
           
 

@@ -113,8 +113,7 @@ typedef struct st_c4_state_t {
     uint64_t era_sequence; /* sequence number of first packet in era */
     uint64_t cruise_bytes_ack; /* accumulate bytes count in cruise state */
     uint64_t cruise_bytes_target; /* expected bytes count until end of cruise */
-    int increased_during_era;
-    int increased_after_push;
+
     int nb_eras_no_increase;
     int nb_push_no_congestion; /* Number of successive 25% pushes with no congestion */
     int nb_eras_delay_based_decrease; /* Number of successive delay based decreases */
@@ -125,10 +124,14 @@ typedef struct st_c4_state_t {
     uint64_t suspended_nominal_cwin;
     uint64_t suspended_nominal_state;
     int nb_recent_delay_excesses;
+
     unsigned int last_freeze_was_timeout : 1;
     unsigned int last_freeze_was_not_delay : 1;
     unsigned int rtt_min_is_trusted : 1;
+    unsigned int increased_during_era : 1;
+    unsigned int increased_after_push : 1;
     unsigned int pig_war : 1;
+
     picoquic_min_max_rtt_t rtt_filter;
     /* Handling of options. */
     char const* option_string;
@@ -440,6 +443,30 @@ void c4_init(picoquic_cnx_t * cnx, picoquic_path_t* path_x, char const* option_s
 }
 
 /*
+* Start a pig war. We detect that there this connection is sharing
+* the bottleneck with an uncooperating other connection that does
+* not back off when delays increase by observing a number of
+* successive congestion notifications caused by "excess delay".
+* In that case, we enter "pig war" mode: reset the min RTT
+* to the current RTT value, re-enter slow start, and after that
+* ignore "excess delay" signals until further notice. 
+ */
+static void c4_start_pig_war(
+    picoquic_path_t* path_x,
+    c4_state_t* c4_state,
+    uint64_t current_time)
+{
+    c4_state->nb_eras_delay_based_decrease = 0;
+    c4_state->pig_war = 1;
+    c4_state->rtt_min = path_x->rtt_sample;
+    for (int i = 0; i < PICOQUIC_MIN_MAX_RTT_SCOPE; i++) {
+        picoquic_cc_filter_rtt_min_max(&c4_state->rtt_filter, path_x->rtt_sample);
+    }
+    c4_state->rtt_filter.rtt_filtered_min = path_x->rtt_sample;
+    c4_enter_initial(path_x, c4_state, current_time);
+}
+
+/*
 * Enter recovery.
 * CWIN is set to C4_ALPHA_RECOVER of nominal value (90%)
 * Remember the first no ACK packet -- recovery will end when that
@@ -470,14 +497,7 @@ static void c4_enter_recovery(
             c4_state->nb_eras_delay_based_decrease++;
             if (c4_state->nb_eras_delay_based_decrease >= C4_MAX_DELAY_ERA_CONGESTIONS) {
                 if (!c4_state->pig_war) {
-                    c4_state->nb_eras_delay_based_decrease = 0;
-                    c4_state->pig_war = 1;
-                    c4_state->rtt_min = path_x->rtt_sample;
-                    for (int i = 0; i < PICOQUIC_MIN_MAX_RTT_SCOPE; i++) {
-                        picoquic_cc_filter_rtt_min_max(&c4_state->rtt_filter, path_x->rtt_sample);
-                    }
-                    c4_state->rtt_filter.rtt_filtered_min = path_x->rtt_sample;
-                    c4_enter_initial(path_x, c4_state, current_time);
+                    c4_start_pig_war(path_x, c4_state, current_time);
                     return;
                 }
             }
@@ -518,17 +538,9 @@ static void c4_enter_push(
     c4_state_t* c4_state,
     uint64_t current_time)
 {
-#if 1
     if (!c4_state->increased_after_push) {
         c4_state->nb_push_no_congestion = 0;
     }
-#else
-    if (c4_state->pig_war) {
-        if (!c4_state->increased_after_push) {
-            c4_state->nb_push_no_congestion = 0;
-        }
-    }
-#endif
     c4_state->increased_after_push = 0;
     c4_state->nb_push_no_congestion++;
     c4_state->alpha_1024_current = C4_ALPHA_PUSH_1024;
@@ -609,8 +621,10 @@ void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_a
         }
 
         if (c4_state->alg_state == c4_cruising) {
-            if (c4_state->nb_push_no_congestion >= C4_NB_PUSH_BEFORE_RESET /*  && !c4_state->no_reaction_to_delay && !c4_state->pig_war */) {
+            if (c4_state->nb_push_no_congestion >= C4_NB_PUSH_BEFORE_RESET) {
                 if (c4_state->pig_war) {
+                    /* End the pig war here. Bandwidth has increased, which means the  competing
+                     * connection is probably gone. */
                     c4_state->pig_war = 0;
                     c4_state->nb_push_no_congestion = 0;
                 }

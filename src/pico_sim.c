@@ -660,6 +660,12 @@ char const* parse_link_spec_item(picoquic_ns_link_spec_t * line_spec, char const
             case 'S':
                 ret = parse_u64(&line_spec->l4s_max, &intermediate[1]);
                 break;
+            case 'B':
+                ret = parse_u64(&line_spec->nb_loss_in_burst, &intermediate[1]);
+                break;
+            case 'P':
+                ret = parse_u64(&line_spec->packets_between_losses, &intermediate[1]);
+                break;
             default:
                 /* unknown parameter */
                 ret = -1;

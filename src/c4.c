@@ -113,6 +113,7 @@ typedef struct st_c4_state_t {
     uint64_t era_sequence; /* sequence number of first packet in era */
     uint64_t cruise_bytes_ack; /* accumulate bytes count in cruise state */
     uint64_t cruise_bytes_target; /* expected bytes count until end of cruise */
+    uint64_t seed_cwin; /* Value of CWIN remembered from previous trials */
 
     int nb_eras_no_increase;
     int nb_push_no_congestion; /* Number of successive 25% pushes with no congestion */
@@ -120,7 +121,6 @@ typedef struct st_c4_state_t {
 
     uint64_t rtt_min;
     uint64_t delay_threshold;
-    uint64_t rolling_rtt_min; /* Min RTT measured for this epoch */
     uint64_t suspended_nominal_cwin;
     uint64_t suspended_nominal_state;
     int nb_recent_delay_excesses;
@@ -131,6 +131,7 @@ typedef struct st_c4_state_t {
     unsigned int increased_during_era : 1;
     unsigned int increased_after_push : 1;
     unsigned int pig_war : 1;
+    unsigned int use_seed_cwin : 1;
 
     picoquic_min_max_rtt_t rtt_filter;
     /* Handling of options. */
@@ -329,8 +330,7 @@ void c4_reset(c4_state_t* c4_state, picoquic_path_t* path_x, char const* option_
 {
     memset(c4_state, 0, sizeof(c4_state_t));
     c4_state->option_string = option_string;
-    c4_state->rtt_min = path_x->smoothed_rtt;
-    c4_state->rolling_rtt_min = c4_state->rtt_min;
+    c4_state->rtt_min = UINT64_MAX;
     c4_state->nominal_cwin = PICOQUIC_CWIN_INITIAL;
     c4_set_options(c4_state);
     c4_enter_initial(path_x, c4_state, current_time);
@@ -339,9 +339,8 @@ void c4_reset(c4_state_t* c4_state, picoquic_path_t* path_x, char const* option_
 void c4_seed_cwin(c4_state_t* c4_state, picoquic_path_t* path_x, uint64_t bytes_in_flight)
 {
     if (c4_state->alg_state == c4_initial) {
-        if (path_x->cwin < bytes_in_flight) {
-            path_x->cwin = bytes_in_flight;
-        }
+        c4_state->use_seed_cwin = 1;
+        c4_state->seed_cwin = bytes_in_flight;
     }
 }
 
@@ -356,14 +355,6 @@ static void c4_exit_initial(picoquic_path_t* path_x, c4_state_t* c4_state, picoq
 
 static void c4_initial_handle_rtt(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_congestion_notification_t notification, uint64_t rtt_measurement, uint64_t current_time)
 {
-#if 0
-    /* if in slow start, increase the window for long delay RTT */
-    c4_state->rtt_min = path_x->rtt_min;
-#endif
-    if (path_x->rtt_min > PICOQUIC_TARGET_RENO_RTT /* && cubic_state->ssthresh == UINT64_MAX */ ) {
-        path_x->cwin = picoquic_cc_update_cwin_for_long_rtt(path_x);
-    }
-
     /* HyStart. */
     /* Using RTT increases as congestion signal. This is used
      * for getting out of slow start, but also for ending a cycle
@@ -402,6 +393,10 @@ static void c4_initial_handle_loss(picoquic_path_t* path_x, c4_state_t* c4_state
 
 static void c4_initial_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_ack_state_t* ack_state, uint64_t current_time)
 {
+    if (c4_state->use_seed_cwin && c4_state->nominal_cwin >= c4_state->seed_cwin) {
+        /* The nominal bandwidth is larger than the seed. The seed has been validated. */
+        c4_state->use_seed_cwin = 0;
+    }
     if (c4_era_check(path_x, c4_state)) {
         /* Only exit on lack of increase if not app limited */
         if (!c4_state->increased_during_era && path_x->last_time_acked_data_frame_sent > path_x->last_sender_limited_time) {
@@ -418,6 +413,13 @@ static void c4_initial_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state,
     else {
         /* Increase cwin based on bandwidth estimation. */
         path_x->cwin = picoquic_cc_update_target_cwin_estimation(path_x);
+        if (c4_state->use_seed_cwin && c4_state->seed_cwin > path_x->cwin) {
+            /* Match half the difference between seed and computed CWIN */
+            uint64_t seeded_cwin= (c4_state->seed_cwin + MULT1024(C4_ALPHA_INITIAL, c4_state->nominal_cwin)) / 2;
+            if (seeded_cwin > path_x->cwin) {
+                path_x->cwin = seeded_cwin;
+            }
+        }
     }
 }
 
@@ -522,6 +524,7 @@ static void c4_enter_cruise(
     uint64_t current_time)
 {
     c4_era_reset(path_x, c4_state);
+    c4_state->use_seed_cwin = 0;
     c4_state->cruise_bytes_ack = 0;
     c4_state->cruise_bytes_target = c4_cruise_bytes_target(c4_state->nominal_cwin);
     c4_state->alpha_1024_current = C4_ALPHA_CRUISE_1024;
@@ -583,7 +586,8 @@ void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_a
 {
     uint64_t corrected_delivered_bytes = c4_compute_corrected_delivered_bytes(c4_state, ack_state->nb_bytes_delivered_since_packet_sent, ack_state->rtt_measurement);
 
-    if (corrected_delivered_bytes > c4_state->nominal_cwin) {
+    if (corrected_delivered_bytes > c4_state->nominal_cwin &&
+        (!c4_state->use_seed_cwin || c4_state->alg_state == c4_initial)) {
         c4_state->nominal_cwin = corrected_delivered_bytes;
         path_x->cwin = MULT1024(c4_state->alpha_1024_current, c4_state->nominal_cwin);
         c4_state->increased_during_era = 1;
@@ -709,12 +713,8 @@ static void c4_handle_rtt(
     if (c4_state->rtt_filter.is_init) {
         /* We use the maximum of the last samples as the candidate for the
          * min RTT, in order to filter the rtt jitter */
-        if (c4_state->rtt_filter.sample_max < c4_state->rolling_rtt_min || c4_state->rolling_rtt_min == 0) {
-            /* If not end of epoch, update the rolling minimum */
-            c4_state->rolling_rtt_min = c4_state->rtt_filter.sample_max;
-            if (c4_state->rolling_rtt_min < c4_state->rtt_min) {
-                c4_state->rtt_min = c4_state->rolling_rtt_min;
-            }
+        if (c4_state->rtt_filter.sample_max < c4_state->rtt_min) {
+            c4_state->rtt_min = c4_state->rtt_filter.sample_max;
         }
     }
     if (rtt_measurement < c4_state->rtt_min) {
@@ -725,7 +725,6 @@ static void c4_handle_rtt(
     }
     else {
         c4_state->rtt_min = rtt_measurement;
-        c4_state->rolling_rtt_min = rtt_measurement;
         c4_state->rtt_min_is_trusted = 1;
         delta_rtt = 0;
     }
@@ -836,7 +835,7 @@ void c4_observe(picoquic_path_t* path_x, uint64_t* cc_state, uint64_t* cc_param)
 {
     c4_state_t* c4_state = (c4_state_t*)path_x->congestion_alg_state;
     *cc_state = (uint64_t)c4_state->alg_state;
-    *cc_param = c4_state->rolling_rtt_min;
+    *cc_param = c4_state->rtt_min;
 }
 
 /* Definition record for the FAST CC algorithm */

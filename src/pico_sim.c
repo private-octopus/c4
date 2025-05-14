@@ -133,6 +133,7 @@ typedef enum {
     e_media_latency_max,
     e_seed_cwin,
     e_seed_rtt,
+    e_wifi_jitter,
     e_error
 } spec_param_enum;
 
@@ -168,6 +169,7 @@ spec_param_t params[] = {
     { e_media_latency_max, "media_latency_max", 17},
     { e_seed_cwin, "seed_cwin", 9},
     { e_seed_rtt, "seed_rtt", 8},
+    { e_wifi_jitter, "wifi_jitter", 11},
 };
 
 const size_t nb_params = sizeof(params) / sizeof(spec_param_t);
@@ -317,6 +319,9 @@ int parse_param(picoquic_ns_spec_t* spec, spec_param_enum p_e, char const* line)
             break;
         case e_seed_rtt:
             ret = parse_u64(&spec->seed_rtt, line);
+            break;
+        case e_wifi_jitter:
+            spec->is_wifi_jitter = 1;
             break;
         default:
             ret = -1;
@@ -675,6 +680,9 @@ char const* parse_link_spec_item(picoquic_ns_link_spec_t * line_spec, char const
                 break;
             case 'P':
                 ret = parse_u64(&line_spec->packets_between_losses, &intermediate[1]);
+                break;
+            case 'W':
+                line_spec->is_wifi_jitter = 1;
                 break;
             default:
                 /* unknown parameter */

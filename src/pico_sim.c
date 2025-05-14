@@ -131,6 +131,7 @@ typedef enum {
     e_media_excluded,
     e_media_latency_average,
     e_media_latency_max,
+    e_wifi_jitter,
     e_error
 } spec_param_enum;
 
@@ -164,6 +165,7 @@ spec_param_t params[] = {
     { e_media_excluded, "media_excluded", 14},
     { e_media_latency_average, "media_latency_average", 21},
     { e_media_latency_max, "media_latency_max", 17},
+    { e_wifi_jitter, "wifi_jitter", 11},
 };
 
 const size_t nb_params = sizeof(params) / sizeof(spec_param_t);
@@ -307,6 +309,9 @@ int parse_param(picoquic_ns_spec_t* spec, spec_param_enum p_e, char const* line)
             break;
         case e_media_latency_max:
             ret = parse_u64(&spec->media_latency_max, line);
+            break;
+        case e_wifi_jitter:
+            spec->is_wifi_jitter = 1;
             break;
         default:
             ret = -1;
@@ -665,6 +670,9 @@ char const* parse_link_spec_item(picoquic_ns_link_spec_t * line_spec, char const
                 break;
             case 'P':
                 ret = parse_u64(&line_spec->packets_between_losses, &intermediate[1]);
+                break;
+            case 'W':
+                line_spec->is_wifi_jitter = 1;
                 break;
             default:
                 /* unknown parameter */

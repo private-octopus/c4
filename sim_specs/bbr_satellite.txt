@@ -2,9 +2,11 @@ main_cc_algo: bbr
 main_start_time: 0
 main_scenario_text: =b1:*1:397:100000000;
 nb_connections: 1
-main_target_time: 8500000
+main_target_time: 8000000
 data_rate_in_gbps: 0.250
 latency: 300000
 queue_delay_max: 600000
 icid: ccc0bb5a
 qlog_dir: cclog
+seed_cwin: 18750000
+seed_rtt: 600123

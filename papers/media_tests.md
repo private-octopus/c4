@@ -98,4 +98,22 @@ with BBR needs to be analyzed, and could probably be fixed.
 
 ## WiFi extreme jitter
 
-To Be Added.
+The test simulates local communication on a Wi-Fi link with heavy jitter.
+
+
+| Queuing (ms)  |av/max| C4 | Cubic | BBR |
+|------|----|-------|-------|-------|
+| Audio | av | 16 | 16 | 16 |
+| Audio | max | 39 | 42 | 66 |
+| Video Low | av | 17 | 20 | 18 |
+| Video Low | max | 41 | 37| 34 |
+| Video High | av | 21 | 23 | 21 |
+| Video High | max | 59 | 62 | 66 |
+
+If we look at the averages, C4 performs better or on par with Cubic and BBR. The maximum
+delay of the "low" video is a bit higher, but the maximum delay of audio is significantly better.
+When we look at the logs, we see that C4 controls transmission more tightly.
+C4 ends up pacing the traffic at about 29 Mbps. BBR is pacing at a 58Mbps.
+Pacing at 28Mbps is actually better, because the actual bandwidth is 20Mbps.
+In case of spike of traffic, the excess data is only sent by the application
+when priorities allow, so the video does not get in the way of the audio traffic.

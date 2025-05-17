@@ -106,6 +106,8 @@ Test of a 4MB download over a "chaotic" wifi connection:
 * BBR: download in 3.35 sec, with the RTT varying between 30 to 45 ms.
 * Cubic: download in 3.34sec, the RTT is pegged at 80ms.
 
+The media simulations reported in {{./media_tests.md}} show that for
+jittery Wi-Fi, C4 performs better than Cubic or BBR.
+
 ##TODO:
 The part about chaotic jitter is questionable. If we don't manage that flag at all, we don't seem to have worst performance, or at least not much worse.
-Repeat the tests with media simulation.

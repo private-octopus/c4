@@ -66,12 +66,12 @@ will be dropped.
 
 | Queuing (ms)  |av/max| C4 | Cubic | BBR |
 |------|----|-------|-------|-------|
-| Audio | av | 43 | 44 | 22 |
-| Audio | max | 322 | 300 | 225 |
-| Video Low | av | 93 | 115 | 102 |
-| Video Low | max | 659 | 839 | 922 |
-| Video High | av | 45 | 40 | 46 |
-| Video High | max | 100 | 943 | 909 |
+| Audio | av | 73 | 70 | 77 |
+| Audio | max | 254 | 245 | 206 |
+| Video Low | av | 79 | 90 | 78 |
+| Video Low | max | 215 | 295 | 250 |
+| Video High | av | 79 | 71 | 89 |
+| Video High | max | 318 | 241 | 577 |
 
 C4 performs worse than BBR but on par with Cubic for audio, and better than either BBR or
 Cubic for low definition video. The performance of high speed video shows a much lower
@@ -95,3 +95,7 @@ The test simulates WiFi suspension.
 C4 performs better than Cubic on average and almost as well as BBR for this scenario, which is
 encouraging because we did lot of work to improve BBR for this scenario. The difference
 with BBR needs to be analyzed, and could probably be fixed. 
+
+## WiFi extreme jitter
+
+To Be Added.

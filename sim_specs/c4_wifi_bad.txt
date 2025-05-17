@@ -1,12 +1,12 @@
 main_cc_algo: c4
-main_cc_options: D
+main_cc_options:
 main_start_time: 0
 main_scenario_text: =b1:*1:397:4000000;
 nb_connections: 1
 main_target_time: 4500000
 data_rate_in_gbps: 0.01
 latency: 1000
-jitter: 12500
+jitter: 7000
 wifi_jitter: 1
 queue_delay_max: 80000
 icid: badfc400

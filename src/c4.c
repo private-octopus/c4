@@ -138,13 +138,14 @@ typedef struct st_c4_state_t {
     unsigned int increased_during_era : 1;
     unsigned int increased_after_push : 1;
     unsigned int pig_war : 1;
+    unsigned int chaotic_jitter : 1;
+    unsigned int no_reaction_to_delay : 1;
+    unsigned int not_strict_delay : 1;
     unsigned int use_seed_cwin : 1;
 
     picoquic_min_max_rtt_t rtt_filter;
     /* Handling of options. */
     char const* option_string;
-    unsigned int no_reaction_to_delay : 1;
-    unsigned int not_strict_delay : 1;
 } c4_state_t;
 
 static void c4_enter_recovery(
@@ -279,7 +280,7 @@ static uint64_t c4_compute_corrected_delivered_bytes(c4_state_t* c4_state, uint6
     uint64_t duration_max = MULT1024(1024 + 51, c4_state->rtt_min);
 
     if (c4_state->rtt_min_is_trusted &&
-        c4_state->not_strict_delay &&
+        (c4_state->not_strict_delay || c4_state->chaotic_jitter) &&
         c4_state->rtt_min_stamp + 1000000 > current_time) {
         if (c4_state->rtt_min < c4_state->nominal_max_rtt) {
             duration_max = MULT1024(256, 3 * c4_state->rtt_min + c4_state->nominal_max_rtt);
@@ -682,6 +683,12 @@ void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_a
             else {
                 c4_state->nominal_max_rtt = (7 * c4_state->nominal_max_rtt + c4_state->era_max_rtt) / 8;
             }
+            if (!c4_state->chaotic_jitter && c4_state->nominal_max_rtt > 2 * c4_state->rtt_min) {
+                c4_state->chaotic_jitter = 1;
+            }
+            if (c4_state->chaotic_jitter && 2*c4_state->nominal_max_rtt < 3* c4_state->rtt_min) {
+                c4_state->chaotic_jitter = 0;
+            }
             /* we could set a bandwidth estimate, but we would rather use the main code's estimate */
             switch (c4_state->alg_state) {
             case c4_recovery:
@@ -839,7 +846,7 @@ static void c4_handle_rtt(
     uint64_t current_time)
 {
     if (c4_state->rtt_min_is_trusted && c4_state->nb_recent_delay_excesses > PICOQUIC_MIN_MAX_RTT_SCOPE) {
-        if (!c4_state->no_reaction_to_delay && !c4_state->pig_war) {
+        if (!c4_state->no_reaction_to_delay && !c4_state->chaotic_jitter && !c4_state->pig_war) {
             /* May well be congested */
             if (c4_state->nb_recent_delay_excesses >= C4_REPEAT_THRESHOLD) {
                 /* Too many events, reduce the window */

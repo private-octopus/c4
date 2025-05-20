@@ -58,6 +58,8 @@ jobs:
           if [ ${QDRESULT} != 0 ]; then exit 1; fi;
           ./pico_sim -S ../../picoquic ../sim_specs/c4_media_ws.txt && QDRESULT=$? 
           if [ ${QDRESULT} != 0 ]; then exit 1; fi;
+          ./pico_sim -S ../../picoquic ../sim_specs/c4_short_long.txt && QDRESULT=$? 
+          if [ ${QDRESULT} != 0 ]; then exit 1; fi;
           exit 0
           
 

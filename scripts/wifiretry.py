@@ -294,7 +294,53 @@ class wifi_simulator:
             trace.append(delay, send_time)
             send_time += interval
         return trace
-        
+
+           
+class trace_frequency:
+    def __init__(self):
+        self.rtt = []
+        self.bucket = []
+    def add_series(self, ser):
+        self.rtt += ser.latency
+        #for rtt in ser.latency:
+        #    self.rtt.append(rtt)
+    def add_trace(self, tra):
+        for x in self.tra.trace:
+            self.rtt.append(x.rtt)
+
+    def compute_frequencies(self):
+        self.bucket = []
+        self.rtt.sort()
+        limit = 2500
+        l_name = "< " + str(limit)
+        bsum = 0
+        overflow=150000
+        total = len(self.rtt)
+        for rtt in self.rtt:
+            while rtt > limit:
+                frq = bsum/total
+                if bsum == 0:
+                    l_count = 0
+                else:
+                    l_count = math.log10(bsum)
+                self.bucket.append([ l_name, bsum, frq, l_count])
+                bsum = 0
+                if rtt > overflow:
+                    l_name = "> " + str(overflow)
+                    limit = 1000000000
+                else:
+                    l_name = str(limit) + "--"
+                    limit += 2500
+                    l_name += str(limit)
+            bsum += 1
+
+        if bsum > 0:
+            frq = bsum/total
+            l_count = math.log10(bsum)
+            self.bucket.append([ l_name, bsum, frq, l_count ])
+
+        df = pd.DataFrame( self.bucket, columns=[ 'range', 'count', 'frq', 'l10_frq' ])
+        return df
 
 # main
 # first, get the trace copy
@@ -314,6 +360,8 @@ sims = [ sim_far, sim_mid, sim_near ]
 out_csv = os.path.join(out_dir, "drop_rates.csv" )
 step_val = 800
 sim_steps = 3000
+sum_tf = trace_frequency()
+
 with open(out_csv, "w") as F:
     F.write("series, N, min_t, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10\n")
     trace_list = []
@@ -326,6 +374,7 @@ with open(out_csv, "w") as F:
         trace.load_file(file_name, filtering=True)
         s_rtt = trace.get_rtt_series(base_name)
         trace_list.append(s_rtt)
+        sum_tf.add_series(s_rtt)
         for serie in [s_rtt ]:
             serie.series_stats()
             if serie.min_latency > 0:
@@ -348,6 +397,11 @@ with open(out_csv, "w") as F:
         sim_file = os.path.join(out_dir, sim[0] + ".csv" )
         df = s_sim.get_df()
         df.to_csv(sim_file)
+
+sum_csv = os.path.join(out_dir, "cumulative.csv" )
+sum_df = sum_tf.compute_frequencies()
+sum_df.to_csv(sum_csv)
+
 
 for s_sim in trace_list:
     df = s_sim.get_df()
@@ -383,6 +437,8 @@ for h in hist_list:
 df = pd.DataFrame(hist_list, columns=headers)
 hist_file = os.path.join(out_dir, "histograms.csv")
 df.to_csv(hist_file)
+
+
 
 
 

@@ -11,7 +11,7 @@ wifi_jitter: 1
 queue_delay_max: 100000
 icid: ed1ac5fb
 qlog_dir: cclog
-qperf_log: bbr_media_wf_qperflog.csv
+qperf_log: c5_media_wb_qperflog.csv
 media_stats_start: 200000
 media_latency_average: 142000
 media_latency_max: 922000

@@ -1,4 +1,5 @@
 main_cc_algo: c4
+main_cc_options: R
 main_start_time: 0
 main_scenario_text: =b1:*1:397:10000000;
 nb_connections: 1
@@ -6,6 +7,6 @@ main_target_time: 8000000
 data_rate_in_gbps: 0.02
 latency: 40000
 queue_delay_max: 80000
-icid: ccc0c41f
+icid: 1ffac500
 qlog_dir: cclog
 link_scenario: wifi_fade

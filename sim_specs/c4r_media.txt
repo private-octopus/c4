@@ -9,7 +9,7 @@ latency: 15000
 queue_delay_max: 100000
 icid: ed1ac500
 qlog_dir: cclog
-qperf_log: c4_media_qperflog.csv
+qperf_log: c5_media_qperflog.csv
 media_stats_start: 200000
 media_latency_average: 31000
 media_latency_max: 45000

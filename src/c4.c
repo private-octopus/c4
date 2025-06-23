@@ -143,6 +143,10 @@ typedef struct st_c4_state_t {
 
     uint64_t delay_threshold;
     uint64_t suspended_nominal_cwin;
+#ifdef C4_WITH_RATE_CONTROL
+    uint64_t suspended_nominal_rate; /* rate before the last timeout-triggered change */
+#endif
+
     uint64_t suspended_nominal_state;
     int nb_recent_delay_excesses;
 
@@ -470,6 +474,11 @@ static void c4_set_options(c4_state_t* c4_state)
             case 'D': /* allow for looser delay bounds */
                 c4_state->not_strict_delay = 1;
                 break;
+#ifdef C4_WITH_RATE_CONTROL
+            case 'R': /* Do rate control instead of cwin control */
+                c4_state->do_rate_control = 1;
+                break;
+#endif
             default:
                 ended = 1;
                 break;
@@ -485,7 +494,6 @@ void c4_reset(c4_state_t* c4_state, picoquic_path_t* path_x, char const* option_
     c4_state->rtt_min = UINT64_MAX;
     c4_state->nominal_cwin = PICOQUIC_CWIN_INITIAL;
 #ifdef C4_WITH_RATE_CONTROL
-    c4_state->do_rate_control = 1; /* TODO: replace this by an option */
     c4_state->nominal_rate = 0; /* since we do not know anything about rate, use CWIN initially */
     c4_state->cwin_gain_1024 = 2048;
     c4_state->alpha_1024_current = C4_ALPHA_INITIAL;
@@ -791,6 +799,9 @@ static void c4_enter_suspended(
     c4_state->alpha_1024_current = C4_ALPHA_RECOVER_1024;
     c4_state->suspended_nominal_cwin = c4_state->nominal_cwin;
     c4_state->suspended_nominal_state = c4_state->alg_state;
+#ifdef C4_WITH_RATE_CONTROL
+    c4_state->suspended_nominal_rate = c4_state->nominal_rate;
+#endif
     c4_state->alg_state = c4_suspended;
     path_x->cwin = path_x->bytes_in_transit;
 }
@@ -801,6 +812,9 @@ static void c4_exit_suspended(
     uint64_t current_time)
 {
     c4_state->nominal_cwin = c4_state->suspended_nominal_cwin;
+#ifdef C4_WITH_RATE_CONTROL
+    c4_state->nominal_rate = c4_state->suspended_nominal_rate;
+#endif
     c4_enter_recovery(path_x, c4_state, 0, 0, 0, current_time);
 }
 

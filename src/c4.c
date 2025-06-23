@@ -95,6 +95,7 @@
 #define C4_BETA_1024 128 /* 0.125 */
 #define C4_BETA_LOSS_1024 256 /* 25%, 1/4th */
 #define C4_BETA_INITIAL_1024 512 /* 50% */
+#define C4_NB_PACKETS_BEFORE_LOSS 10
 #define C4_NB_PUSH_BEFORE_RESET 3
 #define C4_REPEAT_THRESHOLD 4
 #define C4_MAX_DELAY_ERA_CONGESTIONS 4
@@ -121,6 +122,7 @@ typedef struct st_c4_state_t {
     uint64_t nominal_rate; /* Control variable if rate based */
     uint64_t cwin_gain_1024;
     uint64_t seed_rate;
+    uint64_t nb_packets_in_startup;
 #endif
     uint64_t alpha_1024_current;
     uint64_t era_sequence; /* sequence number of first packet in era */
@@ -450,6 +452,7 @@ static void c4_enter_initial(picoquic_path_t* path_x, c4_state_t* c4_state, uint
 #ifdef C4_WITH_RATE_CONTROL
     c4_state->alpha_1024_current = C4_ALPHA_INITIAL_BW;
     c4_state->cwin_gain_1024 = 1024;
+    c4_state->nb_packets_in_startup = 0;
 #else
     c4_state->alpha_1024_current = C4_ALPHA_INITIAL;
     path_x->cwin = MULT1024(c4_state->alpha_1024_current, c4_state->nominal_cwin);
@@ -569,12 +572,22 @@ static void c4_initial_handle_rtt(picoquic_path_t* path_x, c4_state_t* c4_state,
 
 static void c4_initial_handle_loss(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_congestion_notification_t notification, uint64_t current_time)
 {
-    path_x->cwin = MULT1024(C4_BETA_INITIAL_1024, path_x->cwin);
-    c4_exit_initial(path_x, c4_state, notification, current_time);
+#ifdef C4_WITH_RATE_CONTROL
+    c4_state->nb_packets_in_startup += 1;
+    if (c4_state->nb_packets_in_startup > C4_NB_PACKETS_BEFORE_LOSS) {
+#else
+        {
+#endif
+        path_x->cwin = MULT1024(C4_BETA_INITIAL_1024, path_x->cwin);
+        c4_exit_initial(path_x, c4_state, notification, current_time);
+    }
 }
 
 static void c4_initial_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_ack_state_t* ack_state, uint64_t current_time)
 {
+#ifdef C4_WITH_RATE_CONTROL
+    c4_state->nb_packets_in_startup += 1;
+#endif
     if (c4_state->use_seed_cwin && c4_state->nominal_cwin >= c4_state->seed_cwin) {
         /* The nominal bandwidth is larger than the seed. The seed has been validated. */
         c4_state->use_seed_cwin = 0;
@@ -1202,6 +1215,7 @@ void c4_notify(
             if (picoquic_cc_hystart_loss_test(&c4_state->rtt_filter, notification, ack_state->lost_packet_number, PICOQUIC_SMOOTHED_LOSS_THRESHOLD)) {
                 if (c4_state->alg_state == c4_initial) {
                     c4_initial_handle_loss(path_x, c4_state, notification, current_time);
+
                 }
                 else {
                     c4_notify_congestion(path_x, c4_state, 0, 0,

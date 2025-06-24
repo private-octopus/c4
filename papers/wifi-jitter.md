@@ -107,7 +107,7 @@ perform tests and simulations of algorithms operating in different Wi-Fi conditi
 
 ![A picture of the Antikythera mechanism, as found by archeologists](https://upload.wikimedia.org/wikipedia/commons/c/c8/Antikythera_Fragment_A_%28Front%29.webp)
 
-We are still not quite sure of the processes causing these latency, but
+We are still not quite sure of the processes causing this latency, but
 this should not prevent us from doing an useful model that more or less mimics the
 latency variations of WI-Fi networks. After all, the models used by Hellenistic
 astronomers to predict the movement of planets where not exactly based on

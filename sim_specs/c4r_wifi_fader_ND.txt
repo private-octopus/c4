@@ -1,0 +1,12 @@
+main_cc_algo: c4
+main_cc_options: DR
+main_start_time: 0
+main_scenario_text: =b1:*1:397:10000000;
+nb_connections: 1
+main_target_time: 8000000
+data_rate_in_gbps: 0.02
+latency: 15000
+queue_delay_max: 80000
+icid: fadac5db
+qlog_dir: cclog
+link_scenario: 1000000:U0.02:D0.02:L15000:J999:Q30000:S0:W;2000000:U0.02:D0.02:L15000:Q30000:B2:P18:J12000:W;20000000:U0.02:D0.02:L15000:Q30000:J999:W

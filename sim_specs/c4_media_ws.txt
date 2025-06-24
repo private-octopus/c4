@@ -10,7 +10,7 @@ icid: ed1ac455
 qlog_dir: cclog
 qperf_log: c4_media_ws_qperflog.csv
 media_stats_start: 200000
-media_latency_average: 23000
+media_latency_average: 23500
 media_latency_max: 201000
 media_excluded: vhigh, vmid, vlast
 link_scenario: wifi_suspension

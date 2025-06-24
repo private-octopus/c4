@@ -404,7 +404,7 @@ static void c4_apply_rate_and_cwin(
             }
         }
         /* Compute the desired quantum */
-        uint64_t quantum = c4_compute_quantum(pacing_rate, path_x->send_mtu, 2048);
+        uint64_t quantum = c4_compute_quantum(pacing_rate, path_x->send_mtu, 32);
         /* Compute CWIN */
         if (c4_state->rtt_min != UINT64_MAX) {
             uint64_t rtt_target = c4_compute_rtt_target(c4_state);
@@ -592,6 +592,27 @@ static void c4_initial_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state,
         /* The nominal bandwidth is larger than the seed. The seed has been validated. */
         c4_state->use_seed_cwin = 0;
     }
+#if 1
+    if (c4_era_check(path_x, c4_state)) {
+        /*
+        * We should only consider a lack of increase if the application is
+        * not app limited. However, if the application *is* app limited,
+        * that strategy leads to staying in "initial" mode forever,
+        * which is not good either. If we don't check if the app limited,
+        * we lose in the very common case where the server sends almost
+        * nothing for several RTT, until the client asks for some data.
+        * So we test that we have seen at least some data.
+        */
+        if (!c4_state->increased_during_era &&
+            c4_state->nb_packets_in_startup > C4_NB_PACKETS_BEFORE_LOSS) {
+            c4_state->nb_eras_no_increase++;
+        }
+        c4_era_reset(path_x, c4_state);
+    }
+    if (c4_state->nb_eras_no_increase >= 3) {
+        c4_exit_initial(path_x, c4_state, picoquic_congestion_notification_acknowledgement, current_time);
+    }
+#else
     if (c4_era_check(path_x, c4_state)) {
         /* Only exit on lack of increase if not app limited */
         if (!c4_state->increased_during_era && path_x->last_time_acked_data_frame_sent > path_x->last_sender_limited_time) {
@@ -605,6 +626,7 @@ static void c4_initial_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state,
     if (c4_state->nb_eras_no_increase >= 3) {
         c4_exit_initial(path_x, c4_state, picoquic_congestion_notification_acknowledgement, current_time);
     }
+#endif
 
 #ifdef C4_WITH_RATE_CONTROL
     /* if rate controlled move update based on seed and estimate to "set pacing" state */
@@ -745,9 +767,15 @@ static void c4_state_correct_spurious(picoquic_path_t* path_x, c4_state_t* c4_st
         c4_state->nb_recent_delay_excesses--;
     }
     if (c4_state->alg_state == c4_recovery) {
+#ifdef C4_WITH_RATE_CONTROL
+        if (c4_state->previous_rate > c4_state->nominal_rate) {
+            c4_state->nominal_rate = c4_state->previous_rate;
+        }
+#endif
         if (c4_state->previous_cwin > c4_state->nominal_cwin) {
             c4_state->nominal_cwin = c4_state->previous_cwin;
         }
+
         if (c4_state->previous_alg_state == c4_initial) {
             c4_state->alg_state = c4_initial;
             path_x->cwin = MULT1024(C4_ALPHA_INITIAL, c4_state->nominal_cwin);
@@ -1079,6 +1107,9 @@ static void c4_notify_congestion(
          * otherwise the subtraction below would overflow. */
         beta = 768;
     }
+#ifdef C4_WITH_RATE_CONTROL
+    c4_state->nominal_rate -= MULT1024(beta, c4_state->nominal_rate);
+#endif
     c4_state->nominal_cwin -= MULT1024(beta, c4_state->nominal_cwin);
 
     if (is_timeout || c4_state->nominal_cwin < PICOQUIC_CWIN_MINIMUM) {
@@ -1192,6 +1223,11 @@ void c4_notify(
         case picoquic_congestion_notification_acknowledgement:
             c4_handle_ack(path_x, c4_state, ack_state, current_time);
 #ifdef C4_WITH_RATE_CONTROL
+#if 1
+            if (current_time >= 2040000) {
+                DBG_PRINTF("%s", "bug");
+            }
+#endif
             c4_apply_rate_and_cwin(path_x, c4_state);
 #else
             picoquic_update_pacing_data(cnx, path_x, c4_state->alg_state == c4_initial);

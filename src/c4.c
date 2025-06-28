@@ -89,6 +89,7 @@
 #define C4_ALPHA_RECOVER_1024 921 /* 90% */
 #define C4_ALPHA_CRUISE_1024 1003 /* 98% */
 #define C4_ALPHA_PUSH_1024 1280 /* 125 % */
+#define C4_ALPHA_PUSH_LOW_1024 1088 /* 106.25 % */
 #define C4_ALPHA_INITIAL 2048 /* 200% */
 #define C4_ALPHA_INITIAL_BW 2839 /* 4*LN(2), ~ 2.772589 */
 #define C4_ALPHA_SLOWDOWN_1024 512 /* 50% */
@@ -403,8 +404,10 @@ static void c4_apply_rate_and_cwin(
                 pacing_rate = (path_x->peak_bandwidth_estimate + pacing_rate) / 2;
             }
         }
-        /* Compute the desired quantum */
-        uint64_t quantum = c4_compute_quantum(pacing_rate, path_x->send_mtu, 32);
+        /* Compute the desired quantum, using a larger value during startup
+         * to facilitate discovery of peak bandwidth */
+        uint64_t quantum = c4_compute_quantum(pacing_rate, path_x->send_mtu, 
+            (c4_state->alg_state == c4_initial)?32:4);
         /* Compute CWIN */
         if (c4_state->rtt_min != UINT64_MAX) {
             uint64_t rtt_target = c4_compute_rtt_target(c4_state);
@@ -815,12 +818,16 @@ static void c4_enter_push(
     uint64_t current_time)
 {
     if (!c4_state->increased_after_push) {
+        /* If the previous push was not successful, increase by 6.25% instead of 25% */
         c4_state->nb_push_no_congestion = 0;
+        c4_state->alpha_1024_current = C4_ALPHA_PUSH_LOW_1024;
+    }
+    else {
+        c4_state->alpha_1024_current = C4_ALPHA_PUSH_1024;
     }
     c4_state->increased_after_push = 0;
     c4_state->nb_push_no_congestion++;
-    c4_state->alpha_1024_current = C4_ALPHA_PUSH_1024;
-    path_x->cwin = MULT1024(C4_ALPHA_PUSH_1024, c4_state->nominal_cwin);
+    path_x->cwin = MULT1024(c4_state->alpha_1024_current, c4_state->nominal_cwin);
     if (path_x->cwin < c4_state->nominal_cwin + path_x->send_mtu) {
         path_x->cwin = c4_state->nominal_cwin + path_x->send_mtu;
     }
@@ -1053,7 +1060,9 @@ void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_a
                     c4_enter_initial(path_x, c4_state, current_time);
                 }
             }
-            else if (c4_state->cruise_bytes_ack >= c4_state->cruise_bytes_target) {
+            /* Do not enter push if the connection is app-limited. */
+            else if (c4_state->cruise_bytes_ack >= c4_state->cruise_bytes_target &&
+                path_x->last_time_acked_data_frame_sent > path_x->last_sender_limited_time) {
                 c4_enter_push(path_x, c4_state, current_time);
             }
         }
@@ -1223,11 +1232,6 @@ void c4_notify(
         case picoquic_congestion_notification_acknowledgement:
             c4_handle_ack(path_x, c4_state, ack_state, current_time);
 #ifdef C4_WITH_RATE_CONTROL
-#if 1
-            if (current_time >= 2040000) {
-                DBG_PRINTF("%s", "bug");
-            }
-#endif
             c4_apply_rate_and_cwin(path_x, c4_state);
 #else
             picoquic_update_pacing_data(cnx, path_x, c4_state->alg_state == c4_initial);

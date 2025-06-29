@@ -11,7 +11,7 @@ icid: ed1ac4fa
 qlog_dir: cclog
 qperf_log: c5_media_wf_qperflog.csv
 media_stats_start: 200000
-media_latency_average: 173000
-media_latency_max: 699000
+media_latency_average: 110000
+media_latency_max: 380000
 media_excluded: vhigh, vmid, vlast
 link_scenario: wifi_fade

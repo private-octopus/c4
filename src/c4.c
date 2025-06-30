@@ -332,6 +332,7 @@ static uint64_t c4_compute_corrected_delivered_bytes(c4_state_t* c4_state, uint6
     return nb_bytes_delivered;
 }
 #ifdef C4_WITH_RATE_CONTROL
+#if 0
 static uint64_t c4_compute_delivery_rate(c4_state_t* c4_state, uint64_t nb_bytes_delivered, uint64_t rtt_measurement)
 {
     uint64_t data_rate;
@@ -346,6 +347,7 @@ static uint64_t c4_compute_delivery_rate(c4_state_t* c4_state, uint64_t nb_bytes
 
     return data_rate;
 }
+#endif
 
 static uint64_t c4_compute_quantum(uint64_t pacing_rate, uint64_t send_mtu, uint64_t qr_1024)
 {
@@ -758,38 +760,6 @@ static void c4_enter_recovery(
     c4_era_reset(path_x, c4_state);
 }
 
-/* Correct spurious repeat.
-* A previous timeout might have cause entering recovery. If that
-* timeout was spurious, we will restore the previous value. This is
-* especially important of the previous state was "initial", because
-* premature exit of initial causes drastic preformance loss.
- */
-static void c4_state_correct_spurious(picoquic_path_t* path_x, c4_state_t* c4_state, uint64_t current_time)
-{
-    if (c4_state->nb_recent_delay_excesses > 0) {
-        c4_state->nb_recent_delay_excesses--;
-    }
-    if (c4_state->alg_state == c4_recovery) {
-#ifdef C4_WITH_RATE_CONTROL
-        if (c4_state->previous_rate > c4_state->nominal_rate) {
-            c4_state->nominal_rate = c4_state->previous_rate;
-        }
-#endif
-        if (c4_state->previous_cwin > c4_state->nominal_cwin) {
-            c4_state->nominal_cwin = c4_state->previous_cwin;
-        }
-
-        if (c4_state->previous_alg_state == c4_initial) {
-            c4_state->alg_state = c4_initial;
-            path_x->cwin = MULT1024(C4_ALPHA_INITIAL, c4_state->nominal_cwin);
-        }
-        else {
-            c4_enter_recovery(path_x, c4_state, 0, 0, 0, current_time);
-        }
-    }
-}
-
-
 /* Enter cruise.
 * CWIN is set C4_ALPHA_CRUISE of nominal value (98%?)
 * Ack target if set to nominal cwin times log2 of cwin.
@@ -966,7 +936,27 @@ void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_a
 {
 #ifdef C4_WITH_RATE_CONTROL
     if (c4_state->do_rate_control) {
+        
+#if 1
+        uint64_t delivery_rate = 0;
+        /* Need to compute the delivery rate */
+        if (path_x->bandwidth_estimate > 0) {
+            delivery_rate = path_x->bandwidth_estimate;
+        }
+        else if (ack_state->rtt_measurement > 0) {
+            delivery_rate = 1000000 * ack_state->nb_bytes_delivered_since_packet_sent / ack_state->rtt_measurement;
+        }
+        else
+        {
+            delivery_rate = 40000;
+        }
+
+        if (delivery_rate > 1250000) {
+            fprintf(stderr, "bug");
+        }
+#else
         uint64_t delivery_rate = c4_compute_delivery_rate(c4_state, ack_state->nb_bytes_delivered_since_packet_sent, ack_state->rtt_measurement);
+#endif
         if (delivery_rate > c4_state->nominal_rate &&
             (!c4_state->use_seed_cwin || c4_state->alg_state == c4_initial)) {
             c4_state->nominal_rate = delivery_rate;
@@ -1252,6 +1242,12 @@ void c4_notify(
                 /* Do not worry about loss of packets sent before entering recovery */
                 break;
             }
+#if 1
+            if (notification == picoquic_congestion_notification_timeout) {
+                /* experiment: treat timeout as PTO */
+                break;
+            }
+#endif
             if (picoquic_cc_hystart_loss_test(&c4_state->rtt_filter, notification, ack_state->lost_packet_number, PICOQUIC_SMOOTHED_LOSS_THRESHOLD)) {
                 if (c4_state->alg_state == c4_initial) {
                     c4_initial_handle_loss(path_x, c4_state, notification, current_time);
@@ -1264,7 +1260,6 @@ void c4_notify(
             }
             break;
         case picoquic_congestion_notification_spurious_repeat:
-            c4_state_correct_spurious(path_x, c4_state, current_time);
             break;
         case picoquic_congestion_notification_rtt_measurement:
             c4_update_rtt(c4_state, ack_state->rtt_measurement, current_time);

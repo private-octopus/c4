@@ -966,7 +966,27 @@ void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_a
 {
 #ifdef C4_WITH_RATE_CONTROL
     if (c4_state->do_rate_control) {
+        
+#if 1
+        uint64_t delivery_rate = 0;
+        /* Need to compute the delivery rate */
+        if (path_x->bandwidth_estimate > 0) {
+            delivery_rate = path_x->bandwidth_estimate;
+        }
+        else if (ack_state->rtt_measurement > 0) {
+            delivery_rate = 1000000 * ack_state->nb_bytes_delivered_since_packet_sent / ack_state->rtt_measurement;
+        }
+        else
+        {
+            delivery_rate = 40000;
+        }
+
+        if (delivery_rate > 1250000) {
+            fprintf(stderr, "bug");
+        }
+#else
         uint64_t delivery_rate = c4_compute_delivery_rate(c4_state, ack_state->nb_bytes_delivered_since_packet_sent, ack_state->rtt_measurement);
+#endif
         if (delivery_rate > c4_state->nominal_rate &&
             (!c4_state->use_seed_cwin || c4_state->alg_state == c4_initial)) {
             c4_state->nominal_rate = delivery_rate;
@@ -1252,6 +1272,12 @@ void c4_notify(
                 /* Do not worry about loss of packets sent before entering recovery */
                 break;
             }
+#if 1
+            if (notification == picoquic_congestion_notification_timeout) {
+                /* experiment: treat timeout as PTO */
+                break;
+            }
+#endif
             if (picoquic_cc_hystart_loss_test(&c4_state->rtt_filter, notification, ack_state->lost_packet_number, PICOQUIC_SMOOTHED_LOSS_THRESHOLD)) {
                 if (c4_state->alg_state == c4_initial) {
                     c4_initial_handle_loss(path_x, c4_state, notification, current_time);
@@ -1264,7 +1290,10 @@ void c4_notify(
             }
             break;
         case picoquic_congestion_notification_spurious_repeat:
+#if 1
+#else
             c4_state_correct_spurious(path_x, c4_state, current_time);
+#endif
             break;
         case picoquic_congestion_notification_rtt_measurement:
             c4_update_rtt(c4_state, ack_state->rtt_measurement, current_time);

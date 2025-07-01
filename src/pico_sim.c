@@ -99,7 +99,6 @@ int main(int argc, char** argv)
         }
         else {
             ret = picoquic_ns(&spec, stderr);
-            fprintf(stderr, "picoquic_ns (%s) returns %d\n", spec_file_name, ret);
         }
         F = picoquic_file_close(F);
         release_spec_data(&spec);

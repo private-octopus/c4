@@ -20,7 +20,7 @@ if argc == 3:
 elif argc != 2:
     print("Usage: python "+ sys.argv[0] + " test_name [<path_to_exe>]")
 else:
-    test_name = sys.argv[1]
+    test_name = sys.argv[1].strip()
     exe_name = "pico_sim"
     if os.name == "nt":
         exe_name += ".exe"
@@ -39,18 +39,27 @@ solution_path = os.path.dirname(script_path)
 print("Solution path: " + str(solution_path))
 sim_path = os.path.join(solution_path, "sim_specs")
 print("Sim path: ", sim_path)
-test_path = os.path.join(sim_path, test_name)
-if not os.path.isfile(test_path):
-    print (test_path + " is not a file!")
-    exit -1;
-
 # get the list of test files
-ret = 0
-cmd = exe_path + " " + test_path
-for x in range(0, 100):
-    ret = os.system(cmd)
-    if ret != 0:
-        print(test_name + " returns " + str(ret) + " after " + str(x) + " trials.")
-        break
-if ret == 0:
-    print("All 100 trials of " + test_name + " pass.")
+test_list = [ ]
+if test_name.endswith("*"):
+    test_prefix = test_name[:-1]
+    for t_name in os.listdir(sim_path):
+        if len(test_prefix) == 0 or t_name.startswith(test_prefix):
+            test_list.append(t_name)
+else:
+    test_list.append(test_name)
+
+for t_name in test_list:
+    test_path = os.path.join(sim_path, t_name)
+    if not os.path.isfile(test_path):
+        print (test_path + " is not a file!")
+        exit -1;
+    ret = 0
+    cmd = exe_path + " " + test_path
+    for x in range(0, 100):
+        ret = os.system(cmd)
+        if ret != 0:
+            print(t_name + " returns " + str(ret) + " after " + str(x) + " trials.")
+            break
+    if ret == 0:
+        print("All 100 trials of " + t_name + " pass.")

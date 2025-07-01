@@ -349,6 +349,9 @@ static void c4_enter_initial(picoquic_path_t* path_x, c4_state_t* c4_state, uint
 #endif
     c4_era_reset(path_x, c4_state);
     c4_state->nb_eras_no_increase = 0;
+#if 1
+    c4_state->nb_eras_delay_based_decrease = 0;
+#endif
 }
 
 static void c4_set_options(c4_state_t* c4_state)
@@ -565,6 +568,7 @@ static void c4_enter_recovery(
         c4_state->nb_push_no_congestion = 0;
         c4_state->last_freeze_was_not_delay = !is_delay;
     }
+#if 0
     if (is_delay) {
         if (c4_state->alg_state == c4_cruising) {
             /* Check whether we have too many such delay based events, as this
@@ -582,6 +586,7 @@ static void c4_enter_recovery(
     else if (c4_state->nb_eras_delay_based_decrease > 0) {
         c4_state->nb_eras_delay_based_decrease--;
     }
+#endif
     c4_state->alg_state = c4_recovery;
     c4_state->alpha_1024_current = C4_ALPHA_RECOVER_1024;
     path_x->cwin = MULT1024(C4_ALPHA_RECOVER_1024, c4_state->nominal_cwin);
@@ -624,7 +629,7 @@ static void c4_enter_push(
     c4_state_t* c4_state,
     uint64_t current_time)
 {
-    if (!c4_state->increased_after_push) {
+    if (!c4_state->increased_after_push && !c4_state->pig_war) {
         /* If the previous push was not successful, increase by 6.25% instead of 25% */
         c4_state->nb_push_no_congestion = 0;
         c4_state->alpha_1024_current = C4_ALPHA_PUSH_LOW_1024;
@@ -803,6 +808,9 @@ void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_a
             if (c4_state->chaotic_jitter && 2*c4_state->nominal_max_rtt < 3* c4_state->rtt_min) {
                 c4_state->chaotic_jitter = 0;
             }
+            if (c4_state->nb_eras_no_increase > 0) {
+                c4_state->nb_eras_delay_based_decrease--;
+            }
 
             /* Manage the transition to the next state */
             if (c4_is_slowdown_needed(c4_state, current_time)){
@@ -891,11 +899,25 @@ static void c4_notify_congestion(
         if (c4_state->alg_state == c4_initial && beta < C4_BETA_INITIAL_1024) {
             beta = C4_BETA_INITIAL_1024;
         }
-    }
-    if (beta > 768) {
-        /* capping beta to 3/4. In any case, it should be lower than 1024,
-         * otherwise the subtraction below would overflow. */
-        beta = 768;
+
+        if (beta > 768) {
+            /* capping beta to 3/4. In any case, it should be lower than 1024,
+             * otherwise the subtraction below would overflow. */
+            beta = 768;
+        }
+
+        if (is_delay) {
+            /* Check whether we have too many such delay based events, as this
+            * is indivative of competition with non cooperating connections.
+            */
+            c4_state->nb_eras_delay_based_decrease++;
+            if (c4_state->nb_eras_delay_based_decrease >= C4_MAX_DELAY_ERA_CONGESTIONS) {
+                if (!c4_state->pig_war) {
+                    c4_start_pig_war(path_x, c4_state, current_time);
+                    return;
+                }
+            }
+        }
     }
     c4_state->nominal_cwin -= MULT1024(beta, c4_state->nominal_cwin);
 
@@ -1046,10 +1068,12 @@ void c4_notify(
             c4_apply_rate_and_cwin(path_x, c4_state);
             break;
         case picoquic_congestion_notification_lost_feedback:
+#if 0
             if (c4_state->rtt_min_is_trusted && c4_state->alg_state != c4_initial 
                 && c4_state->alg_state != c4_suspended && c4_state->alg_state != c4_slowdown) {
                 c4_enter_suspended(path_x, c4_state);
             }
+#endif
             break;
         case picoquic_congestion_notification_cwin_blocked:
             break;

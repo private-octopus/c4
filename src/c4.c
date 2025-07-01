@@ -91,20 +91,17 @@
 #define C4_ALPHA_PUSH_1024 1280 /* 125 % */
 #define C4_ALPHA_PUSH_LOW_1024 1088 /* 106.25 % */
 #define C4_ALPHA_INITIAL 2048 /* 200% */
-#define C4_ALPHA_INITIAL_BW 2839 /* 4*LN(2), ~ 2.772589 */
 #define C4_ALPHA_SLOWDOWN_1024 512 /* 50% */
 #define C4_BETA_1024 128 /* 0.125 */
 #define C4_BETA_LOSS_1024 256 /* 25%, 1/4th */
 #define C4_BETA_INITIAL_1024 512 /* 50% */
-#define C4_NB_PACKETS_BEFORE_LOSS 10
+#define C4_NB_PACKETS_BEFORE_LOSS 20
 #define C4_NB_PUSH_BEFORE_RESET 3
 #define C4_REPEAT_THRESHOLD 4
 #define C4_MAX_DELAY_ERA_CONGESTIONS 4
 #define C4_SLOWDOWN_DELAY 5000000 /* st least 5 seconds after last min RTT validation and slow down */
 #define C4_SLOWDOWN_RTT_COUNT 5 /* slowdown delay must be at least 5 RTT */
 #define C4_RTT_MARGIN_5PERCENT 51 
-
-#define C4_WITH_RATE_CONTROL 1
 
 typedef enum {
     c4_initial = 0,
@@ -119,13 +116,8 @@ typedef enum {
 typedef struct st_c4_state_t {
     c4_alg_state_t alg_state;
     uint64_t nominal_cwin; /* Control variable if CWIN based. */
-#ifdef C4_WITH_RATE_CONTROL
-    uint64_t nominal_rate; /* Control variable if rate based */
-    uint64_t cwin_gain_1024;
-    uint64_t seed_rate;
-    uint64_t nb_packets_in_startup;
-#endif
     uint64_t alpha_1024_current;
+    uint64_t nb_packets_in_startup;
     uint64_t era_sequence; /* sequence number of first packet in era */
     uint64_t cruise_bytes_ack; /* accumulate bytes count in cruise state */
     uint64_t cruise_bytes_target; /* expected bytes count until end of cruise */
@@ -146,18 +138,12 @@ typedef struct st_c4_state_t {
 
     uint64_t delay_threshold;
     uint64_t suspended_nominal_cwin;
-#ifdef C4_WITH_RATE_CONTROL
-    uint64_t suspended_nominal_rate; /* rate before the last timeout-triggered change */
-#endif
 
     uint64_t suspended_nominal_state;
     int nb_recent_delay_excesses;
 
     uint64_t previous_alg_state; /* state before the last timeout-triggered change */
     uint64_t previous_cwin; /* cwin before the last timeout-triggered change */
-#ifdef C4_WITH_RATE_CONTROL
-    uint64_t previous_rate; /* rate before the last timeout-triggered change */
-#endif
 
     unsigned int last_freeze_was_timeout : 1;
     unsigned int last_freeze_was_not_delay : 1;
@@ -169,9 +155,6 @@ typedef struct st_c4_state_t {
     unsigned int no_reaction_to_delay : 1;
     unsigned int not_strict_delay : 1;
     unsigned int use_seed_cwin : 1;
-#ifdef C4_WITH_RATE_CONTROL
-    unsigned int do_rate_control : 1;
-#endif
 
     picoquic_min_max_rtt_t rtt_filter;
     /* Handling of options. */
@@ -331,105 +314,15 @@ static uint64_t c4_compute_corrected_delivered_bytes(c4_state_t* c4_state, uint6
 
     return nb_bytes_delivered;
 }
-#ifdef C4_WITH_RATE_CONTROL
-#if 0
-static uint64_t c4_compute_delivery_rate(c4_state_t* c4_state, uint64_t nb_bytes_delivered, uint64_t rtt_measurement)
-{
-    uint64_t data_rate;
-
-    if (nb_bytes_delivered > (UINT64_MAX >> 20)) {
-        data_rate = nb_bytes_delivered / rtt_measurement;
-    }
-    else {
-        uint64_t data_rate_million = nb_bytes_delivered * 1000000;
-        data_rate = (data_rate_million / rtt_measurement);
-    }
-
-    return data_rate;
-}
-#endif
-
-static uint64_t c4_compute_quantum(uint64_t pacing_rate, uint64_t send_mtu, uint64_t qr_1024)
-{
-    /* 1.2 Mbps = 150 kBps = 150000Bps  */
-    uint64_t send_quantum = MULT1024(qr_1024, pacing_rate);
-    if (send_quantum > 0x10000) {
-        send_quantum = 0x10000;
-    }
-    else if (pacing_rate < 150000) {
-        if (send_quantum < send_mtu) {
-            send_quantum = send_mtu;
-        }
-    }
-    else if (send_quantum < 2 * send_mtu) {
-        send_quantum = 2 * send_mtu;
-    }
-    return send_quantum;
-}
-
-static uint64_t c4_compute_rtt_target(c4_state_t* c4_state)
-{
-    uint64_t rtt_target = MULT1024(1024 + C4_RTT_MARGIN_5PERCENT, c4_state->rtt_min);
-    if (c4_state->chaotic_jitter && c4_state->nominal_max_rtt > rtt_target) {
-        rtt_target = (3 * rtt_target + c4_state->nominal_max_rtt) / 4;
-    }
-    return rtt_target;
-}
-
-static uint64_t c4_get_cwin_from_estimates(
-    picoquic_path_t* path_x, c4_state_t* c4_state, uint64_t target_cwin)
-{
-    /* Increase cwin based on bandwidth estimation. */
-    uint64_t cwin = picoquic_cc_update_target_cwin_estimation(path_x);
-    if (c4_state->use_seed_cwin && c4_state->seed_cwin > cwin) {
-        /* Match half the difference between seed and computed CWIN */
-        uint64_t seeded_cwin = (c4_state->seed_cwin + target_cwin) / 2;
-        if (seeded_cwin > cwin)
-            cwin = seeded_cwin;
-    }
-    return cwin;
-}
 
 static void c4_apply_rate_and_cwin(
     picoquic_path_t* path_x,
     c4_state_t* c4_state)
 {
-    if (c4_state->do_rate_control && c4_state->nominal_rate > 0) {
-        /* If doing rate control, we apply the computed rate */
-        uint64_t pacing_rate = MULT1024(c4_state->alpha_1024_current, c4_state->nominal_rate);
-        /* During start-up, consider the availability of peak bandwidth or seed bandwidth */
-        if (c4_state->alg_state == c4_initial) {
-            if (c4_state->seed_rate > pacing_rate && c4_state->seed_rate > path_x->peak_bandwidth_estimate) {
-                pacing_rate = (c4_state->seed_rate + pacing_rate) / 2;
-            }
-            else if (path_x->peak_bandwidth_estimate > pacing_rate) {
-                pacing_rate = (path_x->peak_bandwidth_estimate + pacing_rate) / 2;
-            }
-        }
-        /* Compute the desired quantum, using a larger value during startup
-         * to facilitate discovery of peak bandwidth */
-        uint64_t quantum = c4_compute_quantum(pacing_rate, path_x->send_mtu, 
-            (c4_state->alg_state == c4_initial)?32:4);
-        /* Compute CWIN */
-        if (c4_state->rtt_min != UINT64_MAX) {
-            uint64_t rtt_target = c4_compute_rtt_target(c4_state);
-            uint64_t cwin = (pacing_rate * rtt_target) / 1000000;
-            cwin = MULT1024(c4_state->cwin_gain_1024, cwin);
-            /* Apply the pacing control */
-            path_x->cwin = cwin;
-        }
-        else {
-            path_x->cwin = c4_get_cwin_from_estimates(path_x, c4_state, path_x->cwin);
-        }
-        picoquic_update_pacing_rate(path_x->cnx, path_x, (double)pacing_rate, quantum);
-    }
-    else {
-        /* Assume that cwin was already set */
-        picoquic_update_pacing_data(path_x->cnx, path_x, c4_state->alg_state == c4_initial);
-    }
+    /* Assume that cwin was already set */
+    picoquic_update_pacing_data(path_x->cnx, path_x, c4_state->alg_state == c4_initial);
 }
 
-#endif
 /* End of round trip.
 * Happens if packet waited for is acked.
 * Add bandwidth measurement to bandwidth barrel.
@@ -454,12 +347,9 @@ static void c4_enter_initial(picoquic_path_t* path_x, c4_state_t* c4_state, uint
 {
     c4_state->alg_state = c4_initial;
     c4_state->nb_push_no_congestion = 0;
-#ifdef C4_WITH_RATE_CONTROL
-    c4_state->alpha_1024_current = C4_ALPHA_INITIAL_BW;
-    c4_state->cwin_gain_1024 = 1024;
-    c4_state->nb_packets_in_startup = 0;
-#else
     c4_state->alpha_1024_current = C4_ALPHA_INITIAL;
+    c4_state->nb_packets_in_startup = 0;
+#if 1
     path_x->cwin = MULT1024(c4_state->alpha_1024_current, c4_state->nominal_cwin);
 #endif
     c4_era_reset(path_x, c4_state);
@@ -482,11 +372,6 @@ static void c4_set_options(c4_state_t* c4_state)
             case 'D': /* allow for looser delay bounds */
                 c4_state->not_strict_delay = 1;
                 break;
-#ifdef C4_WITH_RATE_CONTROL
-            case 'R': /* Do rate control instead of cwin control */
-                c4_state->do_rate_control = 1;
-                break;
-#endif
             default:
                 ended = 1;
                 break;
@@ -500,12 +385,8 @@ void c4_reset(c4_state_t* c4_state, picoquic_path_t* path_x, char const* option_
     memset(c4_state, 0, sizeof(c4_state_t));
     c4_state->option_string = option_string;
     c4_state->rtt_min = UINT64_MAX;
-    c4_state->nominal_cwin = PICOQUIC_CWIN_INITIAL;
-#ifdef C4_WITH_RATE_CONTROL
-    c4_state->nominal_rate = 0; /* since we do not know anything about rate, use CWIN initially */
-    c4_state->cwin_gain_1024 = 2048;
+    c4_state->nominal_cwin = PICOQUIC_CWIN_INITIAL/2;
     c4_state->alpha_1024_current = C4_ALPHA_INITIAL;
-#endif
     c4_set_options(c4_state);
     c4_enter_initial(path_x, c4_state, current_time);
 }
@@ -515,9 +396,6 @@ void c4_seed_cwin(c4_state_t* c4_state, picoquic_path_t* path_x, uint64_t bytes_
     if (c4_state->alg_state == c4_initial) {
         c4_state->use_seed_cwin = 1;
         c4_state->seed_cwin = bytes_in_flight;
-#if C4_WITH_RATE_CONTROL
-        c4_state->seed_rate = (bytes_in_flight * 1000000) / path_x->smoothed_rtt;
-#endif
     }
 }
 
@@ -527,9 +405,6 @@ static void c4_exit_initial(picoquic_path_t* path_x, c4_state_t* c4_state, picoq
     int is_congested = 0;
     int is_timeout = 0;
 
-#ifdef C4_WITH_RATE_CONTROL
-    c4_state->cwin_gain_1024 = 2048;
-#endif
     if (notification != picoquic_congestion_notification_acknowledgement) {
         c4_state->nominal_cwin = path_x->cwin;
         if (notification == picoquic_congestion_notification_timeout) {
@@ -577,12 +452,8 @@ static void c4_initial_handle_rtt(picoquic_path_t* path_x, c4_state_t* c4_state,
 
 static void c4_initial_handle_loss(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_congestion_notification_t notification, uint64_t current_time)
 {
-#ifdef C4_WITH_RATE_CONTROL
     c4_state->nb_packets_in_startup += 1;
     if (c4_state->nb_packets_in_startup > C4_NB_PACKETS_BEFORE_LOSS) {
-#else
-        {
-#endif
         path_x->cwin = MULT1024(C4_BETA_INITIAL_1024, path_x->cwin);
         c4_exit_initial(path_x, c4_state, notification, current_time);
     }
@@ -590,14 +461,11 @@ static void c4_initial_handle_loss(picoquic_path_t* path_x, c4_state_t* c4_state
 
 static void c4_initial_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_ack_state_t* ack_state, uint64_t current_time)
 {
-#ifdef C4_WITH_RATE_CONTROL
     c4_state->nb_packets_in_startup += 1;
-#endif
     if (c4_state->use_seed_cwin && c4_state->nominal_cwin >= c4_state->seed_cwin) {
         /* The nominal bandwidth is larger than the seed. The seed has been validated. */
         c4_state->use_seed_cwin = 0;
     }
-#if 1
     if (c4_era_check(path_x, c4_state)) {
         /*
         * We should only consider a lack of increase if the application is
@@ -617,36 +485,14 @@ static void c4_initial_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state,
     if (c4_state->nb_eras_no_increase >= 3) {
         c4_exit_initial(path_x, c4_state, picoquic_congestion_notification_acknowledgement, current_time);
     }
-#else
-    if (c4_era_check(path_x, c4_state)) {
-        /* Only exit on lack of increase if not app limited */
-        if (!c4_state->increased_during_era && path_x->last_time_acked_data_frame_sent > path_x->last_sender_limited_time) {
-            c4_state->nb_eras_no_increase++;
-        }
-        c4_era_reset(path_x, c4_state);
-    }
-    /* TODO: handle possible information about bandwidth seed, peak bandwidth, careful resume,
-     * as required to support geo satellites.
-     */
-    if (c4_state->nb_eras_no_increase >= 3) {
-        c4_exit_initial(path_x, c4_state, picoquic_congestion_notification_acknowledgement, current_time);
-    }
-#endif
 
-#ifdef C4_WITH_RATE_CONTROL
-    /* if rate controlled move update based on seed and estimate to "set pacing" state */
-    else if (!c4_state->do_rate_control) {
-#else
-    else {
-#endif
-        /* Increase cwin based on bandwidth estimation. */
-        path_x->cwin = picoquic_cc_update_target_cwin_estimation(path_x);
-        if (c4_state->use_seed_cwin && c4_state->seed_cwin > path_x->cwin) {
-            /* Match half the difference between seed and computed CWIN */
-            uint64_t seeded_cwin= (c4_state->seed_cwin + MULT1024(C4_ALPHA_INITIAL, c4_state->nominal_cwin)) / 2;
-            if (seeded_cwin > path_x->cwin) {
-                path_x->cwin = seeded_cwin;
-            }
+    /* Increase cwin based on peak bandwidth estimation. */
+    path_x->cwin = picoquic_cc_update_target_cwin_estimation(path_x);
+    if (c4_state->use_seed_cwin && c4_state->seed_cwin > path_x->cwin) {
+        /* Match half the difference between seed and computed CWIN */
+        uint64_t seeded_cwin= (c4_state->seed_cwin + MULT1024(C4_ALPHA_INITIAL, c4_state->nominal_cwin)) / 2;
+        if (seeded_cwin > path_x->cwin) {
+            path_x->cwin = seeded_cwin;
         }
     }
 }
@@ -723,9 +569,6 @@ static void c4_enter_recovery(
     uint64_t current_time)
 {
     c4_state->previous_cwin = c4_state->nominal_cwin;
-#ifdef C4_WITH_RATE_CONTROL
-    c4_state->previous_rate = c4_state->nominal_rate;
-#endif
     c4_state->previous_alg_state = c4_state->alg_state;
 
     if (!is_congested) {
@@ -817,9 +660,6 @@ static void c4_enter_suspended(
     c4_state->alpha_1024_current = C4_ALPHA_RECOVER_1024;
     c4_state->suspended_nominal_cwin = c4_state->nominal_cwin;
     c4_state->suspended_nominal_state = c4_state->alg_state;
-#ifdef C4_WITH_RATE_CONTROL
-    c4_state->suspended_nominal_rate = c4_state->nominal_rate;
-#endif
     c4_state->alg_state = c4_suspended;
     path_x->cwin = path_x->bytes_in_transit;
 }
@@ -830,9 +670,6 @@ static void c4_exit_suspended(
     uint64_t current_time)
 {
     c4_state->nominal_cwin = c4_state->suspended_nominal_cwin;
-#ifdef C4_WITH_RATE_CONTROL
-    c4_state->nominal_rate = c4_state->suspended_nominal_rate;
-#endif
     c4_enter_recovery(path_x, c4_state, 0, 0, 0, current_time);
 }
 
@@ -899,11 +736,9 @@ static void c4_end_slowdown_era(
 void c4_enter_slowdown(picoquic_path_t* path_x, c4_state_t* c4_state, uint64_t current_time)
 {
     uint64_t current_rtt = c4_state->rtt_filter.sample_max;
-#ifdef C4_WITH_RATE_CONTROL
     c4_state->alpha_1024_current = C4_ALPHA_SLOWDOWN_1024;
-#else
-    uint64_t target_cwin = MULT1024(C4_ALPHA_SLOWDOWN_1024, c4_state->nominal_cwin);
-    path_x->cwin = target_cwin;
+#if 1
+    path_x->cwin = MULT1024(C4_ALPHA_SLOWDOWN_1024, c4_state->nominal_cwin);
 #endif
 
     c4_reset_min_rtt(c4_state, c4_state->rtt_min, current_rtt, current_time);
@@ -934,52 +769,16 @@ int c4_is_slowdown_needed(c4_state_t* c4_state, uint64_t current_time)
  */
 void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_ack_state_t* ack_state, uint64_t current_time)
 {
-#ifdef C4_WITH_RATE_CONTROL
-    if (c4_state->do_rate_control) {
-        
-#if 1
-        uint64_t delivery_rate = 0;
-        /* Need to compute the delivery rate */
-        if (path_x->bandwidth_estimate > 0) {
-            delivery_rate = path_x->bandwidth_estimate;
-        }
-        else if (ack_state->rtt_measurement > 0) {
-            delivery_rate = 1000000 * ack_state->nb_bytes_delivered_since_packet_sent / ack_state->rtt_measurement;
-        }
-        else
-        {
-            delivery_rate = 40000;
-        }
+    uint64_t corrected_delivered_bytes = c4_compute_corrected_delivered_bytes(c4_state, ack_state->nb_bytes_delivered_since_packet_sent, ack_state->rtt_measurement, current_time);
 
-        if (delivery_rate > 1250000) {
-            fprintf(stderr, "bug");
-        }
-#else
-        uint64_t delivery_rate = c4_compute_delivery_rate(c4_state, ack_state->nb_bytes_delivered_since_packet_sent, ack_state->rtt_measurement);
-#endif
-        if (delivery_rate > c4_state->nominal_rate &&
-            (!c4_state->use_seed_cwin || c4_state->alg_state == c4_initial)) {
-            c4_state->nominal_rate = delivery_rate;
-            c4_state->increased_during_era = 1;
-            c4_state->increased_after_push = 1;
-            c4_state->nb_eras_no_increase = 0;
-        }
+    if (corrected_delivered_bytes > c4_state->nominal_cwin &&
+        (!c4_state->use_seed_cwin || c4_state->alg_state == c4_initial)) {
+        c4_state->nominal_cwin = corrected_delivered_bytes;
+        path_x->cwin = MULT1024(c4_state->alpha_1024_current, c4_state->nominal_cwin);
+        c4_state->increased_during_era = 1;
+        c4_state->increased_after_push = 1;
+        c4_state->nb_eras_no_increase = 0;
     }
-    else {
-#endif
-        uint64_t corrected_delivered_bytes = c4_compute_corrected_delivered_bytes(c4_state, ack_state->nb_bytes_delivered_since_packet_sent, ack_state->rtt_measurement, current_time);
-
-        if (corrected_delivered_bytes > c4_state->nominal_cwin &&
-            (!c4_state->use_seed_cwin || c4_state->alg_state == c4_initial)) {
-            c4_state->nominal_cwin = corrected_delivered_bytes;
-            path_x->cwin = MULT1024(c4_state->alpha_1024_current, c4_state->nominal_cwin);
-            c4_state->increased_during_era = 1;
-            c4_state->increased_after_push = 1;
-            c4_state->nb_eras_no_increase = 0;
-        }
-#ifdef C4_WITH_RATE_CONTROL
-    }
-#endif
 
     c4_state->cruise_bytes_ack += ack_state->nb_bytes_acknowledged;
 
@@ -1106,9 +905,6 @@ static void c4_notify_congestion(
          * otherwise the subtraction below would overflow. */
         beta = 768;
     }
-#ifdef C4_WITH_RATE_CONTROL
-    c4_state->nominal_rate -= MULT1024(beta, c4_state->nominal_rate);
-#endif
     c4_state->nominal_cwin -= MULT1024(beta, c4_state->nominal_cwin);
 
     if (is_timeout || c4_state->nominal_cwin < PICOQUIC_CWIN_MINIMUM) {
@@ -1117,11 +913,7 @@ static void c4_notify_congestion(
 
     c4_enter_recovery(path_x, c4_state, 1, is_delay, is_timeout, current_time);
 
-#ifdef C4_WITH_RATE_CONTROL
-     c4_apply_rate_and_cwin(path_x, c4_state);
-#else
-     picoquic_update_pacing_data(path_x->cnx, path_x, 0);
-#endif
+    c4_apply_rate_and_cwin(path_x, c4_state);
 
     path_x->is_ssthresh_initialized = 1;
 }
@@ -1220,12 +1012,8 @@ void c4_notify(
     if (c4_state != NULL) {
         switch (notification) {
         case picoquic_congestion_notification_acknowledgement:
-            c4_handle_ack(path_x, c4_state, ack_state, current_time);
-#ifdef C4_WITH_RATE_CONTROL
+            c4_handle_ack(path_x, c4_state, ack_state, current_time);\
             c4_apply_rate_and_cwin(path_x, c4_state);
-#else
-            picoquic_update_pacing_data(cnx, path_x, c4_state->alg_state == c4_initial);
-#endif
             break;
         case picoquic_congestion_notification_ecn_ec:
             /* TODO: ECN is special? Implement the prague logic */
@@ -1269,11 +1057,7 @@ void c4_notify(
             else {
                 c4_handle_rtt(cnx, path_x, c4_state, ack_state->rtt_measurement, current_time);
             }
-#ifdef C4_WITH_RATE_CONTROL
             c4_apply_rate_and_cwin(path_x, c4_state);
-#else
-            picoquic_update_pacing_data(cnx, path_x, c4_state->alg_state == c4_initial);
-#endif
             break;
         case picoquic_congestion_notification_lost_feedback:
             if (c4_state->rtt_min_is_trusted && c4_state->alg_state != c4_initial 

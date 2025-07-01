@@ -142,10 +142,6 @@ typedef struct st_c4_state_t {
     uint64_t suspended_nominal_state;
     int nb_recent_delay_excesses;
 
-    uint64_t previous_alg_state; /* state before the last timeout-triggered change */
-    uint64_t previous_cwin; /* cwin before the last timeout-triggered change */
-
-    unsigned int last_freeze_was_timeout : 1;
     unsigned int last_freeze_was_not_delay : 1;
     unsigned int rtt_min_is_trusted : 1;
     unsigned int increased_during_era : 1;
@@ -166,7 +162,6 @@ static void c4_enter_recovery(
     c4_state_t* c4_state,
     int is_congested,
     int is_delay,
-    int is_timeout,
     uint64_t current_time);
 
 /* Compute the delay threshold for declaring congestion,
@@ -403,16 +398,12 @@ static void c4_exit_initial(picoquic_path_t* path_x, c4_state_t* c4_state, picoq
 {
     /* We assume that any required correction is done prior to calling this */
     int is_congested = 0;
-    int is_timeout = 0;
 
     if (notification != picoquic_congestion_notification_acknowledgement) {
+        /* TODO: check this! */
         c4_state->nominal_cwin = path_x->cwin;
-        if (notification == picoquic_congestion_notification_timeout) {
-            is_congested = 1;
-            is_timeout = 1;
-        }
     }
-    c4_enter_recovery(path_x, c4_state, is_congested, 0, is_timeout, current_time);
+    c4_enter_recovery(path_x, c4_state, is_congested, 0, current_time);
 }
 
 static void c4_initial_handle_rtt(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_congestion_notification_t notification, uint64_t rtt_measurement, uint64_t current_time)
@@ -565,20 +556,14 @@ static void c4_enter_recovery(
     c4_state_t* c4_state,
     int is_congested,
     int is_delay,
-    int is_timeout,
     uint64_t current_time)
 {
-    c4_state->previous_cwin = c4_state->nominal_cwin;
-    c4_state->previous_alg_state = c4_state->alg_state;
-
     if (!is_congested) {
         c4_state->last_freeze_was_not_delay = 0;
-        c4_state->last_freeze_was_timeout = 0;
     }
     else {
         c4_state->nb_push_no_congestion = 0;
         c4_state->last_freeze_was_not_delay = !is_delay;
-        c4_state->last_freeze_was_timeout = is_timeout;
     }
     if (is_delay) {
         if (c4_state->alg_state == c4_cruising) {
@@ -670,7 +655,7 @@ static void c4_exit_suspended(
     uint64_t current_time)
 {
     c4_state->nominal_cwin = c4_state->suspended_nominal_cwin;
-    c4_enter_recovery(path_x, c4_state, 0, 0, 0, current_time);
+    c4_enter_recovery(path_x, c4_state, 0, 0, current_time);
 }
 
 
@@ -823,7 +808,7 @@ void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_a
                 c4_era_reset(path_x, c4_state);
                 break;
             case c4_pushing:
-                c4_enter_recovery(path_x, c4_state, 0, 0, 0, current_time);
+                c4_enter_recovery(path_x, c4_state, 0, 0, current_time);
                 break;
             case c4_suspended:
                 c4_exit_suspended(path_x, c4_state, current_time);
@@ -860,8 +845,8 @@ void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_a
 
 /* Reaction to ECN/CE or sustained losses.
  * This is more or less the same code as added to bbr.
- * This code is called if an ECN/EC event is received, or a timeout
- * event, or a lost event indicating a high loss rate,
+ * This code is called if an ECN/EC event is received, 
+ * or a lost event indicating a high loss rate,
  * or a delay event.
  * 
  * TODO: proper treatment of ECN per L4S
@@ -871,20 +856,18 @@ static void c4_notify_congestion(
     c4_state_t* c4_state,
     uint64_t rtt_latest,
     int is_delay,
-    int is_timeout,
     uint64_t current_time)
 {
     uint64_t beta = C4_BETA_LOSS_1024;
     c4_state->nb_push_no_congestion = 0;
 
     if (c4_state->alg_state == c4_recovery &&
-        (!is_timeout || !c4_state->last_freeze_was_timeout) &&
         (!is_delay || !c4_state->last_freeze_was_not_delay)) {
         /* Do not treat additional events during same freeze interval */
         return;
     }
 
-    if (c4_state->alg_state == c4_suspended /* && !is_timeout */) {
+    if (c4_state->alg_state == c4_suspended) {
         return;
     }
     /* Clear the counter used to filter spruious delay measurements */
@@ -907,11 +890,10 @@ static void c4_notify_congestion(
     }
     c4_state->nominal_cwin -= MULT1024(beta, c4_state->nominal_cwin);
 
-    if (is_timeout || c4_state->nominal_cwin < PICOQUIC_CWIN_MINIMUM) {
+    if (c4_state->nominal_cwin < PICOQUIC_CWIN_MINIMUM) {
         c4_state->nominal_cwin = PICOQUIC_CWIN_MINIMUM;
     }
-
-    c4_enter_recovery(path_x, c4_state, 1, is_delay, is_timeout, current_time);
+    c4_enter_recovery(path_x, c4_state, 1, is_delay, current_time);
 
     c4_apply_rate_and_cwin(path_x, c4_state);
 
@@ -988,7 +970,7 @@ static void c4_handle_rtt(
             /* May well be congested */
             if (c4_state->nb_recent_delay_excesses >= C4_REPEAT_THRESHOLD) {
                 /* Too many events, reduce the window */
-                c4_notify_congestion(path_x, c4_state, rtt_measurement, 1, 0, current_time);
+                c4_notify_congestion(path_x, c4_state, rtt_measurement, 1, current_time);
             }
         }
     }
@@ -1021,33 +1003,28 @@ void c4_notify(
                 c4_initial_handle_loss(path_x, c4_state, notification, current_time);
             }
             else {
-                c4_notify_congestion(path_x, c4_state, 0, 0, 0, current_time);
+                c4_notify_congestion(path_x, c4_state, 0, 0, current_time);
             }
             break;
         case picoquic_congestion_notification_repeat:
-        case picoquic_congestion_notification_timeout:
             if (c4_state->alg_state == c4_recovery && ack_state->lost_packet_number < c4_state->era_sequence) {
                 /* Do not worry about loss of packets sent before entering recovery */
                 break;
             }
-#if 1
-            if (notification == picoquic_congestion_notification_timeout) {
-                /* experiment: treat timeout as PTO */
-                break;
-            }
-#endif
             if (picoquic_cc_hystart_loss_test(&c4_state->rtt_filter, notification, ack_state->lost_packet_number, PICOQUIC_SMOOTHED_LOSS_THRESHOLD)) {
                 if (c4_state->alg_state == c4_initial) {
                     c4_initial_handle_loss(path_x, c4_state, notification, current_time);
-
                 }
                 else {
-                    c4_notify_congestion(path_x, c4_state, 0, 0,
-                        (notification == picoquic_congestion_notification_timeout) ? 1 : 0, current_time);
+                    c4_notify_congestion(path_x, c4_state, 0, 0, current_time);
                 }
             }
             break;
+        case picoquic_congestion_notification_timeout:
+            /* Treat timeout as PTO: no impact on congestion control */
+            break;
         case picoquic_congestion_notification_spurious_repeat:
+            /* Remove handling of spurious repeat, as it was tied to timeout */
             break;
         case picoquic_congestion_notification_rtt_measurement:
             c4_update_rtt(c4_state, ack_state->rtt_measurement, current_time);

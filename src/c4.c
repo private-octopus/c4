@@ -600,7 +600,16 @@ static void c4_enter_cruise(
     c4_era_reset(path_x, c4_state);
     c4_state->use_seed_cwin = 0;
     c4_state->cruise_bytes_ack = 0;
+#if 1
+    if (c4_state->increased_after_push) {
+        c4_state->cruise_bytes_target = 0;
+    }
+    else {
+        c4_state->cruise_bytes_target = c4_cruise_bytes_target(c4_state->nominal_cwin);
+    }
+#else
     c4_state->cruise_bytes_target = c4_cruise_bytes_target(c4_state->nominal_cwin);
+#endif
     c4_state->alpha_1024_current = C4_ALPHA_CRUISE_1024;
     path_x->cwin = MULT1024(C4_ALPHA_CRUISE_1024, c4_state->nominal_cwin);
     c4_state->alg_state = c4_cruising;

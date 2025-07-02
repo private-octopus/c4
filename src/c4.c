@@ -626,6 +626,7 @@ static void c4_enter_push(
 * which will stop transmission of new packets on the path. We remember
 * the nominal CWIN so it could be restored. On exit, we enter the
 * recovery state with the new CWIN */
+#if 0
 static void c4_enter_suspended(
     picoquic_path_t* path_x,
     c4_state_t* c4_state)
@@ -636,6 +637,7 @@ static void c4_enter_suspended(
     c4_state->alg_state = c4_suspended;
     path_x->cwin = path_x->bytes_in_transit;
 }
+#endif
 
 static void c4_exit_suspended(
     picoquic_path_t* path_x,
@@ -878,16 +880,14 @@ static void c4_notify_congestion(
             beta = 768;
         }
 
-        if (is_delay) {
-            /* Check whether we have too many such delay based events, as this
-            * is indivative of competition with non cooperating connections.
-            */
-            c4_state->nb_eras_delay_based_decrease++;
-            if (c4_state->nb_eras_delay_based_decrease >= C4_MAX_DELAY_ERA_CONGESTIONS) {
-                if (!c4_state->pig_war) {
-                    c4_start_pig_war(path_x, c4_state, current_time);
-                    return;
-                }
+        /* Check whether we have too many such delay based events, as this
+        * is indivative of competition with non cooperating connections.
+        */
+        c4_state->nb_eras_delay_based_decrease++;
+        if (c4_state->nb_eras_delay_based_decrease >= C4_MAX_DELAY_ERA_CONGESTIONS) {
+            if (!c4_state->pig_war) {
+                c4_start_pig_war(path_x, c4_state, current_time);
+                return;
             }
         }
     }

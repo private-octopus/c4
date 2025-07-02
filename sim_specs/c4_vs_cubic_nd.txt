@@ -6,7 +6,7 @@ nb_connections: 2
 background_cc_algo: cubic
 background_start_time: 0
 background_scenario_text: =b1:*1:397:40000000;
-main_target_time: 25500000
+main_target_time: 24900000
 data_rate_in_gbps: 0.02
 latency: 40000
 queue_delay_max: 80000

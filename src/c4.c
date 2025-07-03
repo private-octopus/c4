@@ -50,7 +50,6 @@
 * Pushing.   For one RTT. Transmit at higher rate, to probe the network, then
 *            move to "cruising". Higher rate should be 25% higher, to probe
 *            without creating big queues.
-* Suspended. If feedback is lost.
 * 
 * Competing. If we detect the need to compete with Cubic. We probably want to
 *            do something. Substate compete cruise, compete push, compute recovery.
@@ -62,10 +61,7 @@
 *            recovery to cruising -- at the end of period.
 *            cruising, pushing to recovery -- if excess delay, loss or ECN
 *            pushing to recovery -- at end of period.
-*            any state to suspended -- if suspension event.
-*            to competing -- if some number of entering recovery because delay too high?
-*            competing to recovery? or to initial? if the delay decreases enough?
-*            if 3 successful push pahses -- transit to initial
+*            to slowdown..
 * 
 * 
 * State variables:
@@ -86,8 +82,9 @@
 #define PICOQUIC_CC_ALGO_NUMBER_C4 8
 #define C4_DELAY_THRESHOLD_MAX 25000
 #define MULT1024(c, v) (((v)*(c)) >> 10)
+#define C4_ALPHA_NEUTRAL_1024 1024 /* 100% */
 #define C4_ALPHA_RECOVER_1024 921 /* 90% */
-#define C4_ALPHA_CRUISE_1024 1003 /* 98% */
+#define C4_ALPHA_CRUISE_1024 1024 /* 98% */
 #define C4_ALPHA_PUSH_1024 1280 /* 125 % */
 #define C4_ALPHA_PUSH_LOW_1024 1088 /* 106.25 % */
 #define C4_ALPHA_INITIAL 2048 /* 200% */
@@ -96,7 +93,7 @@
 #define C4_BETA_LOSS_1024 256 /* 25%, 1/4th */
 #define C4_BETA_INITIAL_1024 512 /* 50% */
 #define C4_NB_PACKETS_BEFORE_LOSS 20
-#define C4_NB_PUSH_BEFORE_RESET 3
+#define C4_NB_PUSH_BEFORE_RESET 4
 #define C4_REPEAT_THRESHOLD 4
 #define C4_MAX_DELAY_ERA_CONGESTIONS 4
 #define C4_SLOWDOWN_DELAY 5000000 /* st least 5 seconds after last min RTT validation and slow down */
@@ -126,6 +123,8 @@ typedef struct st_c4_state_t {
     int nb_eras_no_increase;
     int nb_push_no_congestion; /* Number of successive 25% pushes with no congestion */
     int nb_eras_delay_based_decrease; /* Number of successive delay based decreases */
+    uint64_t push_cwin_old;
+    uint64_t push_alpha;
 
     uint64_t rtt_min;
     uint64_t rtt_min_stamp;
@@ -162,6 +161,10 @@ static void c4_enter_recovery(
     c4_state_t* c4_state,
     int is_congested,
     int is_delay,
+    uint64_t current_time);
+static void c4_enter_cruise(
+    picoquic_path_t* path_x,
+    c4_state_t* c4_state,
     uint64_t current_time);
 
 /* Compute the delay threshold for declaring congestion,
@@ -344,11 +347,10 @@ static void c4_enter_initial(picoquic_path_t* path_x, c4_state_t* c4_state, uint
     c4_state->nb_push_no_congestion = 0;
     c4_state->alpha_1024_current = C4_ALPHA_INITIAL;
     c4_state->nb_packets_in_startup = 0;
-#if 1
     path_x->cwin = MULT1024(c4_state->alpha_1024_current, c4_state->nominal_cwin);
-#endif
     c4_era_reset(path_x, c4_state);
     c4_state->nb_eras_no_increase = 0;
+    c4_state->nb_eras_delay_based_decrease = 0;
 }
 
 static void c4_set_options(c4_state_t* c4_state)
@@ -560,32 +562,50 @@ static void c4_enter_recovery(
 {
     if (!is_congested) {
         c4_state->last_freeze_was_not_delay = 0;
+        c4_state->alpha_1024_current = C4_ALPHA_NEUTRAL_1024;
     }
     else {
         c4_state->nb_push_no_congestion = 0;
         c4_state->last_freeze_was_not_delay = !is_delay;
+        if (c4_state->alpha_1024_current > C4_ALPHA_PUSH_LOW_1024) {
+            c4_state->alpha_1024_current = C4_ALPHA_RECOVER_1024;
+        }
+        else {
+            c4_state->alpha_1024_current = C4_ALPHA_NEUTRAL_1024;
+        }
     }
-    if (is_delay) {
-        if (c4_state->alg_state == c4_cruising) {
-            /* Check whether we have too many such delay based events, as this
-            * is indivative of competition with non cooperating connections.
-            */
-            c4_state->nb_eras_delay_based_decrease++;
-            if (c4_state->nb_eras_delay_based_decrease >= C4_MAX_DELAY_ERA_CONGESTIONS) {
-                if (!c4_state->pig_war) {
-                    c4_start_pig_war(path_x, c4_state, current_time);
-                    return;
-                }
+    c4_state->alg_state = c4_recovery;
+    path_x->cwin = MULT1024(c4_state->alpha_1024_current, c4_state->nominal_cwin);
+    c4_era_reset(path_x, c4_state);
+}
+
+/* Exit recovery. We will test whether the previous push was successful.
+* We do that by comparing the nominal cwin to the value before entering
+* push. This "previous value" would be zero if the previous state
+* was not pushing.
+ */
+
+static void c4_exit_recovery(
+    picoquic_path_t* path_x,
+    c4_state_t* c4_state, uint64_t current_time)
+{
+    c4_state->nb_recent_delay_excesses = 0;
+    if (c4_state->push_cwin_old > 0 && c4_state->push_alpha > 0) {
+        if (c4_state->push_alpha > C4_ALPHA_PUSH_LOW_1024) {
+            uint64_t target_cwin = (c4_state->push_cwin_old +
+                MULT1024(c4_state->push_alpha, c4_state->push_cwin_old)) / 2;
+            if (c4_state->nominal_cwin >= target_cwin) {
+                c4_state->increased_after_push = 1;
+            }
+            else {
+                c4_state->increased_after_push = 0;
             }
         }
     }
-    else if (c4_state->nb_eras_delay_based_decrease > 0) {
-        c4_state->nb_eras_delay_based_decrease--;
-    }
-    c4_state->alg_state = c4_recovery;
-    c4_state->alpha_1024_current = C4_ALPHA_RECOVER_1024;
-    path_x->cwin = MULT1024(C4_ALPHA_RECOVER_1024, c4_state->nominal_cwin);
-    c4_era_reset(path_x, c4_state);
+    c4_state->push_cwin_old = 0;
+    c4_state->push_alpha = 0;
+
+    c4_enter_cruise(path_x, c4_state, current_time);
 }
 
 /* Enter cruise.
@@ -600,14 +620,22 @@ static void c4_enter_cruise(
     c4_era_reset(path_x, c4_state);
     c4_state->use_seed_cwin = 0;
     c4_state->cruise_bytes_ack = 0;
-    c4_state->cruise_bytes_target = c4_cruise_bytes_target(c4_state->nominal_cwin);
+
+#if 1
+    if (c4_state->increased_after_push && c4_state->nb_push_no_congestion > 0) {
+#endif
+        c4_state->cruise_bytes_target = 0;
+    }
+    else {
+        c4_state->cruise_bytes_target = c4_cruise_bytes_target(c4_state->nominal_cwin);
+    }
     c4_state->alpha_1024_current = C4_ALPHA_CRUISE_1024;
     path_x->cwin = MULT1024(C4_ALPHA_CRUISE_1024, c4_state->nominal_cwin);
     c4_state->alg_state = c4_cruising;
 }
 
 /* Enter push.
-* CWIN is set C4_ALPHA_PUSH of nominal value (125%?)
+* CWIN is set C4_ALPHA_PUSH of nominal value (125%?)q
 * Ack target if set to nominal cwin times log2 of cwin.
 */
 static void c4_enter_push(
@@ -615,7 +643,7 @@ static void c4_enter_push(
     c4_state_t* c4_state,
     uint64_t current_time)
 {
-    if (!c4_state->increased_after_push) {
+    if ((!c4_state->increased_after_push || c4_state->nb_push_no_congestion == 0) && !c4_state->pig_war) {
         /* If the previous push was not successful, increase by 6.25% instead of 25% */
         c4_state->nb_push_no_congestion = 0;
         c4_state->alpha_1024_current = C4_ALPHA_PUSH_LOW_1024;
@@ -623,6 +651,8 @@ static void c4_enter_push(
     else {
         c4_state->alpha_1024_current = C4_ALPHA_PUSH_1024;
     }
+    c4_state->push_cwin_old = c4_state->nominal_cwin;
+    c4_state->push_alpha = c4_state->alpha_1024_current;
     c4_state->increased_after_push = 0;
     c4_state->nb_push_no_congestion++;
     path_x->cwin = MULT1024(c4_state->alpha_1024_current, c4_state->nominal_cwin);
@@ -638,6 +668,7 @@ static void c4_enter_push(
 * which will stop transmission of new packets on the path. We remember
 * the nominal CWIN so it could be restored. On exit, we enter the
 * recovery state with the new CWIN */
+#if 0
 static void c4_enter_suspended(
     picoquic_path_t* path_x,
     c4_state_t* c4_state)
@@ -648,6 +679,7 @@ static void c4_enter_suspended(
     c4_state->alg_state = c4_suspended;
     path_x->cwin = path_x->bytes_in_transit;
 }
+#endif
 
 static void c4_exit_suspended(
     picoquic_path_t* path_x,
@@ -722,9 +754,7 @@ void c4_enter_slowdown(picoquic_path_t* path_x, c4_state_t* c4_state, uint64_t c
 {
     uint64_t current_rtt = c4_state->rtt_filter.sample_max;
     c4_state->alpha_1024_current = C4_ALPHA_SLOWDOWN_1024;
-#if 1
     path_x->cwin = MULT1024(C4_ALPHA_SLOWDOWN_1024, c4_state->nominal_cwin);
-#endif
 
     c4_reset_min_rtt(c4_state, c4_state->rtt_min, current_rtt, current_time);
     c4_state->alg_state = c4_slowdown;
@@ -761,7 +791,10 @@ void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_a
         c4_state->nominal_cwin = corrected_delivered_bytes;
         path_x->cwin = MULT1024(c4_state->alpha_1024_current, c4_state->nominal_cwin);
         c4_state->increased_during_era = 1;
+#if 0
+#else
         c4_state->increased_after_push = 1;
+#endif
         c4_state->nb_eras_no_increase = 0;
     }
 
@@ -794,6 +827,9 @@ void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_a
             if (c4_state->chaotic_jitter && 2*c4_state->nominal_max_rtt < 3* c4_state->rtt_min) {
                 c4_state->chaotic_jitter = 0;
             }
+            if (c4_state->nb_eras_no_increase > 0) {
+                c4_state->nb_eras_delay_based_decrease--;
+            }
 
             /* Manage the transition to the next state */
             if (c4_is_slowdown_needed(c4_state, current_time)){
@@ -801,8 +837,7 @@ void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_a
             }
             else switch (c4_state->alg_state) {
             case c4_recovery:
-                c4_state->nb_recent_delay_excesses = 0;
-                c4_enter_cruise(path_x, c4_state, current_time);
+                c4_exit_recovery(path_x, c4_state, current_time);
                 break;
             case c4_cruising:
                 c4_era_reset(path_x, c4_state);
@@ -882,17 +917,47 @@ static void c4_notify_congestion(
         if (c4_state->alg_state == c4_initial && beta < C4_BETA_INITIAL_1024) {
             beta = C4_BETA_INITIAL_1024;
         }
+
+        if (beta > 768) {
+            /* capping beta to 3/4. In any case, it should be lower than 1024,
+             * otherwise the subtraction below would overflow. */
+            beta = 768;
+        }
+
+        /* Check whether we have too many such delay based events, as this
+        * is indivative of competition with non cooperating connections.
+        */
+        c4_state->nb_eras_delay_based_decrease++;
+        if (c4_state->nb_eras_delay_based_decrease >= C4_MAX_DELAY_ERA_CONGESTIONS) {
+            if (!c4_state->pig_war) {
+                c4_start_pig_war(path_x, c4_state, current_time);
+                return;
+            }
+        }
     }
-    if (beta > 768) {
-        /* capping beta to 3/4. In any case, it should be lower than 1024,
-         * otherwise the subtraction below would overflow. */
-        beta = 768;
+#if 1
+    if (c4_state->alg_state == c4_pushing) {
+        c4_state->nb_push_no_congestion = 0;
     }
+    else {
+        c4_state->nominal_cwin -= MULT1024(beta, c4_state->nominal_cwin);
+
+        if (c4_state->nominal_cwin < PICOQUIC_CWIN_MINIMUM) {
+            c4_state->nominal_cwin = PICOQUIC_CWIN_MINIMUM;
+        }
+    }
+#else
+    /* We reduce the nominal CWIN here even in the case of a failed push. This is
+     * questionable, since the congestion was cause by the extra packets sent for the
+     * push. However, it has the side effect of reducing the queue a bit after a
+     * push, and is immediately corrected if need be by the next ACK.
+     */
     c4_state->nominal_cwin -= MULT1024(beta, c4_state->nominal_cwin);
 
     if (c4_state->nominal_cwin < PICOQUIC_CWIN_MINIMUM) {
         c4_state->nominal_cwin = PICOQUIC_CWIN_MINIMUM;
     }
+#endif
     c4_enter_recovery(path_x, c4_state, 1, is_delay, current_time);
 
     c4_apply_rate_and_cwin(path_x, c4_state);
@@ -1037,10 +1102,6 @@ void c4_notify(
             c4_apply_rate_and_cwin(path_x, c4_state);
             break;
         case picoquic_congestion_notification_lost_feedback:
-            if (c4_state->rtt_min_is_trusted && c4_state->alg_state != c4_initial 
-                && c4_state->alg_state != c4_suspended && c4_state->alg_state != c4_slowdown) {
-                c4_enter_suspended(path_x, c4_state);
-            }
             break;
         case picoquic_congestion_notification_cwin_blocked:
             break;

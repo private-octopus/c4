@@ -585,7 +585,7 @@ static void c4_enter_recovery(
 * was not pushing.
  */
 
-static c4_exit_recovery(
+static void c4_exit_recovery(
     picoquic_path_t* path_x,
     c4_state_t* c4_state, uint64_t current_time)
 {

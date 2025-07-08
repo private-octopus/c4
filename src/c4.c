@@ -149,8 +149,6 @@ typedef struct st_c4_state_t {
     unsigned int congestion_delay_notified : 1;
     unsigned int pig_war : 1;
     unsigned int chaotic_jitter : 1;
-    unsigned int no_reaction_to_delay : 1;
-    unsigned int not_strict_delay : 1;
     unsigned int use_seed_cwin : 1;
     unsigned int do_cascade : 1;
     unsigned int do_slow_push : 1;
@@ -300,8 +298,7 @@ static uint64_t c4_compute_corrected_delivered_bytes(c4_state_t* c4_state, uint6
 {
     uint64_t duration_max = MULT1024(1024 + 51, c4_state->rtt_min);
 
-    if (c4_state->rtt_min_is_trusted &&
-        (c4_state->not_strict_delay || c4_state->chaotic_jitter) &&
+    if (c4_state->rtt_min_is_trusted && c4_state->chaotic_jitter &&
         c4_state->rtt_min_stamp + 1000000 > current_time) {
         if (c4_state->rtt_min < c4_state->nominal_max_rtt) {
             duration_max = MULT1024(256, 3 * c4_state->rtt_min + c4_state->nominal_max_rtt);
@@ -421,12 +418,6 @@ static void c4_set_options(c4_state_t* c4_state)
         while ((c = *x) != 0 && !ended) {
             x++;
             switch (c) {
-            case 'C': /* turn of the reaction to delays, e.g., to compete with Cubic */
-                c4_state->no_reaction_to_delay = 1;
-                break;
-            case 'D': /* allow for looser delay bounds */
-                c4_state->not_strict_delay = 1;
-                break;
             case 'K': /* allow the cascade behavior */
                 c4_state->do_cascade = 1;
                 break;
@@ -1076,7 +1067,7 @@ static void c4_handle_rtt(
     uint64_t current_time)
 {
     if (c4_state->rtt_min_is_trusted && c4_state->nb_recent_delay_excesses > PICOQUIC_MIN_MAX_RTT_SCOPE) {
-        if (!c4_state->no_reaction_to_delay && !c4_state->chaotic_jitter && !c4_state->pig_war) {
+        if (!c4_state->chaotic_jitter && !c4_state->pig_war) {
             /* May well be congested */
             if (c4_state->nb_recent_delay_excesses >= C4_REPEAT_THRESHOLD) {
                 /* Too many events, reduce the window */

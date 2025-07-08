@@ -143,8 +143,6 @@ typedef struct st_c4_state_t {
 
     unsigned int last_freeze_was_not_delay : 1;
     unsigned int rtt_min_is_trusted : 1;
-    unsigned int increased_during_era : 1;
-    unsigned int increased_after_push : 1;
     unsigned int congestion_notified : 1;
     unsigned int congestion_delay_notified : 1;
     unsigned int pig_war : 1;
@@ -391,7 +389,6 @@ static void c4_era_reset(
     c4_state_t* c4_state)
 {
     c4_state->era_sequence = picoquic_cc_get_sequence_number(path_x->cnx, path_x);
-    c4_state->increased_during_era = 0;
     c4_state->era_max_rtt = 0;
 }
 
@@ -858,7 +855,6 @@ void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_a
         (!c4_state->use_seed_cwin || c4_state->alg_state == c4_initial)) {
         c4_state->nominal_cwin = corrected_delivered_bytes;
         path_x->cwin = MULT1024(c4_state->alpha_1024_current, c4_state->nominal_cwin);
-        c4_state->increased_during_era = 1;
     }
 
     c4_state->cruise_bytes_ack += ack_state->nb_bytes_acknowledged;

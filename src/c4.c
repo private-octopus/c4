@@ -427,6 +427,18 @@ static void c4_set_options(c4_state_t* c4_state)
             case 'D': /* allow for looser delay bounds */
                 c4_state->not_strict_delay = 1;
                 break;
+            case 'K': /* allow the cascade behavior */
+                c4_state->do_cascade = 1;
+                break;
+            case 'k': /* disallow the cascade behavior */
+                c4_state->do_cascade = 0;
+                break;
+            case 'O': /* allow the slow push behavior */
+                c4_state->do_slow_push = 1;
+                break;
+            case 'o': /* disallow the slow push behavior */
+                c4_state->do_slow_push = 0;
+                break;
             default:
                 ended = 1;
                 break;
@@ -442,6 +454,8 @@ void c4_reset(c4_state_t* c4_state, picoquic_path_t* path_x, char const* option_
     c4_state->rtt_min = UINT64_MAX;
     c4_state->nominal_cwin = PICOQUIC_CWIN_INITIAL/2;
     c4_state->alpha_1024_current = C4_ALPHA_INITIAL;
+    c4_state->do_slow_push = 1;
+    c4_state->do_cascade = 1;
     c4_set_options(c4_state);
     c4_enter_initial(path_x, c4_state, current_time);
 }

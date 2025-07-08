@@ -3,7 +3,7 @@ main_cc_options:
 main_start_time: 0
 main_scenario_text: =b1:*1:397:4000000;
 nb_connections: 1
-main_target_time: 6500000
+main_target_time: 6800000
 data_rate_in_gbps: 0.01
 latency: 1000
 jitter: 7000

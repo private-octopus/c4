@@ -34,7 +34,6 @@
 * - Tuning the interval: no bw increase => larger, bw increase => sooner, how soon?
 * - stopping the compete mode: ECN? ECN as signal that the bottleneck is actively managed.
 * - compete with self? Maybe introduce some random behavior.
-* - suspension mode: support the suspension detected, etc.
  */
 
 /* States of C4:
@@ -50,10 +49,16 @@
 * Pushing.   For one RTT. Transmit at higher rate, to probe the network, then
 *            move to "cruising". Higher rate should be 25% higher, to probe
 *            without creating big queues.
+* Slowdown.  Periodic slowdown to 1/2 the nomnal CWIN, in order to reset
+*            the min delay.
 * 
-* Competing. If we detect the need to compete with Cubic. We probably want to
-*            do something. Substate compete cruise, compete push, compute recovery.
-*            is competing a state or a flag? (just disable delay feedback?)
+* Modes:
+* pig_war: If we detect the need to compete with Cubic. In that mode, stop
+*           treating delay variations as congestion signals.
+* 
+* chaotic_delay: if we detect significant delay jitter. In that mode,
+*           instead of tracking the min delay, track a target
+*           delay as (3*min delay + running_max)/4
 * 
 * Transitions:
 *            initial to recovery -- similar to hystart for now.
@@ -66,7 +71,6 @@
 * 
 * State variables:
 * - CWIN. Main control variable.
-* - Pacing_rate.
 * - Sequence number of first packet sent in epoch. Epoch ends when this is acknowledged.
 * - Observed data rate. Measured at the end of epoch N, reflects setting at epoch N-1.
 * - Average rate of EC marking
@@ -74,7 +78,6 @@
 * - Average rate of excess delay
 * - Number of cruising bytes sent.
 * - Cruising bytes target before transition to push
-* - value of nominal CWIN before suspension
 * - RTT min
  */
 
@@ -105,8 +108,6 @@ typedef enum {
     c4_recovery,
     c4_cruising,
     c4_pushing,
-    c4_suspended,
-    c4_competing,
     c4_slowdown
 } c4_alg_state_t;
 
@@ -136,9 +137,6 @@ typedef struct st_c4_state_t {
     int nb_slowdown_experienced;
 
     uint64_t delay_threshold;
-    uint64_t suspended_nominal_cwin;
-
-    uint64_t suspended_nominal_state;
     int nb_recent_delay_excesses;
 
     unsigned int last_freeze_was_not_delay : 1;
@@ -727,33 +725,6 @@ static void c4_enter_push(
     c4_state->alg_state = c4_pushing;
 }
 
-/* Enter and exit suspension.
-* When entering suspension, we set the cwin to the bytes in flight,
-* which will stop transmission of new packets on the path. We remember
-* the nominal CWIN so it could be restored. On exit, we enter the
-* recovery state with the new CWIN */
-#if 0
-static void c4_enter_suspended(
-    picoquic_path_t* path_x,
-    c4_state_t* c4_state)
-{
-    c4_state->alpha_1024_current = C4_ALPHA_RECOVER_1024;
-    c4_state->suspended_nominal_cwin = c4_state->nominal_cwin;
-    c4_state->suspended_nominal_state = c4_state->alg_state;
-    c4_state->alg_state = c4_suspended;
-    path_x->cwin = path_x->bytes_in_transit;
-}
-#endif
-
-static void c4_exit_suspended(
-    picoquic_path_t* path_x,
-    c4_state_t* c4_state,
-    uint64_t current_time)
-{
-    c4_state->nominal_cwin = c4_state->suspended_nominal_cwin;
-    c4_enter_recovery(path_x, c4_state, 0, 0, current_time);
-}
-
 
 /* Reset the min RTT and the associated tracking variables.
  */
@@ -863,10 +834,7 @@ void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_a
         c4_initial_handle_ack(path_x, c4_state, ack_state, current_time);
     }
     else {
-        if (c4_state->alg_state == c4_suspended) {
-            c4_exit_suspended(path_x, c4_state, current_time);
-        }
-        else if (c4_era_check(path_x, c4_state)) {
+        if (c4_era_check(path_x, c4_state)) {
             /* We use the nominal_max_rtt to estimate the "natural jitter". 
             * This code is only executed if the era ends "naturally" -- if the era
             * was cut short by a congestion event, we do not update the max RTT
@@ -905,9 +873,6 @@ void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_a
             case c4_pushing:
                 c4_enter_recovery(path_x, c4_state, 0, 0, current_time);
                 break;
-            case c4_suspended:
-                c4_exit_suspended(path_x, c4_state, current_time);
-                break;
             case c4_slowdown:
                 c4_end_slowdown_era(path_x, c4_state, current_time);
                 break;
@@ -945,9 +910,6 @@ static void c4_notify_congestion(
         return;
     }
 
-    if (c4_state->alg_state == c4_suspended) {
-        return;
-    }
     /* Clear the counter used to filter spruious delay measurements */
     c4_state->nb_recent_delay_excesses = 0;
 

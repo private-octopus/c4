@@ -1,5 +1,16 @@
 # Delay, Congestion Window and Data Rate
 
+*WARNING: this test is obsolete. We tried to implement a data rate based variant, and could not make it work.
+Data_rate measurements are less reliable than CWND measurements, because of ACK compression.
+CWND measurements boil down to number of acked bytes, which can be then brought down a bit if the RTT
+is too large. Data rate measurements are division of acked bytes by RTT, 
+and this can get widely off in case of ACK compression -- i.e., if there is lots of jitter...
+Since Wi-Fi is a core scenario, and Wi-Fi networks exhibit lots of jitter,
+we end up with a core scenario in which control of the data rate just
+does not work well.**
+
+
+
 The first version of C4 used the Congestion Window (CWND) as the primary
 control. This arbitrary design decision was motivated by a desire for
 simplicity, and especially by a reaction to the increasing complexity

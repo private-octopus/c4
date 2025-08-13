@@ -128,12 +128,16 @@ period. On entering recovery, we will reduce the `nominal_CWND`
 if the congestion happened outside of a `push` period:
 ~~~
     // on congestion detected:
-    nominal_CWND = beta*nominal_CWND
+    nominal_CWND = (1-beta)*nominal_CWND
 ~~~
-The cofficient `beta` is normally set to `3/4`, similar to the
-value used in Cubic. If the signal is an ECN/CE rate, we may
+The cofficient `beta` differs depending on the nature of the congestion
+signal. For packet losses, it is set to `1/4`, similar to the
+value used in Cubic. For delay based losses, it is proportional to the
+difference between the measured RTT and the target RTT divided by
+the acceptable margin, capped to `1/4`. If the signal
+is an ECN/CE rate, we may
 use a proportional reduction coefficient in line with
-the L4S specification.
+the L4S specification, again capped to `1/4`.
 
 During the recovery period, CWND is set to the new value of
 `nominal_CWND`. The recovery period ends when the first packet
@@ -158,10 +162,10 @@ is doing, but may be less than ideal for real time applications.
 We manage that compromise by adopting a variable `pushing` rate:
 
 - If pushing at 25% did not result in a significant increase of
-  the `nominal_CWIN`, the next `pushing` will happen at 10%
-- If pushing at 10% did result in some increase of the `nominal_CWIN`,
+  the `nominal_CWIN`, the next `pushing` will happen at 5.25%
+- If pushing at 6.25% did result in some increase of the `nominal_CWIN`,
   the next `pushing` will happen at 25%, otherwise it will
-  remain at 10%
+  remain at 6.25%
 - If three consecutive `pushing` periods result in significant
   increases, we detect that the underlying network conditions
   have changed, and we reenter the `startup` phase.
@@ -200,6 +204,12 @@ bottleneck, each of those connections may experience cleaner
 RTT measurements, leading to equalization of the `min_RTT`
 observed by these connections.
 
+TODO: we may add a `post-slowdown` state, lasting one round trip after
+the end of slowdown. Any change in RTT caused by the `slowdown`
+would happen in that state. After `post-slowdown`, we would
+re-enter `startup` if the delay for 2 slowdown periods exceeds
+the `min_RTT`, or simply move back to cruising if it did not.
+
 ## Supporting Application Limited Connections
 
 In the previous sections, we mentioned a series of details
@@ -216,7 +226,6 @@ meant for supporting application limited connections:
 - There will ne no transition to slowdown if the application is
   some of the time operating at less than the half the maximum
   rate.
-
 
 
 ## Simple state machine
@@ -256,15 +265,7 @@ The state machine for C4 has the following states:
   it enters the `recovery` state. 
 * `slowdown`: the connection is using CWND set to
   1/2 of `nominal_CWND`. It exits `slowdown` after
-  one round trip, and moves to the `post-slowdown` state.
-* `post-slowdown`: the connection is using CWND set to
-  `nominal_CWND`. It remains in that state until the
-  last byte sent during the `slowdown` state is
-  acknowledged. If the minimum RTT observed during
-  two `post-slowdown` states is larger than `min_RTT`,
-  the `min_RTT` is set to that value, and the connection
-  moves back to `startup`. Otherwise, the connection moves
-  back to cruising state.
+  one round trip. 
 
 ## Driving for fairness
 
@@ -321,6 +322,9 @@ BW(bps) | BDP(bytes) | Nb RTT
 
 We could have expressed this in fractions of RTT instead of number of bytes,
 which might be more fair for application limited connection.
+
+We could also express this fractions based on the measured bandwidth, `nominal_CWND`
+divided by `target_RTT`, which would make fairness less dependent on path RTT.
 
 
 

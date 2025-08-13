@@ -298,7 +298,7 @@ For example, assuming an RTT of 50 ms, we will see cruising
 duration in RTT varying with the bandwidth in bps as:
 
 BW(bps) | BDP(bytes) | Nb RTT
----------|----------|----+
+---------|----------|----
 1.00E+05 | 6.25E+02 | 7.0
 2.00E+05 | 1.25E+03 | 7.0
 5.00E+05 | 3.13E+03 | 7.3

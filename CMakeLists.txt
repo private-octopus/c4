@@ -49,7 +49,7 @@ add_executable(c4_demo
     src/c4.c
 )
 
-target_link_libraries(pico_sim
+target_link_libraries(c4_demo
     ${Picoquic_LIBRARIES}
     ${PTLS_LIBRARIES}
     ${OPENSSL_LIBRARIES}

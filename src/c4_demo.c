@@ -83,6 +83,7 @@ static const char* token_store_filename = "demo_token_store.bin";
 #ifdef PICOQUIC_MEMORY_LOG
 #include "auto_memlog.h"
 #endif
+#include "picoquic_register_cc_algo.h"
 #include "c4.h"
 
 void print_address(FILE* F_log, struct sockaddr* address, char* label, picoquic_connection_id_t cnx_id)
@@ -1356,9 +1357,15 @@ int main(int argc, char** argv)
     (void)WSA_START(MAKEWORD(2, 2), &wsaData);
 #endif
     picoquic_register_all_congestion_control_algorithms();
-    picoquic_config_init(&config);
-    memcpy(option_string, "A:u:f:1", 7);
-    ret = picoquic_config_option_letters(option_string + 7, sizeof(option_string) - 7, NULL);
+
+    if ((ret = picoquic_register_cc_algorithm(c4_algorithm)) != 0) {
+        fprintf(stderr, "Could not register C4 algorithm, ret = 0x%x", ret);
+    }
+    else {
+        picoquic_config_init(&config);
+        memcpy(option_string, "A:u:f:1", 7);
+        ret = picoquic_config_option_letters(option_string + 7, sizeof(option_string) - 7, NULL);
+    }
 
     if (ret == 0) {
         /* Get the parameters */

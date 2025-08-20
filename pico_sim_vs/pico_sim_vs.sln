@@ -4,8 +4,16 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 VisualStudioVersion = 17.11.35208.52
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "pico_sim_vs", "pico_sim_vs.vcxproj", "{43B13A86-3049-4E22-9D58-38358E3151CA}"
+	ProjectSection(ProjectDependencies) = postProject
+		{9CBC4D21-6901-4781-91F9-1A2F00AA176E} = {9CBC4D21-6901-4781-91F9-1A2F00AA176E}
+	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "c4_demo", "c4_demo.vcxproj", "{F90A0E94-EDC2-42D2-B1B0-421C05A283BF}"
+	ProjectSection(ProjectDependencies) = postProject
+		{9CBC4D21-6901-4781-91F9-1A2F00AA176E} = {9CBC4D21-6901-4781-91F9-1A2F00AA176E}
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "c4_lib", "..\c4_lib\c4_lib.vcxproj", "{9CBC4D21-6901-4781-91F9-1A2F00AA176E}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -31,6 +39,14 @@ Global
 		{F90A0E94-EDC2-42D2-B1B0-421C05A283BF}.Release|x64.Build.0 = Release|x64
 		{F90A0E94-EDC2-42D2-B1B0-421C05A283BF}.Release|x86.ActiveCfg = Release|Win32
 		{F90A0E94-EDC2-42D2-B1B0-421C05A283BF}.Release|x86.Build.0 = Release|Win32
+		{9CBC4D21-6901-4781-91F9-1A2F00AA176E}.Debug|x64.ActiveCfg = Debug|x64
+		{9CBC4D21-6901-4781-91F9-1A2F00AA176E}.Debug|x64.Build.0 = Debug|x64
+		{9CBC4D21-6901-4781-91F9-1A2F00AA176E}.Debug|x86.ActiveCfg = Debug|Win32
+		{9CBC4D21-6901-4781-91F9-1A2F00AA176E}.Debug|x86.Build.0 = Debug|Win32
+		{9CBC4D21-6901-4781-91F9-1A2F00AA176E}.Release|x64.ActiveCfg = Release|x64
+		{9CBC4D21-6901-4781-91F9-1A2F00AA176E}.Release|x64.Build.0 = Release|x64
+		{9CBC4D21-6901-4781-91F9-1A2F00AA176E}.Release|x86.ActiveCfg = Release|Win32
+		{9CBC4D21-6901-4781-91F9-1A2F00AA176E}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

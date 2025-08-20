@@ -19,6 +19,7 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include "string.h"
 #include "picoquic_register_cc_algo.h"
 
 /* Add a test algorithm to the list of registered algorithms.

@@ -18,16 +18,5 @@
     <ClCompile Include="..\src\pico_sim.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\src\c4.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="pico_sim_vs\getopt.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="pico_sim_vs\getopt.h">
-      <Filter>Source Files</Filter>
-    </ClInclude>
   </ItemGroup>
 </Project>

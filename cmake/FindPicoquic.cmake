@@ -52,7 +52,7 @@ if(Picoquic_FOUND)
     set(Picoquic_INCLUDE_DIRS
         ${Picoquic_INCLUDE_DIR}
         ${Picoquic_TEST_DIR}
-        ${Picoquic_BINLOG_DIR})
+        ${Picoquic_LOG_DIR})
 endif()
 
 mark_as_advanced(Picoquic_LIBRARIES Picoquic_INCLUDE_DIRS)

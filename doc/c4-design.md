@@ -1,7 +1,113 @@
-# Design of Christian's Congestion Control Code (C4)
+---
+title: "Design of Christian's Congestion Control Code (C4)"
+abbrev: "C4 Design"
+category: info
 
-C4 is designed to support multimedia applications. These applications
-require low delays, and often exhibit a varaible data rate as they
+docname: draft-huitema-ccwg-c4-design-latest
+submissiontype: IETF
+number:
+date:
+consensus: true
+ipr: trust200902
+area: "Web and Internet Transport"
+keyword:
+ - C4
+ - Congestion Control
+ - Realtime Communication
+ - Media over QUIC
+
+author:
+ -
+   ins: C. Huitema
+   name: Christian Huitema
+   org: Private Octopus Inc.
+   email: huitema@huitema.net
+ -
+   ins: S. Nandakumar
+   name: Suhas Nandakumar
+   organization: Cisco
+   email: snandaku@cisco.com
+ -
+   ins: C. Jennings
+   name: Cullen Jennings
+   organization: Cisco
+   email: fluffy@iii.ca
+
+normative:
+informative:
+   RFC9000:
+   I-D.ietf-moq-transport:
+   RFC9438:
+   I-D.ietf-ccwg-bbr:
+   RFC6817:
+   RFC6582:
+
+   TCP-Vegas:
+    target: https://ieeexplore.ieee.org/document/464716
+    title: "TCP Vegas: end to end congestion avoidance on a global Internet"
+    date: "31 October 1995"
+    seriesinfo: "IEEE Journal on Selected Areas in Communications ( Volume: 13, Issue: 8, October 1995)"
+    author:
+     -
+       ins: L.S. Brakmo
+     -
+       ins: L.L. Peterson
+
+   HyStart:
+     target: https://doi.org/10.1016/j.comnet.2011.01.014
+     title: "Taming the elephants: New TCP slow start"
+     date: "June 2011"
+     seriesinfo: Computer Networks vol. 55, no. 9, pp. 2092-2110
+     author:
+      - 
+        ins: S. Ha
+      -
+        ins: I. Rhee
+
+   Cubic-QUIC-Blog:
+    target: https://www.privateoctopus.com/2019/11/11/implementing-cubic-congestion-control-in-quic/
+    title: "Implementing Cubic congestion control in Quic"
+    date: "Nov 18, 2019"
+    seriesinfo: "Christian Huitema's blog"
+    author:
+    -
+      ins: C. Huitema
+
+   I-D.ietf-quic-ack-frequency:
+
+   Wi-Fi-Suspension-Blog:
+    target: https://www.privateoctopus.com/2023/05/18/the-weird-case-of-wifi-latency-spikes.html
+    title: "The weird case of the wifi latency spikes"
+    date: "May 18, 2023"
+    seriesinfo: "Christian Huitema's blog"
+    author:
+    -
+      ins: C. Huitema
+
+   I-D.irtf-iccrg-ledbat-plus-plus:
+
+--- abstract
+
+Christian's Congestion Control Code is a new congestion control
+algorithm designed to support Real-Time applications such as
+Media over QUIC. It is designed to drive towards low delays,
+with good support for the "application limited" behavior
+frequently found when using variable rate encoding, and
+with fast reaction to congestion to avoid the "priority
+inversion" happening when congestion control overestimates
+the available capacity. The design emphasizes simplicity and
+avoids making too many assumption about the "model" of
+the network.
+
+--- middle
+
+# Introduction
+
+Christian's Congestion Control Code (C4) is a new congestion control
+algorithm designed to support Real-Time multimedia applications, specifically
+multimedia applications using QUIC {{RFC9000}} and the Media
+over QUIC transport {{I-D.ietf-moq-transport}}. These applications
+require low delays, and often exhibit a variable data rate as they
 alternate high bandwidth requirements when sending reference frames
 and lower bandwith requirements when sending differential frames.
 We translate that into 3 main goals:
@@ -10,12 +116,199 @@ We translate that into 3 main goals:
 - Support "application limited" behavior,
 - React quickly to changing network conditions.
 
-In addition, we want to do all that while keeping the protocol
+The design of C4 is inspired by our experience using different
+congestion control algorithms for QUIC,
+notably Cubic {{RFC9438}}, Hystart {{HyStart}}, and BBR {{I-D.ietf-ccwg-bbr}},
+as well as the study
+of delay-oriented algorithms such as TCP Vegas {{TCP-Vegas}}
+and LEDBAT {{RFC6817}}. In addition, we wanted to keep the algorithm
 simple and easy to implement.
 
 From this goals, we derive a series of design choices.
 
-## Keep it simple
+# React to delays
+
+If we want to drive for low delays, the obvious choice is to observe
+react to delay variations. Our baseline is to use the reaction to
+delays found in congestion control algorithms like TCP Vegas or LEDBAT:
+
+- monitor the current RTT and the min RTT
+- if the current RTT sample exceed the min RTT by more than a preset
+  margin, treat that as a congestion signal.
+
+The "preset margin" is set by default to 10 ms in TCP Vegas and LEDBAT.
+That was adequate when these algorithms were designed, but it can be
+considered excessive in high speed low latency networks.
+For C4, we set it to the lowest of 1/8th of the min RTT and 25ms.
+
+The min RTT itself is measured over time. We know from deployment
+of Hystart that delay based algorithms are very sensitive to an
+underestimation of min RTT, which can be cause for example by delay jitter
+and ACK compression. Instead of simply retraining the minimum of
+all measurements, we apply filtering.
+
+After applying filtering, the detection of congestion by comparing
+delays to min RTT plus margin works well, except in two conditions:
+
+- if the C4 connection is competing with a another connection that
+  does not react to delay variations, such as a connection using Cubic,
+- if the network exhibits a lot of latency jitter, as happens on
+  some Wi-Fi networks.
+
+We also know that if several connection using delay-based algorithms
+compete, the competition is only fair if they all have the same
+estimate of the min RTT. We handle that by using a "periodic slow down"
+mechanism.
+
+## Filtering of Delay measurements
+
+When testing an implementation of Cubic in QUIC in 2019, we noticed
+that delay jitter was causing Hystart to exit early, resulting in
+poor performance for the affected connection (see {{Cubic-QUIC-Blog}}).
+There was a double effect:
+
+- Latency jitter sometimes resulted in measurements exceeding the
+  target delay, causing Hystart to exit,
+- Latency jitter also resulted sometimes in measurements lower
+  than the min RTT, causing the delay threshold to be set at
+  an excessively low value.
+
+We corrected the issue by implementing a low pass filter of the
+the delay measurements. The low pass filter retained the last N
+measurements. We modified delay tests as follow:
+
+- We only considered a measurement as exceeding the delay target
+  if all last N measurements exceeded that target,
+- We only updated the min RTT if the maximum of the last
+  N measurements exceeded the min RTT.
+
+There is of course a tension between the number of samples
+considered (the value N) and the responsiveness of delay-based
+congestion control. The delay-based congestion notification will
+only happen after N measurements. This depends on the frequency
+of acknowledgements, which itself depends on configuration
+parameters of the QUIC implementation. This frequency is itself
+compromise: too frequent ACKs cause too many interruptions
+and slow down the transmission, but spacing ACKs too much
+means that detection of packet losses will be delayed.
+QUIC ACK Frequency draft {{I-D.ietf-quic-ack-frequency}} allows
+sender to specify a maximum delay and a maximum number of packets
+between ACKs, and we can expect different implementations
+to use different parameters.
+In our early implementation, we set N=7, because we
+assume that we will get at least 8 ACKs per RTT most of the
+time. We might want to reduce that number when the congestion
+window is small, for example smaller than 16 packets, but
+we have not tested that yet.
+
+## Managing Competition with Loss Based Algorithms
+
+Competition between Cubic and a delay based algorithm leads to Cubic
+consuming all the bandwidth, and the delay based connection starving.
+This phenomenon force TCP Vegas to only be deployed in controlled
+environments, in which it does not have to compete with
+TCP Reno {{RFC6582}} or Cubic. 
+
+We handles this competition issue by using a simple detection algorithm.
+If C4 detect competition with a loss based algorithm, it switches
+to "pig war" mode and stops reacting to changes in delays -- it will
+instead only react to packet losses and ECN signals. In that mode,
+we use another algorithm to detect when the competition has ceased,
+and switch back to the delay responsive mode.
+
+In our initial deployments, we detect competition when delay based
+congestion notifications leads to CWND reduction for 3 consecutive
+RTT. The assumption is that if the competition reacted to delays
+variations, it would have reacted to the delay increases before
+3 RTT.
+
+Our initial exit competition algorithm is simple. C4 will exit the
+"pig war" mode if the available bandwidth increases..
+
+## Handling Chaotic Delays
+
+Some Wi-Fi network exhibit spikes in latency. These spikes are
+probably what caused the delay jitter discussed in
+{{Cubic-QUIC-Blog}}. We discussed them in more details in
+{{Wi-Fi-Suspension-Blog}}. We are not sure about the
+mechanism behind these spikes, but we have noticed that they
+mostly happen when several adjacent Wi-Fi networks are configured
+to use the same frequencies and channels. In these configurations,
+we expect the hidden node problem to result in some collisions.
+The Wi-Fi layer 2 retransmission algorithm takes care of these
+losses, but apparently uses an exponential back off algorithm
+to space retransmission delays in case of repeated collisions.
+When repeated collisions occur, the exponential backoff mechanism
+can cause large delays. The Wi-Fi layer 2 algorithm will also
+try to maintain delivery order, and subsequent packets will
+be queued behind the packet that caused the collisions.
+
+We detect the advent of such "chaotic delay jitter" by computing a running
+estimate of the max RTT. We measure the max RTT observed in each round trip,
+to obtain the "era max RTT". We then compute an exponentially averaged
+"nominal max RTT":
+
+~~~
+nominal_max_rtt = (7 * nominal_max_rtt + era_max_rtt) / 8;
+~~~
+
+If the nominal max RTT is more than twice the min RTT, we set the
+"chaotic jitter" condition. When that condition is set, instead of
+detecting delay based congestion by comparing the delay measurements
+to min RTT, we compare them to a "target RTT", computed as:
+
+~~~
+target_rtt = (3 * min_RTT + 1*nominal_max_rtt)/4
+~~~
+
+The network conditions can evolve over time. C4 will keep monitoring
+the nominal max RTT, and will reset the "chaotic jitter" condition
+if nominal max RTT decreases below a threshold of 1.5 times the
+min RTT.
+
+## Monitor min RTT
+
+Delay based algorithm like CWND rely on a correct estimate of the
+min RTT. They will naturally discover a reduction in the min
+RTT, but detecting an increase in the max RTT is difficult.
+There are known failure modes when multiple delay based
+algortihms compete, in particular the "late comer advantage".
+
+The connections ensure that their min RTT is valid by
+occasionally entering a "slowdown" period, during which they set
+CWND to half the nominal value. This is similar to
+the "Probe RTT" mechanism implemented in BBR, or the
+"initial and periodic slowdown" proposed as extension
+to LEDBAT in {{I-D.irtf-iccrg-ledbat-plus-plus}}. In our
+implementation, the slowdown occurs if more than 5
+seconds have elapsed since the previous slowdown, or
+since the last time the min RTT was set.
+
+The measurement of min RTT in the period
+that follows the slowdown is considered a "clean"
+measurement. If two consecutive slowdown periods are
+followed by clean measurements larger than the current
+min RTT, we detect an RTT change and reset the
+connection. If the measurement results in the same
+value as the previous min RTT, C4 continue normal
+operation.
+
+Some applications exhibit periods of natural slow down. This
+is the case for example of multimedia applications, when
+they only send differentially encoded frames. Natural
+slowdown is detected if an application sends less than
+half the nominal CWND during a period, and more than 4 seconds
+have elapsed since the previous slowdown or the previous
+min RTT update. The measurement that follows a natural
+slowdown is also considered a clean measurement.
+
+A slowdown period corresponds to a reduction in offered
+traffic. If multiple connections are competing for the same
+bottleneck, each of these connections may experience cleaner
+RTT measurements, leading to equalization of the min RTT
+observed by these connections.
+
+# Keep it simple
 
 We develop C4 partly as a reaction to the complexity of BBR, which tends to
 increase with each successive release of the BBR draft. BBR controls both
@@ -27,47 +320,7 @@ the network. This leads to complex interaction between "short term" and
 the congestion window. We compute the pacing rate based on the congestion
 window and the target RTT, which is mostly based on the min RTT.
 
-## React to delays
-
-If we want to drive for low delays, the obvious choice is to observe
-react to delay variations. Our baseline is to use the reaction to
-delays found in congestion control algorithms like TCP VEGAS or LEDBAT:
-
-- monitor the current RTT and the min RTT
-- if the current RTT sample exceed the min RTT by more than a preset
-  margin, treat that as a congestion signal.
-
-We know that this simple algorithm fails in two conditions:
-
-- if the C4 connection is competing with a another connection that
-  does not react to delay variations, such as a connection using Cubic,
-- if the network exhibits a lot of latency jitter, as happens on
-  some Wi-Fi networks.
-
-Competition between Cubic and a delay based algorithm leads to Cubic
-consuming all the bandwidth, and the delay based connection starving.
-We handles that by detecting the competition scenario when delay based
-congestion notifications leads to CWND reduction for 3 consecutive
-RTT. In that case, C4 switches to "pig war" mode and stops reacting
-to changes in delays. C4 will exit the `pig_war` mode if the bandwidth
-raises above the initial value.
-
-Some Wi-Fi network exhibit spikes in latency, which we believe are
-caused by packet losses due to collisions when adjacent Wi-Fi
-networks operate on the same channel. Collisions and packet losses
-are corrected by a link layer protocol that uses the exponential backoff
-to increase delays between successive repeats of a packet. That causes
-large delay variations. We detect that by computing a running
-estimate of max RTT. If the running estimate of max RTT is more than 
-double `min_RTT`, instead of setting
-`target_RTT = min_RTT`, we use:
-~~~
-target_rtt = (3 * min_RTT + 1*max_RTT_estimate)/4
-~~~
-We then detect delay based congestion by comparing RTT samples to
-`target_RTT + margin`.
-
-## Make before break
+# Make before break
 
 We update the CWND value during `push` periods, during which we
 normally increase the value of CWND by 25% -- or by 100% during
@@ -111,7 +364,7 @@ We will exit the startup period if the value of
 `nominal_CWND` does not increase by at least 10% for 3
 consecutive RTT.
 
-## React to Congestion Signals
+# React to Congestion Signals
 
 The `nominal_CWND` formula ensure that CWND will grow if capacity
 is found available during a `push` period. However, changing
@@ -171,44 +424,6 @@ We manage that compromise by adopting a variable `pushing` rate:
   have changed, and we reenter the `startup` phase.
 
 By exception, we will always push at 25% in the `pig war` mode.
-
-## Monitor min RTT
-
-Delay based algorithm like CWND rely on a correct estimate of the
-min RTT. They will naturally discover a reduction in the min
-RTT, but detecting an increase in the max RTT is difficult.
-There are know failure mode when multiple delay based
-connection compete, in particular the "late comer advantage".
-The connections ensure that their min RTT is valid by
-entering a `slowdown` period, during which they set
-CWND to half the nominal value.
-
-Some applications exhibit periods of natural slow down. This
-is the case for example of multimedia applications, when
-they only send differentially encoded frames. Natural
-slow down is detected if an application sends less than
-half the nominal CWND during a period.
-
-The connection will enter a slowdown period if at least
-5 seconds have passed since the last forced or natural
-slowdown. The measurement of min RTT in the period
-that follows the slowdown is considered a "clean"
-measurement. If two consecutive slowdown periods are
-followed by clean measurements larger than the current
-min RTT, we detect and RTT change and reset the
-connection. If not, we just continue normal processing.
-
-A slowdown period corresponds to a reduction in offered
-traffic. If multiple connections are competing for the same
-bottleneck, each of those connections may experience cleaner
-RTT measurements, leading to equalization of the `min_RTT`
-observed by these connections.
-
-TODO: we may add a `post-slowdown` state, lasting one round trip after
-the end of slowdown. Any change in RTT caused by the `slowdown`
-would happen in that state. After `post-slowdown`, we would
-re-enter `startup` if the delay for 2 slowdown periods exceeds
-the `min_RTT`, or simply move back to cruising if it did not.
 
 ## Supporting Application Limited Connections
 
@@ -327,8 +542,23 @@ We could also express this fractions based on the measured bandwidth, `nominal_C
 divided by `target_RTT`, which would make fairness less dependent on path RTT.
 
 
+# Security Considerations
 
+We do not believe that C4 introduce new security issues. Or maybe there are,
+such as what happen if applications can be fooled in going to fast and
+overwhelming the network, or going to slow and underwhelming the application.
+Discuss!
 
+# IANA Considerations
+
+This document has no IANA actions.
+
+--- back
+
+# Acknowledgments
+{:numbered="false"}
+
+TODO acknowledge.
 
 
 

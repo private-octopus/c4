@@ -31,12 +31,37 @@ message(STATUS "OpenSSL_LIBRARIES: ${OPENSSL_LIBRARIES}")
 include_directories(include lib tests 
     ${Picoquic_INCLUDE_DIRS} ${PTLS_INCLUDE_DIRS} ${OPENSSL_INCLUDE_DIR})
 
+set (C4_LIBRARY_FILES
+    src/c4.c
+    src/register_cc_algo.c
+)
+
+set (C4_LIBRARY_HEADERS
+    src/c4.h
+    src/picoquic_register_cc_algo.h
+)
+
+add_library(c4_lib ${C4_LIBRARY_HEADERS} ${C4_LIBRARY_FILES})
+
 add_executable(pico_sim
     src/pico_sim.c
-    src/c4.c
 )
 
 target_link_libraries(pico_sim
+    c4_lib
+    ${Picoquic_LIBRARIES}
+    ${PTLS_LIBRARIES}
+    ${OPENSSL_LIBRARIES}
+    ${CMAKE_DL_LIBS}
+    ${CMAKE_THREAD_LIBS_INIT}
+)
+
+add_executable(c4_demo
+    src/c4_demo.c
+)
+
+target_link_libraries(c4_demo
+    c4_lib
     ${Picoquic_LIBRARIES}
     ${PTLS_LIBRARIES}
     ${OPENSSL_LIBRARIES}

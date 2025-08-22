@@ -19,6 +19,12 @@ find_path(Picoquic_LOG_DIR
           ${CMAKE_BINARY_DIR}/../picoquic/loglib
           ../picotls/picoquic/ )
 
+find_path(Picoquic_HTTP_DIR
+    NAMES h3zero.h
+    HINTS ${CMAKE_SOURCE_DIR}/../picoquic/picohttp
+          ${CMAKE_BINARY_DIR}/../picoquic/picohttp
+          ../picotls/picoquic/ )
+
 set(Picoquic_HINTS 
     ${CMAKE_BINARY_DIR}/../picoquic
     ${CMAKE_BINARY_DIR}/../picoquic/build 
@@ -44,15 +50,16 @@ find_package_handle_standard_args(Picoquic REQUIRED_VARS
 
 if(Picoquic_FOUND)
     set(Picoquic_LIBRARIES
-        ${Picoquic_TEST_LIBRARY} 
+        ${Picoquic_TEST_LIBRARY}
         ${Picoquic_HTTP_LIBRARY}
         ${Picoquic_LOG_LIBRARY} 
         ${Picoquic_CORE_LIBRARY}
     )
     set(Picoquic_INCLUDE_DIRS
-        ${Picoquic_INCLUDE_DIR}
         ${Picoquic_TEST_DIR}
-        ${Picoquic_BINLOG_DIR})
+        ${Picoquic_HTTP_DIR}
+        ${Picoquic_LOG_DIR}
+        ${Picoquic_INCLUDE_DIR})
 endif()
 
 mark_as_advanced(Picoquic_LIBRARIES Picoquic_INCLUDE_DIRS)

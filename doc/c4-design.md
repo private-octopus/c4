@@ -86,6 +86,24 @@ informative:
 
    I-D.irtf-iccrg-ledbat-plus-plus:
 
+   RFC9331:
+   ICCRG-LEO:
+    target: https://datatracker.ietf.org/meeting/122/materials/slides-122-iccrg-mind-the-misleading-effects-of-leo-mobility-on-end-to-end-congestion-control-00
+    title: "Mind the Misleading Effects of LEO Mobility on End-to-End Congestion Control"
+    date: "March 17, 2025"
+    seriesinfo: "Slides presented at ICCRG meeting during IETF 122"
+    author:
+    -
+      ins: Z. Lai
+    -
+      ins: Z. Li
+    -
+      ins: Q. Wu
+    -
+      ins: H. Li
+    -
+      ins: Q. Zhang
+
 --- abstract
 
 Christian's Congestion Control Code is a new congestion control
@@ -112,9 +130,9 @@ alternate high bandwidth requirements when sending reference frames
 and lower bandwith requirements when sending differential frames.
 We translate that into 3 main goals:
 
-- Drive towards low delays,
-- Support "application limited" behavior,
-- React quickly to changing network conditions.
+- Drive towards low delays (see {{react-to-delays}}),
+- Support "application limited" behavior (see {{limited}}),
+- React quickly to changing network conditions (see {{congestion}}).
 
 The design of C4 is inspired by our experience using different
 congestion control algorithms for QUIC,
@@ -124,9 +142,29 @@ of delay-oriented algorithms such as TCP Vegas {{TCP-Vegas}}
 and LEDBAT {{RFC6817}}. In addition, we wanted to keep the algorithm
 simple and easy to implement.
 
-From this goals, we derive a series of design choices.
+C4 assumes that the transport stack is
+capable of signaling to the congestion algorithms events such
+as acknowledgements, RTT measurements, ECN signals or the detection
+of packet losses. It also assumes that the congestion algorithm
+controls the transport stack by setting the congestion window
+(CWND). C4 will also set a pacing rate, derived from the
+value of CWND
 
-# React to delays
+C4 tracks the state of the network by keeping a small set of
+variables, the main ones being the "nominal CWND", the "min RTT",
+and the current state of the algorithm. The details on using and
+tracking the min RTT are discussed in {{react-to-delays}}.
+
+The nominal CWND is a congestion window that, if applied, would not cause
+the building of queues and network congestion. C4 discovers that value during
+a "startup" phase. C4 will spend most of its time following that window, i.e.,
+in "cruising" mode. It will use larger CWND during "pushing" periods,
+to try discover whether the network capacity has increased. If it encounters
+congestion, C4 will reduce the nominal CWND and move to "recovery",
+before returning to cruising. The design of these mechanisms is
+discussed in {{congestion}}.
+
+# React to delays {#react-to-delays}
 
 If we want to drive for low delays, the obvious choice is to observe
 react to delay variations. Our baseline is to use the reaction to
@@ -227,7 +265,7 @@ Our initial exit competition algorithm is simple. C4 will exit the
 
 ## Handling Chaotic Delays
 
-Some Wi-Fi network exhibit spikes in latency. These spikes are
+Some Wi-Fi networks exhibit spikes in latency. These spikes are
 probably what caused the delay jitter discussed in
 {{Cubic-QUIC-Blog}}. We discussed them in more details in
 {{Wi-Fi-Suspension-Blog}}. We are not sure about the
@@ -308,77 +346,27 @@ bottleneck, each of these connections may experience cleaner
 RTT measurements, leading to equalization of the min RTT
 observed by these connections.
 
-# Keep it simple
+# React quickly to changing network conditions {#congestion}
 
-We develop C4 partly as a reaction to the complexity of BBR, which tends to
-increase with each successive release of the BBR draft. BBR controls both
-the pacing rate, which tracks the expected bottleneck bandwidth, and the
-congestion window (CWND), which limits the number of bytes in flight according
-to pacing rate, min RTT and estimate of max bytes in flight supported by
-the network. This leads to complex interaction between "short term" and
-"long term" parameters. Instead, C4 uses a single control parameter,
-the congestion window. We compute the pacing rate based on the congestion
-window and the target RTT, which is mostly based on the min RTT.
+Our focus is on maintaining low delays, and thus reacting
+to delay increases as explained in {{react-to-delays}}.
+However, only relying on increased delays would be a mistake.
+Experience with the early version of BBR showed that
+completely ignoring packet losses can lead to very unfair
+competition with Cubic. The L4S effort is promoting the use
+of ECN feedback by network elements (see {{RFC9331}}),
+which could well end up detecting congestion and queues
+more precisely than the monitoring of end-to-end delays.
+C4 will thus detect changing network conditions by monitoring
+3 congestion control signals:
 
-# Make before break
-
-We update the CWND value during `push` periods, during which we
-normally increase the value of CWND by 25% -- or by 100% during
-the startup phase. We then monitor the number of bytes acknowledged
-at the end of the period, i.e., between the acknowledgement
-of the last packet in the previous period and the acknowledgement
-of the last packet of this period. This number
-of acknowledged bytes reflect the capacity of the network, but
-the increased transmission rate during push may also force
-some queuing. We correct the initial estimate for the
-queuing effect using the formula:
-~~~
-if not in pig-war mode:
-    corrected_bytes_acked = bytes_acked_in_period * target_rtt /
-                     max(target_rtt, period_duration)
-else:
-    corrected_bytes_acked = bytes_acked_in_period
-~~~
-We then compare `corrected_bytes_acked` to the nominal CWND, and update
-the CWND only if `corrected_bytes_acked` is greater:
-~~~
-if corrected_bytes_acked > CWND:
-    nominal_CWND = corrected_bytes_acked
-~~~
-In normal operation, we ensure that the CWND stays within network
-capacity by setting:
-~~~
-    CWND = nominal_CWND
-~~~
-We only use a larger CWND during the `push` phases, setting:
-~~~
-    CWND = (1+alpha)* nominal_CWND
-~~~
-
-We also use the make before break strategy during the initial
-`startup` period, during which we set:
-~~~
-    alpha_startup = 100%
-~~~
-We will exit the startup period if the value of
-`nominal_CWND` does not increase by at least 10% for 3
-consecutive RTT.
-
-# React to Congestion Signals
-
-The `nominal_CWND` formula ensure that CWND will grow if capacity
-is found available during a `push` period. However, changing
-network conditions may happen at any time. C4 detects these
-changing conditions by monitoring 3 congestion control
-signals:
-
-1. Excessive increase of measured RTT (except in `pig war` mode),
-2. Excessive rate of packet losses,
+1. Excessive increase of measured RTT (except in pig war mode),
+2. Excessive rate of packet losses (but not mere Probe Time Out, see {{no-pto}}),
 3. Excessive rate of ECN/CE marks
 
-If any of these signals is detected, we will enter a `recovery`
-period. On entering recovery, we will reduce the `nominal_CWND`
-if the congestion happened outside of a `push` period:
+If any of these signals is detected, C4 enters a "recovery"
+state. On entering recovery, C4 reduces the `nominal_CWND`
+by a factor "beta":
 ~~~
     // on congestion detected:
     nominal_CWND = (1-beta)*nominal_CWND
@@ -390,99 +378,84 @@ difference between the measured RTT and the target RTT divided by
 the acceptable margin, capped to `1/4`. If the signal
 is an ECN/CE rate, we may
 use a proportional reduction coefficient in line with
-the L4S specification, again capped to `1/4`.
+the {{RFC9331}}, again capped to `1/4`.
 
 During the recovery period, CWND is set to the new value of
-`nominal_CWND`. The recovery period ends when the first packet
+"nominal CWND". The recovery period ends when the first packet
 sent after entering recovery is acknowledged. Congestion
 signals are processed when entering recovery; further signals
 are ignored until the end of recovery.
 
+Network conditions may change for the better or for the worse. Worsening 
+is detected through congestion signals, but increases can only be detected
+by trying to send more data and checking whether the network accepts it.
+Different algorithms have done two ways: pursuing regular increases of
+CWND until congestion finally occurs, like for example the "congestion
+avoidance" phase of TCP RENO; or periodically probe the network
+by sending at a higher rate, like the Probe Bandwidth mechanism of
+BBR. C4 adopt the periodic probing approach, in particular
+because it is a better fit for variable rate multimedia applications
+(see details in {{limited}}).
+
+## Do not react to Probe Time Out {#no-pto}
+
 QUIC normally detect losses by observing gaps in the sequences of acknowledged
-packet. That's a robust signal. QUIC will also use inject "Probe time out"
+packet. That's a robust signal. QUIC will also inject "Probe time out"
 packets if the PTO timeout elapses before the last sent packet has not been acknowledged.
-This is not a robust congestion signal, because the delay jitter may also cause
+This is not a robust congestion signal, because delay jitter may also cause
 PTO timeouts. When testing in "high jitter" conditions, we realized that we should
 not change the state of C4 for losses detected solely based on timer, and
 only react to those losses that are detected by gaps in acknowledgements.
 
-## Variable Pushing Rate
+## Update the Nominal CWND after Pushing {#cwnd-update}
 
-C4 tests for avaiable bandwidth at regular `pushing` intervals.
-Testing is compromise between operating at the available
-capacity and risking building queues. Testing at 25% mimics what BBR
-is doing, but may be less than ideal for real time applications.
-We manage that compromise by adopting a variable `pushing` rate:
+C4 configures the transport with a larger CWND than the nominal CWND
+during "pushing" periods.
+The peer will acknowledge the data sent during these periods in
+the round trip that followed. 
 
-- If pushing at 25% did not result in a significant increase of
-  the `nominal_CWIN`, the next `pushing` will happen at 5.25%
-- If pushing at 6.25% did result in some increase of the `nominal_CWIN`,
-  the next `pushing` will happen at 25%, otherwise it will
-  remain at 6.25%
-- If three consecutive `pushing` periods result in significant
-  increases, we detect that the underlying network conditions
-  have changed, and we reenter the `startup` phase.
+~~~
+TODO: diagram
+~~~
 
-By exception, we will always push at 25% in the `pig war` mode.
+When we receive
+an ACK for a newly acknowledged packet number N,
+we compute the number of bytes acknowledged
+between the acknowledgement received before N was sent and the acknowledgement
+of the last packet of this period. This number
+of acknowledged bytes reflect the capacity of the network, but
+the increased CWND during push may also force
+some queuing. We correct the initial estimate for the
+queuing effect using the formula:
 
-## Supporting Application Limited Connections
+~~~
+if not in pig-war mode:
+    corrected_bytes_acked = bytes_acked_in_period * target_rtt /
+                     max(target_rtt, period_duration)
+else:
+    corrected_bytes_acked = bytes_acked_in_period
+~~~
 
-In the previous sections, we mentioned a series of details
-meant for supporting application limited connections:
+We then compare `corrected_bytes_acked` to the nominal CWND, and update
+the CWND only if `corrected_bytes_acked` is greater:
 
-- The CWND can only become lower if a congestion signal is received.
-  That means a limited connection that is not experiencing congestion
-  will continue operating with the nominal congestion window.
+~~~
+if corrected_bytes_acked > CWND:
+    nominal_CWND = corrected_bytes_acked
+~~~
 
-- Transition to `pushing` only happens when the application is not
-  congestion limited. This means the application will have a chance
-  to test capacity limits when it has data to send.
+This strategy is effectively a form of "make before break". The pushing
+only increase the CWND by a fraction of the nominal CWND,
+and only lasts for one round trip. That limited increase is not
+expected to increase the size of queues by more than a small
+fraction of the bandwidth\*delay product. It might cause a
+slight increase of the measured RTT for a short period, or
+perhaps cause some ECN signalling, but it should not cause packet
+losses -- unless C4 is in "pig war" mode. If there was no extra
+capacity available, C4 does not increase the nominal CWND and
+the connection continues with the previous value.
 
-- There will ne no transition to slowdown if the application is
-  some of the time operating at less than the half the maximum
-  rate.
-
-
-## Simple state machine
-
-The state machine for C4 has the following states:
-
-* `startup`: the initial state, during which the CWND is
-  set to twice the `nominal_CWND`. The connection
-  exits startup if the `nominal_cwnd` does not
-  increase for 3 consecutive round trips. When the
-  connection exits startup, it enters `recovery`.
-* `recovery`: the connection enters that state after
-  `startup`, `pushing`, or a congestion detection in
-  a `cruising` state. It remains in that state for
-  at least one roundtrip, until the first packet sent
-  in `discovery` is acknowledged. Once that happens,
-  the connection enters `slowdown` if no `slowdown`
-  has been experienced for 5 seconds, or `cruising`
-  otherwise.
-* `cruising`: the connection is sending using the
-  `nominal_cwnd` value. If congestion is detected,
-  the connection exits cruising and enters
-  `recovery` after lowering the value of
-  `nominal_cwnd`. If after a roundtrip the application
-  sent fewer than 1/2 of `nominal_cwnd`, and if the
-  last `slowdown` occured more than 4 seconds ago,
-  the connection moves to the `post-slowdown` state.
-  Otherwise, the connection will
-  remain in `cruising` state until a sufficient
-  number of bytes have been acknowledged, and
-  the connection is not `app limited`. At that
-  point, it enters `pushing`.
-* `pushing`: the connection is using a CWND 25%
-  larger than `nominal_CWND`. It remains in that state
-  for one round trip, i.e., until the first packet
-  send while `pushing` is acknowledged. At that point,
-  it enters the `recovery` state. 
-* `slowdown`: the connection is using CWND set to
-  1/2 of `nominal_CWND`. It exits `slowdown` after
-  one round trip. 
-
-## Driving for fairness
+## Driving for fairness {#fairness}
 
 The duration of `cruising` is expressed as a number of bytes.
 This number of bytes is computed with two goals:
@@ -538,9 +511,160 @@ BW(bps) | BDP(bytes) | Nb RTT
 We could have expressed this in fractions of RTT instead of number of bytes,
 which might be more fair for application limited connection.
 
-We could also express this fractions based on the measured bandwidth, `nominal_CWND`
-divided by `target_RTT`, which would make fairness less dependent on path RTT.
+We could also compute these fractions based on the measured bandwidth, "nominal CWND"
+divided by "target RTT", which would make fairness less dependent on path RTT. we did
+not, because TCP RENO's mechanism are strictly based on CWND size, and thus fairness
+requires using the same criteria.
 
+## Cascade of Increases
+
+We sometimes encounter networks in which the available bandwidth changes rapidly.
+For example, when a competing connection stops, the available capacity may double.
+With low Earth orbit satellite constellations (LEO), it appears
+that ground stations constantly check availability of nearby satellites, and
+switch to a different satellite every 10 or 15 seconds depending on the
+constellation (see {{ICCRG-LEO}}), with the bandwidth jumping from 10Mbps to
+65Mbps.
+
+Because we aim for fairness with RENO or Cubic, the cycle of recovery, cruising
+and pushing will only result in slow increases increases, maybe 25% after 10 RTT.
+This means we would only double the bandwidth after about 40 RTT, or increase
+from 10 to 65 Mbps after almost 200 RTT -- by which time the LEO station might
+have connected to a different orbiting satellite. To go faster, we implement
+a "cascade": if three successive pushings all result in increases of the
+nominal CWND, C4 will reenter the "startup" mode, during which each RTT
+can result in a 100% increase of CWND.
+
+# Supporting Application Limited Connections {#limited}
+
+In the previous sections, we mentioned a series of details
+meant for supporting application limited connections:
+
+- The CWND can only become lower if a congestion signal is received.
+  That means a limited connection that is not experiencing congestion
+  will continue operating with the nominal congestion window.
+
+- Transition to `pushing` only happens when the application is not
+  congestion limited. This means the application will have a chance
+  to test capacity limits when it has data to send.
+
+- There will ne no transition to slowdown if the application is
+  some of the time operating at less than the half the maximum
+  rate.
+
+## Variable Pushing Rate
+
+C4 tests for avaiable bandwidth at regular `pushing` intervals.
+Testing is compromise between operating at the available
+capacity and risking building queues. Testing at 25% mimics what BBR
+is doing, but may be less than ideal for real time applications.
+We manage that compromise by adopting a variable `pushing` rate:
+
+- If pushing at 25% did not result in a significant increase of
+  the `nominal_CWIN`, the next `pushing` will happen at 5.25%
+- If pushing at 6.25% did result in some increase of the `nominal_CWIN`,
+  the next `pushing` will happen at 25%, otherwise it will
+  remain at 6.25%
+- If three consecutive `pushing` periods result in significant
+  increases, we detect that the underlying network conditions
+  have changed, and we reenter the `startup` phase.
+
+By exception, we will always push at 25% in the `pig war` mode.
+
+# State Machine
+
+The state machine for C4 has the following states:
+
+* `startup`: the initial state, during which the CWND is
+  set to twice the `nominal_CWND`. The connection
+  exits startup if the `nominal_cwnd` does not
+  increase for 3 consecutive round trips. When the
+  connection exits startup, it enters `recovery`.
+* `recovery`: the connection enters that state after
+  `startup`, `pushing`, or a congestion detection in
+  a `cruising` state. It remains in that state for
+  at least one roundtrip, until the first packet sent
+  in `discovery` is acknowledged. Once that happens,
+  the connection enters `slowdown` if no `slowdown`
+  has been experienced for 5 seconds, or `cruising`
+  otherwise.
+* `cruising`: the connection is sending using the
+  `nominal_cwnd` value. If congestion is detected,
+  the connection exits cruising and enters
+  `recovery` after lowering the value of
+  `nominal_cwnd`. If after a roundtrip the application
+  sent fewer than 1/2 of `nominal_cwnd`, and if the
+  last `slowdown` occured more than 4 seconds ago,
+  the connection moves to the `checking` state.
+  Otherwise, the connection will
+  remain in `cruising` state until a sufficient
+  number of bytes have been acknowledged, and
+  the connection is not `app limited`. At that
+  point, it enters `pushing`.
+* `pushing`: the connection is using a CWND 25%
+  larger than `nominal_CWND`. It remains in that state
+  for one round trip, i.e., until the first packet
+  send while `pushing` is acknowledged. At that point,
+  it enters the `recovery` state. 
+* `slowdown`: the connection is using CWND set to
+  1/2 of `nominal_CWND`. After one round trip, it exits `slowdown`
+  and enters `checking`.
+* `checking`: after a forced or natural slowdown,
+  the connection enters the checking state. It is
+  sending using the `nominal_cwnd` value. The connection remains in
+  checking state for one round trip. After that round trip,
+  it goes back to `cruising` if the lowest RTT measured
+  during the round trip or the previous checking state is lower
+  than or equal to the
+  current min RTT. If not, if the lowest RTT measured during
+  two consecutive slowdown periods is higher than the min RTT,
+  it resets the min RTT to the last measurement and reenters
+  `startup`.
+
+These transitions are summarized in the following state
+diagram.
+
+~~~
+                    Start
+                      |
+                      v
+                      +<-----------------------+-------------------+
+                      |                        |                   ^
+                      v                        |                   |
+                 +----------+                  |                   |
+                 | Startup  |                  |                   |
+                 +----|-----+                  |                   |
+                      |                        |                   |
+                      v                        |                   |
+                 +---------------+             |                   |
+  +--+---------->|   Recovery    |             |                   |
+  ^  ^           +----|---|---|--+             |                   |
+  |  |                |   |   | Rapid Increase |                   |
+  |  |                |   |   +--------------->+                   |
+  |  |                |   |                                        |
+  |  |                |   v   Forced Slowdown                      |
+  |  |                |   +------------------>+                    |
+  |  |                |                       |                    |
+  |  |                +<----------------------|------------------+ |
+  |  |                |                       |                  ^ |
+  |  |                v                       v                  | |
+  |  |           +----------+            +----------+            | |
+  |  |           | Cruising |            | Slowdown |            | |
+  |  |           +-|--|--|--+            +----|-----+            | |
+  |  | Congestion  |  |  |  Natural Slowdown  |                  | |
+  |  +-------------+  |  +------------------->+                  | |
+  |                   |                       |                  | |
+  |                   v                       v                  | |
+  |              +----------+            +-----------+           | |
+  |              | Pushing  |            | Checking  |           | |
+  |              +----|-----+            +---|---|---+           | |
+  |                   |                      |   | RTT Min lower | |
+  +<------------------+                      |   +-------------->+ |
+                                             |                     |
+                                             | RTT Min Higher      |
+                                             +-------------------->+
+~~~
+  
 
 # Security Considerations
 

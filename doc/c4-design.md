@@ -516,7 +516,7 @@ divided by "target RTT", which would make fairness less dependent on path RTT. w
 not, because TCP RENO's mechanism are strictly based on CWND size, and thus fairness
 requires using the same criteria.
 
-## Cascade of Increases
+## Cascade of Increases {#cascade}
 
 We sometimes encounter networks in which the available bandwidth changes rapidly.
 For example, when a competing connection stops, the available capacity may double.
@@ -537,89 +537,170 @@ can result in a 100% increase of CWND.
 
 # Supporting Application Limited Connections {#limited}
 
-In the previous sections, we mentioned a series of details
-meant for supporting application limited connections:
+C4 is specially designed to support multimedia applications,
+which very often operate in application limited mode.
+After testing and simulations of application limited applications,
+we incorporated a number of features.
 
-- The CWND can only become lower if a congestion signal is received.
-  That means a limited connection that is not experiencing congestion
-  will continue operating with the nominal congestion window.
+The first feature is the design decision to only lower the nominal CWND
+if congestion is detected. This is in contrast with the BBR design,
+in which the estimate of bottleneck bandwidth is also lowered
+if the bandwidth measured after a "probe bandwidth" attempt is
+lower than the current estimate while the connection was not
+"application limited". We found that detection of the application
+limited state was somewhat error prone. Occasional errors end up
+with a spurious reduction of the estimate of the bottleneck bandwidth.
+These errors can accumulate over time, causing the bandwidth
+estimate to "drift down", and the multimedia experience to suffer.
+Only reacting to congestion notifications much reduces that
+risk.
 
-- Transition to `pushing` only happens when the application is not
-  congestion limited. This means the application will have a chance
-  to test capacity limits when it has data to send.
+The second feature is the "make before break" nature of the CWND
+updates discussed in {{cwnd-update}}. This reduces the risk
+of using CWND that are too large and would cause queues or losses,
+and thus make C4 a good choice for multimedia applications.
 
-- There will ne no transition to slowdown if the application is
-  some of the time operating at less than the half the maximum
-  rate.
+C4 adds two more features to handle multimedia
+applications well: coordinated pushing (see {{coordinated-pushing}}),
+and variable pushing rate (see {{variable-pushing}}).
 
-## Variable Pushing Rate
+## Coordinated Pushing {#coordinated-pushing}
 
-C4 tests for avaiable bandwidth at regular `pushing` intervals.
-Testing is compromise between operating at the available
-capacity and risking building queues. Testing at 25% mimics what BBR
+As stated in {{fairness}}, the connection will remain in "cruising"
+state for a specified interval, and then move to "pushing". This works well
+when the connection is almost saturating the network path, but not so
+well for a media application that uses little bandwidth most of the
+time, and only needs more bandwidth when it is refreshing the state
+of the media encoders and sending new "reference" frames. If that
+happens, pushing will only be effective if the pushing interval
+coincides with the sending of these reference frames. If pushing
+happens during an application limited period, there will be no data to
+push with and thus no chance of increasing the nominal CWND. If the
+reference frames are sent outside of a pushing interval, the
+CWND will be kept at the nominal value.
+
+To break that issue, one could imagine sending "filler" traffic during
+the pushing periods. We tried that in simulations, and the drawback became
+obvious. The filler traffic would sometimes cause queues and packet
+losses, which degrade the quality of the multimedia experience.
+We could reduce this risk of packet losses by sending redundant traffic,
+for example creating the additional traffic using a forward error
+correction (FEC) algorithm, so that individual packet losses are
+immediately corrected. However, this is complicated, and FEC does
+not necessarily protect against batches of losses.
+
+C4 uses a simpler solution. If the time has come to enter pushing, it
+will check whether the connection is "application limited", which is
+simply defined as testing whether the application send a "nominal CWND"
+worth of data during the previous interval. If it is, C4 will remain
+in cruising state until the application finally sends more data, and
+will only enter the the pushing state when the last period was
+not application limited.
+
+## Variable Pushing Rate {#variable-pushing}
+
+C4 tests for available bandwidth at regular pushing intervals
+(see {{fairness}}), during which the CWND is set at 25% more
+than the nominal CWND. This mimics what BBR
 is doing, but may be less than ideal for real time applications.
-We manage that compromise by adopting a variable `pushing` rate:
+When in pushing state, the application is allowed to send
+more data than the nominal CWND, which causes temporary queues
+and degrades the experience somewhat. On the other hand, not pushing
+at all would not be a good option, because the connection could
+end up stuck using only a fraction of the available
+capacity. We thus have to find a compromise between operating at
+low capacity and risking building queues. 
+
+We manage that compromise by adopting a variable pushing rate:
 
 - If pushing at 25% did not result in a significant increase of
-  the `nominal_CWIN`, the next `pushing` will happen at 5.25%
-- If pushing at 6.25% did result in some increase of the `nominal_CWIN`,
-  the next `pushing` will happen at 25%, otherwise it will
+  the nominal CWIN, the next pushing will happen at 6.25%
+- If pushing at 6.25% did result in some increase of the nominal CWIN,
+  the next pushing will happen at 25%, otherwise it will
   remain at 6.25%
-- If three consecutive `pushing` periods result in significant
-  increases, we detect that the underlying network conditions
-  have changed, and we reenter the `startup` phase.
 
-By exception, we will always push at 25% in the `pig war` mode.
+As explained in {{cascade}}, if three consecutive pushing attempts
+result in significant increases, C4 detects that the underlying network
+conditions have changed, and will reenter the startup state.
+
+## Pushing rate and Cascades
+
+The choice of a 25% push rate was motivated by discussions of
+BBR design. Pushing has two parallel functions: discover the available
+capacity, if any; and also, push back against other connections
+in case of competition. Consider for example competition with Cubic.
+The Cubic connection will only back off if it observes packet losses,
+which typically happen when the bottleneck buffers are full. Pushing
+at a high rate increases the chance of building queues,
+overfilling the buffers, causing losses, and thus causing Cubic to back off.
+Pushing at a lower rate like 6.25% would not have that effect, and C4
+would keep using a lower share of the network. This is why we will always
+push at 25% in the "pig war" mode.
+
+The computation of the interval between pushes is tied to the need to
+compete nicely, and follows the general idea that
+the average growth rate should mimic that of RENO or Cubic in the
+same circumstances. If we pick a lower push rate, such as 6.25% or
+maybe 12.5%, we might be able to use shorter intervals. This could be
+a nice compromise: in normal operation, push frequently, but at a
+low rate. This would not create large queues or disturb competing
+connections, but it will let C4 discover capacity more quickly. Then,
+we could use the "cascade" algorithm to push at a higher rate,
+and then maybe switch to startup mode if a lot of capacity is
+available. This is something that we intend to test, but have not
+implemented yet.
 
 # State Machine
 
 The state machine for C4 has the following states:
 
-* `startup`: the initial state, during which the CWND is
-  set to twice the `nominal_CWND`. The connection
-  exits startup if the `nominal_cwnd` does not
+* "startup": the initial state, during which the CWND is
+  set to twice the "nominal_CWND". The connection
+  exits startup if the "nominal_cwnd" does not
   increase for 3 consecutive round trips. When the
-  connection exits startup, it enters `recovery`.
-* `recovery`: the connection enters that state after
-  `startup`, `pushing`, or a congestion detection in
-  a `cruising` state. It remains in that state for
+  connection exits startup, it enters "recovery".
+* "recovery": the connection enters that state after
+  "startup", "pushing", or a congestion detection in
+  a "cruising" state. It remains in that state for
   at least one roundtrip, until the first packet sent
-  in `discovery` is acknowledged. Once that happens,
-  the connection enters `slowdown` if no `slowdown`
-  has been experienced for 5 seconds, or `cruising`
+  in "discovery" is acknowledged. Once that happens,
+  the connection enters "slowdown" if no "slowdown"
+  has been experienced for 5 seconds, or goes back
+  to "startup" if the last 3 pushing attemps have resulted
+  in increases of "nominal CWND", or enters "cruising"
   otherwise.
-* `cruising`: the connection is sending using the
-  `nominal_cwnd` value. If congestion is detected,
+* "cruising": the connection is sending using the
+  "nominal_cwnd" value. If congestion is detected,
   the connection exits cruising and enters
-  `recovery` after lowering the value of
-  `nominal_cwnd`. If after a roundtrip the application
-  sent fewer than 1/2 of `nominal_cwnd`, and if the
-  last `slowdown` occured more than 4 seconds ago,
-  the connection moves to the `checking` state.
+  "recovery" after lowering the value of
+  "nominal_cwnd". If after a roundtrip the application
+  sent fewer than 1/2 of "nominal_cwnd", and if the
+  last "slowdown" occured more than 4 seconds ago,
+  the connection moves to the "checking" state.
   Otherwise, the connection will
-  remain in `cruising` state until a sufficient
+  remain in "cruising" state until a sufficient
   number of bytes have been acknowledged, and
-  the connection is not `app limited`. At that
-  point, it enters `pushing`.
-* `pushing`: the connection is using a CWND 25%
-  larger than `nominal_CWND`. It remains in that state
+  the connection is not "app limited". At that
+  point, it enters "pushing".
+* "pushing": the connection is using a CWND 25%
+  larger than "nominal_CWND". It remains in that state
   for one round trip, i.e., until the first packet
-  send while `pushing` is acknowledged. At that point,
-  it enters the `recovery` state. 
-* `slowdown`: the connection is using CWND set to
-  1/2 of `nominal_CWND`. After one round trip, it exits `slowdown`
-  and enters `checking`.
-* `checking`: after a forced or natural slowdown,
+  send while "pushing" is acknowledged. At that point,
+  it enters the "recovery" state. 
+* "slowdown": the connection is using CWND set to
+  1/2 of "nominal_CWND". After one round trip, it exits "slowdown"
+  and enters "checking".
+* "checking": after a forced or natural slowdown,
   the connection enters the checking state. It is
-  sending using the `nominal_cwnd` value. The connection remains in
+  sending using the "nominal_cwnd" value. The connection remains in
   checking state for one round trip. After that round trip,
-  it goes back to `cruising` if the lowest RTT measured
+  it goes back to "cruising" if the lowest RTT measured
   during the round trip or the previous checking state is lower
   than or equal to the
   current min RTT. If not, if the lowest RTT measured during
   two consecutive slowdown periods is higher than the min RTT,
   it resets the min RTT to the last measurement and reenters
-  `startup`.
+  "startup".
 
 These transitions are summarized in the following state
 diagram.

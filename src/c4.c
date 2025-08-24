@@ -102,7 +102,7 @@
 #define C4_NB_PUSH_BEFORE_RESET 4
 #define C4_REPEAT_THRESHOLD 4
 #define C4_MAX_DELAY_ERA_CONGESTIONS 4
-#define C4_SLOWDOWN_DELAY 5000000 /* st least 5 seconds after last min RTT validation and slow down */
+#define C4_SLOWDOWN_DELAY 5000000 /* target seconds after last min RTT validation and slow down */
 #define C4_SLOWDOWN_RTT_COUNT 5 /* slowdown delay must be at least 5 RTT */
 #define C4_RTT_MARGIN_5PERCENT 51 
 
@@ -345,7 +345,7 @@ static void c4_growth_evaluate(c4_state_t* c4_state)
     if (is_growing) {
         c4_state->nb_push_no_congestion++;
         c4_state->nb_eras_no_increase = 0;
-        if (c4_state->nb_eras_no_increase > 0) {
+        if (c4_state->nb_eras_delay_based_decrease > 0) {
             c4_state->nb_eras_delay_based_decrease--;
         }
     }
@@ -774,7 +774,7 @@ void c4_enter_slowdown(picoquic_path_t* path_x, c4_state_t* c4_state, uint64_t c
     c4_era_reset(path_x, c4_state);
 }
 
-int c4_is_slowdown_needed(c4_state_t* c4_state, uint64_t current_time)
+int c4_is_slowdown_needed(c4_state_t* c4_state, uint64_t current_time, uint64_t bytes_in_past_flight, int * is_natural)
 {
     int ret = 0;
     if (c4_state->alg_state != c4_slowdown && c4_state->alg_state != c4_checking) {
@@ -786,6 +786,12 @@ int c4_is_slowdown_needed(c4_state_t* c4_state, uint64_t current_time)
 
         if (c4_state->rtt_min_stamp + slowdown_delay < current_time &&
             c4_state->rtt_min_stamp + c4_state->rtt_min * C4_SLOWDOWN_RTT_COUNT < current_time) {
+            uint64_t cwnd_target = c4_state->nominal_cwin;
+            if (c4_state->rtt_filter.sample_min > c4_state->rtt_min) {
+                uint64_t alpha_cwnd = 1024 * c4_state->rtt_filter.sample_min / c4_state->rtt_min;
+                cwnd_target = MULT1024(alpha_cwnd, c4_state->nominal_cwin);
+            }
+            *is_natural = (2 * bytes_in_past_flight < cwnd_target);
             ret = 1;
         }
     }
@@ -813,6 +819,20 @@ static void c4_enter_checking(
 * Compare the era RTT and the previous slowdown RTT to
 * the previous value of min RTT. If higher, reset,
 * otherwise enter cruise.
+* 
+* When enter this function, the "running rtt min" represents the min RTT
+* observed since the last call to "c4_reset_min_rtt", which could be
+* either:
+* - the last time we found an RTT min lower than the current value,
+* - or, the last call to `c4_end_checking_era`.
+* The variable `last_slowdown_rtt_min` contains the value of the
+* running minimum at the end of the previous slowdown, or 0 if no
+* slowdown was performed yet.
+* 
+* If both "running rtt min" and "last_slowdown_rtt_min" are larger
+* than "rtt_min", we meet the condition of "two clean observations
+* that rtt_min as changed, and we reset the connection, discovering
+* new values of rtt_min and windows size.
 */
 
 static void c4_end_checking_era(
@@ -855,6 +875,7 @@ void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_a
     }
     else {
         if (c4_era_check(path_x, c4_state)) {
+            int is_natural_slowdown = 0;
             /* We use the nominal_max_rtt to estimate the "natural jitter". 
             * This code is only executed if the era ends "naturally" -- if the era
             * was cut short by a congestion event, we do not update the max RTT
@@ -876,8 +897,17 @@ void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_a
             }
 
             /* Manage the transition to the next state */
-            if (c4_is_slowdown_needed(c4_state, current_time)){
-                c4_enter_slowdown(path_x, c4_state, current_time);
+            if (c4_is_slowdown_needed(c4_state, current_time,
+                ack_state->nb_bytes_delivered_since_packet_sent, &is_natural_slowdown)){
+
+                if (is_natural_slowdown){
+                    /* Use the "natural slowdown delay" path */
+                    c4_enter_checking(path_x, c4_state, current_time);
+                }
+                else {
+                    /* force an actual slowdown */
+                    c4_enter_slowdown(path_x, c4_state, current_time);
+                }
             }
             else switch (c4_state->alg_state) {
             case c4_recovery:
@@ -1008,6 +1038,7 @@ static void c4_update_rtt(
             c4_reset_min_rtt(c4_state, c4_state->rtt_filter.sample_max,
                 c4_state->rtt_filter.sample_max, current_time);
         }
+#if 0
         else {
             /* tracking the last time we got an rtt close enough to rtt_min */
             uint64_t rtt_delta = c4_state->rtt_min / 8;
@@ -1020,6 +1051,7 @@ static void c4_update_rtt(
                     c4_state->rtt_filter.sample_max, current_time);
             }
         }
+#endif
 
         if (c4_state->rtt_filter.sample_max < c4_state->running_rtt_min) {
             c4_state->running_rtt_min = c4_state->rtt_filter.sample_max;

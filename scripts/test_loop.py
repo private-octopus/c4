@@ -15,16 +15,16 @@ import sys
 
 argc = len(sys.argv)
 exe_path = ""
+exe_name = "pico_sim"
+if os.name == "nt":
+    exe_name += ".exe"
 if argc == 3:
     exe_path = sys.argv[2]
 elif argc != 2:
     print("Usage: python "+ sys.argv[0] + " test_name [<path_to_exe>]")
-else:
-    test_name = sys.argv[1].strip()
-    exe_name = "pico_sim"
-    if os.name == "nt":
-        exe_name += ".exe"
-    exe_path = os.path.join(".", exe_name)
+    exit(-1)
+test_name = sys.argv[1].strip()
+exe_path = os.path.join(".", exe_name)
 print("Executable: " + exe_path)
 
 log_path = os.path.join(os.path.dirname(exe_path),"cclog")
@@ -50,6 +50,7 @@ else:
     test_list.append(test_name)
 
 for t_name in test_list:
+    print("Testing: " + t_name)
     test_path = os.path.join(sim_path, t_name)
     if not os.path.isfile(test_path):
         print (test_path + " is not a file!")

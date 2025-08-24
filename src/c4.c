@@ -299,7 +299,7 @@ static uint64_t c4_compute_corrected_delivered_bytes(c4_state_t* c4_state, uint6
     if (c4_state->rtt_min_is_trusted && c4_state->chaotic_jitter &&
         c4_state->rtt_min_stamp + 1000000 > current_time) {
         if (c4_state->rtt_min < c4_state->nominal_max_rtt) {
-            duration_max = MULT1024(256, 3 * c4_state->rtt_min + c4_state->nominal_max_rtt);
+            duration_max = MULT1024(128, 5 * c4_state->rtt_min + 3 * c4_state->nominal_max_rtt);
         }
         else {
             duration_max = MULT1024(1024 + 51, c4_state->rtt_min + 5000);

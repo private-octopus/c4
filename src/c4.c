@@ -982,7 +982,7 @@ static void c4_notify_congestion(
             beta = 768;
         }
     }
-#if 1
+
     if (c4_state->alg_state == c4_pushing) {
         c4_state->nb_push_no_congestion = 0;
     }
@@ -993,18 +993,7 @@ static void c4_notify_congestion(
             c4_state->nominal_cwin = PICOQUIC_CWIN_MINIMUM;
         }
     }
-#else
-    /* We reduce the nominal CWIN here even in the case of a failed push. This is
-     * questionable, since the congestion was cause by the extra packets sent for the
-     * push. However, it has the side effect of reducing the queue a bit after a
-     * push, and is immediately corrected if need be by the next ACK.
-     */
-    c4_state->nominal_cwin -= MULT1024(beta, c4_state->nominal_cwin);
 
-    if (c4_state->nominal_cwin < PICOQUIC_CWIN_MINIMUM) {
-        c4_state->nominal_cwin = PICOQUIC_CWIN_MINIMUM;
-    }
-#endif
     c4_enter_recovery(path_x, c4_state, 1, is_delay, current_time);
 
     c4_apply_rate_and_cwin(path_x, c4_state);
@@ -1038,20 +1027,6 @@ static void c4_update_rtt(
             c4_reset_min_rtt(c4_state, c4_state->rtt_filter.sample_max,
                 c4_state->rtt_filter.sample_max, current_time);
         }
-#if 0
-        else {
-            /* tracking the last time we got an rtt close enough to rtt_min */
-            uint64_t rtt_delta = c4_state->rtt_min / 8;
-
-            if (rtt_delta < 1000) {
-                rtt_delta = 1000;
-            }
-            if (c4_state->rtt_filter.sample_min < c4_state->rtt_min + rtt_delta) {
-                c4_reset_min_rtt(c4_state, c4_state->rtt_min,
-                    c4_state->rtt_filter.sample_max, current_time);
-            }
-        }
-#endif
 
         if (c4_state->rtt_filter.sample_max < c4_state->running_rtt_min) {
             c4_state->running_rtt_min = c4_state->rtt_filter.sample_max;

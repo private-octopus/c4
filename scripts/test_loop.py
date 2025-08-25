@@ -29,7 +29,7 @@ def run_one_test(t_name, sim_path, exe_path, bucket_id):
     if ret == 0:
         print(str(bucket_id) + ": " + "All 100 trials of " + t_name + " pass.")
     return ret
-
+  
 def run_one_list(tb):
     ret = 0
     for t_name in tb.test_list:
@@ -61,7 +61,7 @@ def main():
         exe_path = os.path.join(".", exe_name)
     print("Executable: " + exe_path)
     test_name = sys.argv[1].strip()
-
+    
     log_path = os.path.join(os.path.dirname(exe_path),"cclog")
     if not os.path.isdir(log_path):
         print("Not a directory: " + log_path)
@@ -83,7 +83,6 @@ def main():
                 test_list.append(t_name)
     else:
         test_list.append(test_name)
-
     print("Found " + str(len(test_list)) + " tests.")
 
     # now that we have a list, consider breaking it in multiple "buckets"

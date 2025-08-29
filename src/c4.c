@@ -100,7 +100,6 @@
 #define C4_BETA_INITIAL_1024 512 /* 50% */
 #define C4_NB_PACKETS_BEFORE_LOSS 20
 #define C4_NB_PUSH_BEFORE_RESET 4
-#define C4_REPEAT_THRESHOLD 3
 #define C4_MAX_DELAY_ERA_CONGESTIONS 4
 #define C4_SLOWDOWN_DELAY 5000000 /* target seconds after last min RTT validation and slow down */
 #define C4_SLOWDOWN_RTT_COUNT 5 /* slowdown delay must be at least 5 RTT */
@@ -1070,10 +1069,7 @@ static void c4_handle_rtt(
     if (c4_state->rtt_min_is_trusted && c4_state->nb_recent_delay_excesses > PICOQUIC_MIN_MAX_RTT_SCOPE) {
         if (!c4_state->chaotic_jitter && !c4_state->pig_war) {
             /* May well be congested */
-            if (c4_state->nb_recent_delay_excesses >= C4_REPEAT_THRESHOLD) {
-                /* Too many events, reduce the window */
-                c4_notify_congestion(path_x, c4_state, rtt_measurement, 1, current_time);
-            }
+            c4_notify_congestion(path_x, c4_state, rtt_measurement, 1, current_time);
         }
     }
 }

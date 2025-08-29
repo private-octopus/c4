@@ -100,7 +100,7 @@
 #define C4_BETA_INITIAL_1024 512 /* 50% */
 #define C4_NB_PACKETS_BEFORE_LOSS 20
 #define C4_NB_PUSH_BEFORE_RESET 4
-#define C4_REPEAT_THRESHOLD 4
+#define C4_REPEAT_THRESHOLD 3
 #define C4_MAX_DELAY_ERA_CONGESTIONS 4
 #define C4_SLOWDOWN_DELAY 5000000 /* target seconds after last min RTT validation and slow down */
 #define C4_SLOWDOWN_RTT_COUNT 5 /* slowdown delay must be at least 5 RTT */

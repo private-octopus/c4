@@ -3,7 +3,7 @@ main_start_time: 0
 main_scenario_text: =b1:*1:397:100000000;
 nb_connections: 1
 main_target_time: 7200000
-data_rate_in_gbps: 0.1
+data_rate_in_gbps: 0.250
 latency: 300000
 queue_delay_max: 600000
 seed_cwin: 18750000

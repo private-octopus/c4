@@ -58,9 +58,9 @@
 * pig_war: If we detect the need to compete with Cubic. In that mode, stop
 *           treating delay variations as congestion signals.
 * 
-* chaotic_delay: if we detect significant delay jitter. In that mode,
+* chaotic_jitter: if we detect significant delay jitter. In that mode,
 *           instead of tracking the min delay, track a target
-*           delay as (3*min delay + running_max)/4
+*           delay as (5*min delay + 3*running_max)/8
 * 
 * Transitions:
 *            initial to recovery -- similar to hystart for now.
@@ -1030,13 +1030,19 @@ static void c4_update_rtt(
     if (c4_state->rtt_filter.is_init) {
         /* We use the maximum of the last samples as the candidate for the
          * min RTT, in order to filter the rtt jitter */
-        if (c4_state->rtt_filter.sample_max < c4_state->rtt_min) {
-            c4_reset_min_rtt(c4_state, c4_state->rtt_filter.sample_max,
-                c4_state->rtt_filter.sample_max, current_time);
+        uint64_t samples_min = c4_state->rtt_filter.sample_max;
+        if (2 * c4_state->rtt_filter.sample_min < c4_state->rtt_filter.sample_max) {
+            /* The samples themselves have a chaotic behavior. We should
+             * not just use the "max of sample" as a threshold, because that leads 
+             * to delayed detecting of chaotic jitter. */
+            samples_min = (c4_state->rtt_filter.sample_min + c4_state->rtt_filter.sample_max) / 2;
+        }
+        if (samples_min < c4_state->rtt_min) {
+            c4_reset_min_rtt(c4_state, samples_min, rtt_measurement, current_time);
         }
 
-        if (c4_state->rtt_filter.sample_max < c4_state->running_rtt_min) {
-            c4_state->running_rtt_min = c4_state->rtt_filter.sample_max;
+        if (samples_min < c4_state->running_rtt_min) {
+            c4_state->running_rtt_min = samples_min;
         }
 
         if (c4_state->rtt_filter.sample_min > c4_state->rtt_filter.rtt_filtered_min) {

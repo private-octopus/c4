@@ -841,17 +841,24 @@ static void c4_end_checking_era(
     uint64_t current_time)
 {
     uint64_t last_slowdown_rtt_min = c4_state->last_slowdown_rtt_min;
+    if (path_x->rtt_sample < c4_state->running_rtt_min) {
+        /* A bit of a bug in the picoquic event organization, but the ACK
+        * that ends the era can be signaled before the RTT UPDATE. Thus,
+        * we consider the last sample here.
+         */
+        c4_state->running_rtt_min = path_x->rtt_sample;
+    }
     c4_state->last_slowdown_rtt_min = c4_state->running_rtt_min;
     if (c4_state->running_rtt_min > c4_state->rtt_min &&
         last_slowdown_rtt_min > c4_state->rtt_min) {
         c4_state->nb_eras_delay_based_decrease = 0; /* do not get into pig war just after changing RTT */
-        c4_reset_min_rtt(c4_state, c4_state->running_rtt_min, c4_state->rtt_filter.sample_max, current_time);
+        c4_reset_min_rtt(c4_state, c4_state->running_rtt_min, path_x->rtt_sample, current_time);
         c4_reset_rtt_filter(c4_state);
         c4_enter_initial(path_x, c4_state, current_time);
     }
     else {
         /* Leave RTT_MIN unchanged, but reset time stamp, running min, then move to cruising. */
-        c4_reset_min_rtt(c4_state, c4_state->rtt_min, c4_state->rtt_filter.sample_max, current_time);
+        c4_reset_min_rtt(c4_state, c4_state->rtt_min, path_x->rtt_sample, current_time);
         c4_enter_cruise(path_x, c4_state, current_time);
     }
 }

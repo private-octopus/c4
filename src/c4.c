@@ -398,6 +398,7 @@ static void c4_enter_initial(picoquic_path_t* path_x, c4_state_t* c4_state, uint
     c4_state->nb_push_no_congestion = 0;
     c4_state->alpha_1024_current = C4_ALPHA_INITIAL;
     c4_state->nb_packets_in_startup = 0;
+    c4_state->nb_rtt_update_since_discovery = 0;
     path_x->cwin = MULT1024(c4_state->alpha_1024_current, c4_state->nominal_cwin);
     c4_era_reset(path_x, c4_state);
     c4_state->nb_eras_no_increase = 0;
@@ -478,26 +479,8 @@ static void c4_initial_handle_rtt(picoquic_path_t* path_x, c4_state_t* c4_state,
     * "update_rtt" functions from the actual tests.
      */
 
-    if (c4_state->rtt_filter.is_init && c4_state->nb_recent_delay_excesses >= PICOQUIC_MIN_MAX_RTT_SCOPE
+    if (c4_state->rtt_filter.is_init && c4_state->nb_recent_delay_excesses > 0
         && c4_state->nb_eras_no_increase > 0){
-        if (c4_state->rtt_filter.rtt_filtered_min > PICOQUIC_TARGET_RENO_RTT) {
-            uint64_t beta_1024;
-
-            if (c4_state->rtt_filter.rtt_filtered_min > PICOQUIC_TARGET_SATELLITE_RTT) {
-                beta_1024 = ((uint64_t)PICOQUIC_TARGET_SATELLITE_RTT*1024) / c4_state->rtt_filter.rtt_filtered_min;
-            }
-            else {
-                beta_1024 = ((uint64_t)PICOQUIC_TARGET_RENO_RTT*1024) / c4_state->rtt_filter.rtt_filtered_min;
-            }
-
-            uint64_t base_window = MULT1024(beta_1024, path_x->cwin);
-            uint64_t delta_window = path_x->cwin - base_window;
-            path_x->cwin -= (delta_window / 2);
-        }
-        else {
-            /* In the general case, compensate for the growth of the window after the acknowledged packet was sent. */
-            path_x->cwin /= 2;
-        }
 
         c4_exit_initial(path_x, c4_state, notification, current_time);
     }

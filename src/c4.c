@@ -139,6 +139,7 @@ typedef struct st_c4_state_t {
 
     uint64_t delay_threshold;
     int nb_recent_delay_excesses;
+    int nb_rtt_update_since_discovery;
 
     unsigned int last_freeze_was_not_delay : 1;
     unsigned int rtt_min_is_trusted : 1;
@@ -655,6 +656,7 @@ static void c4_exit_recovery(
     c4_growth_evaluate(c4_state);
     c4_growth_reset(c4_state);
     c4_state->nb_recent_delay_excesses = 0;
+    c4_state->nb_rtt_update_since_discovery = 0;
     /* Check whether we have too many delay based events, as this
     * is indivative of competition with non cooperating connections.
     */
@@ -776,21 +778,24 @@ void c4_enter_slowdown(picoquic_path_t* path_x, c4_state_t* c4_state, uint64_t c
 int c4_is_slowdown_needed(c4_state_t* c4_state, uint64_t current_time, uint64_t bytes_in_past_flight, int * is_natural)
 {
     int ret = 0;
+
     if (c4_state->alg_state != c4_slowdown && c4_state->alg_state != c4_checking) {
         uint64_t slowdown_delay = C4_SLOWDOWN_DELAY;
+        uint64_t cwnd_target = c4_state->nominal_cwin;
+        int is_urgent = 0;
+
         if (c4_state->rtt_filter.sample_min > c4_state->rtt_min) {
             uint64_t alpha_delay = c4_state->rtt_min * 1024 / c4_state->rtt_filter.sample_min;
+            uint64_t alpha_cwnd = 1024 * c4_state->rtt_filter.sample_min / c4_state->rtt_min;
+            cwnd_target = MULT1024(alpha_cwnd, c4_state->nominal_cwin);
             slowdown_delay = MULT1024(alpha_delay, slowdown_delay);
+            is_urgent = 1;
         }
 
-        if (c4_state->rtt_min_stamp + slowdown_delay < current_time &&
-            c4_state->rtt_min_stamp + c4_state->rtt_min * C4_SLOWDOWN_RTT_COUNT < current_time) {
-            uint64_t cwnd_target = c4_state->nominal_cwin;
-            if (c4_state->rtt_filter.sample_min > c4_state->rtt_min) {
-                uint64_t alpha_cwnd = 1024 * c4_state->rtt_filter.sample_min / c4_state->rtt_min;
-                cwnd_target = MULT1024(alpha_cwnd, c4_state->nominal_cwin);
-            }
-            *is_natural = (2 * bytes_in_past_flight < cwnd_target);
+        *is_natural = (2 * bytes_in_past_flight < cwnd_target);
+
+        if ((*is_natural && is_urgent) || (c4_state->rtt_min_stamp + slowdown_delay < current_time &&
+            c4_state->rtt_min_stamp + c4_state->rtt_min * C4_SLOWDOWN_RTT_COUNT < current_time)) {
             ret = 1;
         }
     }
@@ -1020,6 +1025,7 @@ static void c4_update_rtt(
     uint64_t current_time)
 {
     picoquic_cc_filter_rtt_min_max(&c4_state->rtt_filter, rtt_measurement);
+    c4_state->nb_rtt_update_since_discovery += 1;
 
     if (c4_state->rtt_filter.rtt_filtered_min == 0 ||
         c4_state->rtt_filter.rtt_filtered_min > c4_state->rtt_filter.sample_max) {
@@ -1044,10 +1050,13 @@ static void c4_update_rtt(
             c4_state->running_rtt_min = samples_min;
         }
 
-        if (c4_state->rtt_filter.sample_min > c4_state->rtt_filter.rtt_filtered_min) {
-            if (c4_state->rtt_filter.sample_min > c4_state->rtt_min + c4_state->delay_threshold){
-                c4_state->nb_recent_delay_excesses++;
-            }
+        if (c4_state->rtt_filter.sample_min > c4_state->rtt_filter.rtt_filtered_min &&
+            c4_state->nb_rtt_update_since_discovery > PICOQUIC_MIN_MAX_RTT_SCOPE &&
+            ((!c4_state->chaotic_jitter &&
+            c4_state->rtt_filter.sample_min > c4_state->rtt_min + c4_state->delay_threshold) ||
+            (c4_state->chaotic_jitter && c4_state->rtt_filter.sample_min > c4_state->rtt_min 
+                + c4_state->delay_threshold + (c4_state->nominal_max_rtt/2)))) {
+            c4_state->nb_recent_delay_excesses++;
         }
         else {
             c4_state->nb_recent_delay_excesses = 0;
@@ -1066,7 +1075,7 @@ static void c4_handle_rtt(
     uint64_t rtt_measurement,
     uint64_t current_time)
 {
-    if (c4_state->rtt_min_is_trusted && c4_state->nb_recent_delay_excesses > PICOQUIC_MIN_MAX_RTT_SCOPE) {
+    if (c4_state->rtt_min_is_trusted && c4_state->nb_recent_delay_excesses > 0 /* PICOQUIC_MIN_MAX_RTT_SCOPE */) {
         if (!c4_state->chaotic_jitter && !c4_state->pig_war) {
             /* May well be congested */
             c4_notify_congestion(path_x, c4_state, rtt_measurement, 1, current_time);

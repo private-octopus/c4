@@ -99,19 +99,51 @@ should not become more aggressive.
 
 The good news is that the CWND test appears reasonably independent from the
 range delays test: the graph shows that the distribution for the two subsets
-where no pig-war is expected are reasonably similar. We can combine
+where no pig-war is expected are reasonably similar. We could combine
 these two tests, and confirm that the pig war should start only if:
 
 * the congestion window decreased more than 3 times in a row because of
   excessive delays,
 * the ratio of delay samples is larger than 0.6,
-* and, the ration of CWND to max is lower than 0.5.
+* and, the ratio of CWND to max is lower than 0.5.
 
 This is not a perfect test. In our sample, we had 699 "false positive"
 detections if we relied only on the decreasing congestion windows test.
 That number drops to 47 if we apply the two other tests, which is
 definitely an improvement. The number of "true positive" remains constant,
-199 tests in our sample. But we must be cautious. We would need to improve
-our tests, adding a greater variety of link conditions such as different
-throughput, different latencies, and also introducing jitter.
+199 tests in our sample. 
 
+But we must be cautious. We would need to improve
+our tests, adding a greater variety of link conditions such as different
+throughput, different latencies, and also introducing jitter. This
+is unlikely to invalidate the "CWND to max" test, but it could very
+easily affect a test comparing delay ranges.
+
+# Code improvement
+
+Of the two proposed tests, the "CWND to max" ration seems the most robust,
+and it will be the first that we incorporate in the code. It appears to
+work.
+
+![Graph of delays in C4 vs Cubic test after improvements](./detection-c4-vs-cubic-corrected.png "Graph showing delays and CWND for C4 vs Cubic after correction")
+
+There is not much difference in the C4 versus Cubic test, which is as expected.
+The "pig-war" mode is correctly detected after a few seconds, C4 competes
+efficiently when the pig-war mode is on, and C4 returns to normal operation
+when the Cubic connection stops.
+
+![Graph of delays in C4 vs C4 test after improvements](./detection-c4-vs-c4-corrected.png "Graph showing delays and CWND for C4 vs Cubic after correction")
+
+The next graph shows the spread of RTT for a test in which two C4 connections
+compete. They share the resource more or less equally, and the measured RTT remains
+very close to the min RTT, in line with the C4 design goals.
+
+![Graph of delays in C4 vs BBR test after improvements](./detection-c4-vs-bbr-corrected.png "Graph showing delays and CWND for C4 vs Cubic after correction")
+
+The final graph shows the spread of RTT when C4 competes against BBR. As in the C4 vs C4
+case, the measured RTT remain very generally very close to the min RTT. There are however
+a few delay spikes. The one happening about 10 seconds after the start of the connection
+is caused by the "slowdown" mechanism. It detected that the measured RTT was slightly
+above the min RTT, and to correct that re-entered the "initial" state. This is
+by design, but the resulting spike in delay is inconvenient. It will be addressed
+in a following effort.

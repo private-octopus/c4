@@ -123,6 +123,7 @@ typedef struct st_c4_state_t {
     uint64_t cruise_bytes_ack; /* accumulate bytes count in cruise state */
     uint64_t cruise_bytes_target; /* expected bytes count until end of cruise */
     uint64_t seed_cwin; /* Value of CWIN remembered from previous trials */
+    uint64_t max_cwin; /* max nominal CWIN since initial */
 
     int nb_eras_no_increase;
     int nb_push_no_congestion; /* Number of successive 25% pushes with no congestion */
@@ -403,6 +404,7 @@ static void c4_enter_initial(picoquic_path_t* path_x, c4_state_t* c4_state, uint
     c4_era_reset(path_x, c4_state);
     c4_state->nb_eras_no_increase = 0;
     c4_state->nb_eras_delay_based_decrease = 0;
+    c4_state->max_cwin = 0;
     c4_growth_reset(c4_state);
 }
 
@@ -569,19 +571,78 @@ static void c4_reset_rtt_filter(c4_state_t* c4_state)
 }
 
 /*
+* pig_war_log(): collection of "starting pig war" statistics.
+* This code collect statistics on the pig war detection.
+* It was used to check the "spurious" detection in prior
+* versions of the algorithm, collecting the state of key
+* variables at the time of the detection. This enabled a
+* better tuning of the algorithm. It could be reused if
+* we need to tune it again.
+* 
+* The code writes a file per trial in the
+* "pwl" (pig war log) folder in the current directory. The
+* file name is obtained by combining the initial connection
+* id, which should be different for every simulation
+* specification, and a process id to differentiate between
+* multiple runs of the same simulation.
+* 
+* Note that the code is currently written for Windows, using
+* the '//' separator between folder and file name and using
+* the windows API to get the process ID, That could be
+* easily fixed if needed. 
+*/
+/* #define PIG_WAR_STATS */
+#ifdef PIG_WAR_STATS
+#include <processthreadsapi.h>
+static void pig_war_log(
+    picoquic_path_t* path_x,
+    c4_state_t* c4_state,
+    uint64_t current_time)
+{
+    static DWORD rd_id = 0;
+    if (rd_id == 0 && !path_x->cnx->client_mode) {
+        char file_name[256];
+        size_t written = 0;
+        FILE* F;
+
+        file_name[0] = 'p';
+        file_name[1] = 'w';
+        file_name[2] = 'l';
+        file_name[3] = '//';
+        for (int i = 0; i < 4; i++) {
+            (void)picoquic_sprintf(&file_name[4 + 2 * i], 252 - (2 * i), &written, "%02x", path_x->cnx->initial_cnxid.id[i]);
+        }
+        rd_id = GetCurrentProcessId();
+        (void)picoquic_sprintf(&file_name[12], 244, &written, ".%d.txt", rd_id);
+        if ((F = picoquic_file_open(file_name, "wt")) != NULL) {
+            (void)fprintf(F, "%" PRIu64 ", %d, % "PRIu64", % "PRIu64", % "PRIu64", % "PRIu64", % "PRIu64", % "PRIu64", % "PRIu64", % d\n",
+                current_time, c4_state->nb_eras_delay_based_decrease, c4_state->nominal_cwin, c4_state->max_cwin,
+                c4_state->rtt_min, c4_state->rtt_filter.sample_min,
+                c4_state->rtt_filter.sample_max, path_x->rtt_variant, path_x->smoothed_rtt,
+                c4_state->chaotic_jitter);
+            picoquic_file_close(F);
+        }
+    }
+}
+#endif
+
+/*
 * Start a pig war. We detect that there this connection is sharing
 * the bottleneck with an uncooperating other connection that does
 * not back off when delays increase by observing a number of
 * successive congestion notifications caused by "excess delay".
 * In that case, we enter "pig war" mode: reset the min RTT
 * to the current RTT value, re-enter slow start, and after that
-* ignore "excess delay" signals until further notice. 
+* ignore "excess delay" signals until further notice.
  */
 static void c4_start_pig_war(
     picoquic_path_t* path_x,
     c4_state_t* c4_state,
     uint64_t current_time)
 {
+#ifdef PIG_WAR_STATS
+    pig_war_log(path_x, c4_state, current_time);
+#endif
     c4_state->nb_eras_delay_based_decrease = 0;
     c4_state->pig_war = 1;
     c4_state->rtt_min = path_x->rtt_sample;
@@ -638,13 +699,17 @@ static void c4_exit_recovery(
 {
     c4_growth_evaluate(c4_state);
     c4_growth_reset(c4_state);
+    if (c4_state->nominal_cwin > c4_state->max_cwin) {
+        c4_state->max_cwin = c4_state->nominal_cwin;
+    }
     c4_state->nb_recent_delay_excesses = 0;
     c4_state->nb_rtt_update_since_discovery = 0;
     /* Check whether we have too many delay based events, as this
     * is indivative of competition with non cooperating connections.
     */
-    if (c4_state->nb_eras_delay_based_decrease >= C4_MAX_DELAY_ERA_CONGESTIONS &&
-        !c4_state->pig_war) {
+    if (!c4_state->pig_war &&
+        c4_state->nb_eras_delay_based_decrease >= C4_MAX_DELAY_ERA_CONGESTIONS &&
+        2*c4_state->nominal_cwin < c4_state->max_cwin) {
         c4_start_pig_war(path_x, c4_state, current_time);
     }
     else if (c4_state->nb_push_no_congestion >= C4_NB_PUSH_BEFORE_RESET) {

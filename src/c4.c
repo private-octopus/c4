@@ -58,9 +58,9 @@
 * pig_war: If we detect the need to compete with Cubic. In that mode, stop
 *           treating delay variations as congestion signals.
 * 
-* chaotic_delay: if we detect significant delay jitter. In that mode,
+* chaotic_jitter: if we detect significant delay jitter. In that mode,
 *           instead of tracking the min delay, track a target
-*           delay as (3*min delay + running_max)/4
+*           delay as (5*min delay + 3*running_max)/8
 * 
 * Transitions:
 *            initial to recovery -- similar to hystart for now.
@@ -100,7 +100,6 @@
 #define C4_BETA_INITIAL_1024 512 /* 50% */
 #define C4_NB_PACKETS_BEFORE_LOSS 20
 #define C4_NB_PUSH_BEFORE_RESET 4
-#define C4_REPEAT_THRESHOLD 4
 #define C4_MAX_DELAY_ERA_CONGESTIONS 4
 #define C4_SLOWDOWN_DELAY 5000000 /* target seconds after last min RTT validation and slow down */
 #define C4_SLOWDOWN_RTT_COUNT 5 /* slowdown delay must be at least 5 RTT */
@@ -140,6 +139,7 @@ typedef struct st_c4_state_t {
 
     uint64_t delay_threshold;
     int nb_recent_delay_excesses;
+    int nb_rtt_update_since_discovery;
 
     unsigned int last_freeze_was_not_delay : 1;
     unsigned int rtt_min_is_trusted : 1;
@@ -398,6 +398,7 @@ static void c4_enter_initial(picoquic_path_t* path_x, c4_state_t* c4_state, uint
     c4_state->nb_push_no_congestion = 0;
     c4_state->alpha_1024_current = C4_ALPHA_INITIAL;
     c4_state->nb_packets_in_startup = 0;
+    c4_state->nb_rtt_update_since_discovery = 0;
     path_x->cwin = MULT1024(c4_state->alpha_1024_current, c4_state->nominal_cwin);
     c4_era_reset(path_x, c4_state);
     c4_state->nb_eras_no_increase = 0;
@@ -478,26 +479,8 @@ static void c4_initial_handle_rtt(picoquic_path_t* path_x, c4_state_t* c4_state,
     * "update_rtt" functions from the actual tests.
      */
 
-    if (c4_state->rtt_filter.is_init && c4_state->nb_recent_delay_excesses >= PICOQUIC_MIN_MAX_RTT_SCOPE
+    if (c4_state->rtt_filter.is_init && c4_state->nb_recent_delay_excesses > 0
         && c4_state->nb_eras_no_increase > 0){
-        if (c4_state->rtt_filter.rtt_filtered_min > PICOQUIC_TARGET_RENO_RTT) {
-            uint64_t beta_1024;
-
-            if (c4_state->rtt_filter.rtt_filtered_min > PICOQUIC_TARGET_SATELLITE_RTT) {
-                beta_1024 = ((uint64_t)PICOQUIC_TARGET_SATELLITE_RTT*1024) / c4_state->rtt_filter.rtt_filtered_min;
-            }
-            else {
-                beta_1024 = ((uint64_t)PICOQUIC_TARGET_RENO_RTT*1024) / c4_state->rtt_filter.rtt_filtered_min;
-            }
-
-            uint64_t base_window = MULT1024(beta_1024, path_x->cwin);
-            uint64_t delta_window = path_x->cwin - base_window;
-            path_x->cwin -= (delta_window / 2);
-        }
-        else {
-            /* In the general case, compensate for the growth of the window after the acknowledged packet was sent. */
-            path_x->cwin /= 2;
-        }
 
         c4_exit_initial(path_x, c4_state, notification, current_time);
     }
@@ -656,6 +639,7 @@ static void c4_exit_recovery(
     c4_growth_evaluate(c4_state);
     c4_growth_reset(c4_state);
     c4_state->nb_recent_delay_excesses = 0;
+    c4_state->nb_rtt_update_since_discovery = 0;
     /* Check whether we have too many delay based events, as this
     * is indivative of competition with non cooperating connections.
     */
@@ -777,21 +761,24 @@ void c4_enter_slowdown(picoquic_path_t* path_x, c4_state_t* c4_state, uint64_t c
 int c4_is_slowdown_needed(c4_state_t* c4_state, uint64_t current_time, uint64_t bytes_in_past_flight, int * is_natural)
 {
     int ret = 0;
+
     if (c4_state->alg_state != c4_slowdown && c4_state->alg_state != c4_checking) {
         uint64_t slowdown_delay = C4_SLOWDOWN_DELAY;
+        uint64_t cwnd_target = c4_state->nominal_cwin;
+        int is_urgent = 0;
+
         if (c4_state->rtt_filter.sample_min > c4_state->rtt_min) {
             uint64_t alpha_delay = c4_state->rtt_min * 1024 / c4_state->rtt_filter.sample_min;
+            uint64_t alpha_cwnd = 1024 * c4_state->rtt_filter.sample_min / c4_state->rtt_min;
+            cwnd_target = MULT1024(alpha_cwnd, c4_state->nominal_cwin);
             slowdown_delay = MULT1024(alpha_delay, slowdown_delay);
+            is_urgent = 1;
         }
 
-        if (c4_state->rtt_min_stamp + slowdown_delay < current_time &&
-            c4_state->rtt_min_stamp + c4_state->rtt_min * C4_SLOWDOWN_RTT_COUNT < current_time) {
-            uint64_t cwnd_target = c4_state->nominal_cwin;
-            if (c4_state->rtt_filter.sample_min > c4_state->rtt_min) {
-                uint64_t alpha_cwnd = 1024 * c4_state->rtt_filter.sample_min / c4_state->rtt_min;
-                cwnd_target = MULT1024(alpha_cwnd, c4_state->nominal_cwin);
-            }
-            *is_natural = (2 * bytes_in_past_flight < cwnd_target);
+        *is_natural = (2 * bytes_in_past_flight < cwnd_target);
+
+        if ((*is_natural && is_urgent) || (c4_state->rtt_min_stamp + slowdown_delay < current_time &&
+            c4_state->rtt_min_stamp + c4_state->rtt_min * C4_SLOWDOWN_RTT_COUNT < current_time)) {
             ret = 1;
         }
     }
@@ -841,17 +828,24 @@ static void c4_end_checking_era(
     uint64_t current_time)
 {
     uint64_t last_slowdown_rtt_min = c4_state->last_slowdown_rtt_min;
+    if (path_x->rtt_sample < c4_state->running_rtt_min) {
+        /* A bit of a bug in the picoquic event organization, but the ACK
+        * that ends the era can be signaled before the RTT UPDATE. Thus,
+        * we consider the last sample here.
+         */
+        c4_state->running_rtt_min = path_x->rtt_sample;
+    }
     c4_state->last_slowdown_rtt_min = c4_state->running_rtt_min;
     if (c4_state->running_rtt_min > c4_state->rtt_min &&
         last_slowdown_rtt_min > c4_state->rtt_min) {
         c4_state->nb_eras_delay_based_decrease = 0; /* do not get into pig war just after changing RTT */
-        c4_reset_min_rtt(c4_state, c4_state->running_rtt_min, c4_state->rtt_filter.sample_max, current_time);
+        c4_reset_min_rtt(c4_state, c4_state->running_rtt_min, path_x->rtt_sample, current_time);
         c4_reset_rtt_filter(c4_state);
         c4_enter_initial(path_x, c4_state, current_time);
     }
     else {
         /* Leave RTT_MIN unchanged, but reset time stamp, running min, then move to cruising. */
-        c4_reset_min_rtt(c4_state, c4_state->rtt_min, c4_state->rtt_filter.sample_max, current_time);
+        c4_reset_min_rtt(c4_state, c4_state->rtt_min, path_x->rtt_sample, current_time);
         c4_enter_cruise(path_x, c4_state, current_time);
     }
 }
@@ -1014,6 +1008,7 @@ static void c4_update_rtt(
     uint64_t current_time)
 {
     picoquic_cc_filter_rtt_min_max(&c4_state->rtt_filter, rtt_measurement);
+    c4_state->nb_rtt_update_since_discovery += 1;
 
     if (c4_state->rtt_filter.rtt_filtered_min == 0 ||
         c4_state->rtt_filter.rtt_filtered_min > c4_state->rtt_filter.sample_max) {
@@ -1023,19 +1018,28 @@ static void c4_update_rtt(
     if (c4_state->rtt_filter.is_init) {
         /* We use the maximum of the last samples as the candidate for the
          * min RTT, in order to filter the rtt jitter */
-        if (c4_state->rtt_filter.sample_max < c4_state->rtt_min) {
-            c4_reset_min_rtt(c4_state, c4_state->rtt_filter.sample_max,
-                c4_state->rtt_filter.sample_max, current_time);
+        uint64_t samples_min = c4_state->rtt_filter.sample_max;
+        if (2 * c4_state->rtt_filter.sample_min < c4_state->rtt_filter.sample_max) {
+            /* The samples themselves have a chaotic behavior. We should
+             * not just use the "max of sample" as a threshold, because that leads 
+             * to delayed detecting of chaotic jitter. */
+            samples_min = (c4_state->rtt_filter.sample_min + c4_state->rtt_filter.sample_max) / 2;
+        }
+        if (samples_min < c4_state->rtt_min) {
+            c4_reset_min_rtt(c4_state, samples_min, rtt_measurement, current_time);
         }
 
-        if (c4_state->rtt_filter.sample_max < c4_state->running_rtt_min) {
-            c4_state->running_rtt_min = c4_state->rtt_filter.sample_max;
+        if (samples_min < c4_state->running_rtt_min) {
+            c4_state->running_rtt_min = samples_min;
         }
 
-        if (c4_state->rtt_filter.sample_min > c4_state->rtt_filter.rtt_filtered_min) {
-            if (c4_state->rtt_filter.sample_min > c4_state->rtt_min + c4_state->delay_threshold){
-                c4_state->nb_recent_delay_excesses++;
-            }
+        if (c4_state->rtt_filter.sample_min > c4_state->rtt_filter.rtt_filtered_min &&
+            c4_state->nb_rtt_update_since_discovery > PICOQUIC_MIN_MAX_RTT_SCOPE &&
+            ((!c4_state->chaotic_jitter &&
+            c4_state->rtt_filter.sample_min > c4_state->rtt_min + c4_state->delay_threshold) ||
+            (c4_state->chaotic_jitter && c4_state->rtt_filter.sample_min > c4_state->rtt_min 
+                + c4_state->delay_threshold + (c4_state->nominal_max_rtt/2)))) {
+            c4_state->nb_recent_delay_excesses++;
         }
         else {
             c4_state->nb_recent_delay_excesses = 0;
@@ -1054,13 +1058,10 @@ static void c4_handle_rtt(
     uint64_t rtt_measurement,
     uint64_t current_time)
 {
-    if (c4_state->rtt_min_is_trusted && c4_state->nb_recent_delay_excesses > PICOQUIC_MIN_MAX_RTT_SCOPE) {
+    if (c4_state->rtt_min_is_trusted && c4_state->nb_recent_delay_excesses > 0 /* PICOQUIC_MIN_MAX_RTT_SCOPE */) {
         if (!c4_state->chaotic_jitter && !c4_state->pig_war) {
             /* May well be congested */
-            if (c4_state->nb_recent_delay_excesses >= C4_REPEAT_THRESHOLD) {
-                /* Too many events, reduce the window */
-                c4_notify_congestion(path_x, c4_state, rtt_measurement, 1, current_time);
-            }
+            c4_notify_congestion(path_x, c4_state, rtt_measurement, 1, current_time);
         }
     }
 }

@@ -117,6 +117,7 @@ typedef enum {
 typedef struct st_c4_state_t {
     c4_alg_state_t alg_state;
     uint64_t nominal_cwin; /* Control variable if CWIN based. */
+    uint64_t nominal_rate; /* Control variable if not delay based. */
     uint64_t alpha_1024_current;
     uint64_t nb_packets_in_startup;
     uint64_t era_sequence; /* sequence number of first packet in era */
@@ -124,6 +125,7 @@ typedef struct st_c4_state_t {
     uint64_t cruise_bytes_target; /* expected bytes count until end of cruise */
     uint64_t seed_cwin; /* Value of CWIN remembered from previous trials */
     uint64_t max_cwin; /* max nominal CWIN since initial */
+    uint64_t max_bytes_ack; /* maximum bytes acked since congestion */
 
     int nb_eras_no_increase;
     int nb_push_no_congestion; /* Number of successive 25% pushes with no congestion */
@@ -139,7 +141,7 @@ typedef struct st_c4_state_t {
     uint64_t last_slowdown_rtt_min; /* Handling of slowdown */
 
     uint64_t delay_threshold;
-    int nb_recent_delay_excesses;
+    uint64_t recent_delay_excess;
     int nb_rtt_update_since_discovery;
 
     unsigned int last_freeze_was_not_delay : 1;
@@ -319,8 +321,50 @@ static void c4_apply_rate_and_cwin(
     picoquic_path_t* path_x,
     c4_state_t* c4_state)
 {
-    /* Assume that cwin was already set */
-    picoquic_update_pacing_data(path_x->cnx, path_x, c4_state->alg_state == c4_initial);
+    uint64_t target_cwin = MULT1024(c4_state->alpha_1024_current, c4_state->nominal_cwin);
+    if (c4_state->alg_state == c4_initial) {
+        /* Initial special case: bandwidth discovery, and seed cwin */
+        if (c4_state->nb_packets_in_startup > 0) {
+            uint64_t min_win = (path_x->peak_bandwidth_estimate * path_x->smoothed_rtt / 1000000) / 2;
+            if (min_win > target_cwin) {
+                target_cwin = min_win;
+            }
+        }
+        if (c4_state->use_seed_cwin && c4_state->seed_cwin > target_cwin) {
+            /* Match half the difference between seed and computed CWIN */
+            target_cwin = (c4_state->seed_cwin + target_cwin) / 2;
+        }
+    }
+    if (c4_state->alg_state == c4_pushing) {
+        if (target_cwin < c4_state->nominal_cwin + path_x->send_mtu) {
+            target_cwin = c4_state->nominal_cwin + path_x->send_mtu;
+        }
+    }
+
+    path_x->cwin = target_cwin;
+
+    if (!c4_state->chaotic_jitter || c4_state->alg_state == c4_initial) {
+        /* Assume that cwin was already set */
+        picoquic_update_pacing_data(path_x->cnx, path_x, c4_state->alg_state == c4_initial);
+    }
+    else {
+        uint64_t pacing_rate = MULT1024(c4_state->alpha_1024_current, c4_state->nominal_rate);
+        uint64_t quantum;
+
+        if (target_cwin < c4_state->max_bytes_ack) {
+            target_cwin = c4_state->max_bytes_ack;
+            path_x->cwin = target_cwin;
+        }
+            
+        quantum = target_cwin / 4;
+        if (quantum > 0x10000) {
+            quantum = 0x10000;
+        }
+        else if (quantum < 2 * path_x->send_mtu) {
+            quantum = 2 * path_x->send_mtu;
+        }
+        picoquic_update_pacing_rate(path_x->cnx, path_x, (double)pacing_rate, quantum);
+    }
 }
 
 /* Perform evaluation. Assess whether the previous era resulted
@@ -400,7 +444,6 @@ static void c4_enter_initial(picoquic_path_t* path_x, c4_state_t* c4_state, uint
     c4_state->alpha_1024_current = C4_ALPHA_INITIAL;
     c4_state->nb_packets_in_startup = 0;
     c4_state->nb_rtt_update_since_discovery = 0;
-    path_x->cwin = MULT1024(c4_state->alpha_1024_current, c4_state->nominal_cwin);
     c4_era_reset(path_x, c4_state);
     c4_state->nb_eras_no_increase = 0;
     c4_state->nb_eras_delay_based_decrease = 0;
@@ -481,7 +524,7 @@ static void c4_initial_handle_rtt(picoquic_path_t* path_x, c4_state_t* c4_state,
     * "update_rtt" functions from the actual tests.
      */
 
-    if (c4_state->rtt_filter.is_init && c4_state->nb_recent_delay_excesses > 0
+    if (c4_state->rtt_filter.is_init && c4_state->recent_delay_excess > 0
         && c4_state->nb_eras_no_increase > 0){
 
         c4_exit_initial(path_x, c4_state, notification, current_time);
@@ -492,7 +535,6 @@ static void c4_initial_handle_loss(picoquic_path_t* path_x, c4_state_t* c4_state
 {
     c4_state->nb_packets_in_startup += 1;
     if (c4_state->nb_packets_in_startup > C4_NB_PACKETS_BEFORE_LOSS) {
-        path_x->cwin = MULT1024(C4_BETA_INITIAL_1024, path_x->cwin);
         c4_exit_initial(path_x, c4_state, notification, current_time);
     }
 }
@@ -522,16 +564,6 @@ static void c4_initial_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state,
         }
         else {
             c4_growth_reset(c4_state);
-        }
-    }
-
-    /* Increase cwin based on peak bandwidth estimation. */
-    path_x->cwin = picoquic_cc_update_target_cwin_estimation(path_x);
-    if (c4_state->use_seed_cwin && c4_state->seed_cwin > path_x->cwin) {
-        /* Match half the difference between seed and computed CWIN */
-        uint64_t seeded_cwin= (c4_state->seed_cwin + MULT1024(C4_ALPHA_INITIAL, c4_state->nominal_cwin)) / 2;
-        if (seeded_cwin > path_x->cwin) {
-            path_x->cwin = seeded_cwin;
         }
     }
 }
@@ -683,7 +715,6 @@ static void c4_enter_recovery(
         c4_growth_reset(c4_state);
     }
     c4_state->alg_state = c4_recovery;
-    path_x->cwin = MULT1024(c4_state->alpha_1024_current, c4_state->nominal_cwin);
     c4_era_reset(path_x, c4_state);
 }
 
@@ -702,7 +733,7 @@ static void c4_exit_recovery(
     if (c4_state->nominal_cwin > c4_state->max_cwin) {
         c4_state->max_cwin = c4_state->nominal_cwin;
     }
-    c4_state->nb_recent_delay_excesses = 0;
+    c4_state->recent_delay_excess = 0;
     c4_state->nb_rtt_update_since_discovery = 0;
     /* Check whether we have too many delay based events, as this
     * is indivative of competition with non cooperating connections.
@@ -748,7 +779,6 @@ static void c4_enter_cruise(
         c4_state->cruise_bytes_target = c4_cruise_bytes_target(c4_state->nominal_cwin);
     }
     c4_state->alpha_1024_current = C4_ALPHA_CRUISE_1024;
-    path_x->cwin = MULT1024(C4_ALPHA_CRUISE_1024, c4_state->nominal_cwin);
     c4_state->alg_state = c4_cruising;
 }
 
@@ -769,10 +799,6 @@ static void c4_enter_push(
         c4_state->alpha_1024_current = C4_ALPHA_PUSH_1024;
     }
     c4_state->push_alpha = c4_state->alpha_1024_current;
-    path_x->cwin = MULT1024(c4_state->alpha_1024_current, c4_state->nominal_cwin);
-    if (path_x->cwin < c4_state->nominal_cwin + path_x->send_mtu) {
-        path_x->cwin = c4_state->nominal_cwin + path_x->send_mtu;
-    }
     c4_era_reset(path_x, c4_state);
     c4_state->alg_state = c4_pushing;
 }
@@ -816,8 +842,6 @@ void c4_enter_slowdown(picoquic_path_t* path_x, c4_state_t* c4_state, uint64_t c
 {
     uint64_t current_rtt = c4_state->rtt_filter.sample_max;
     c4_state->alpha_1024_current = C4_ALPHA_SLOWDOWN_1024;
-    path_x->cwin = MULT1024(C4_ALPHA_SLOWDOWN_1024, c4_state->nominal_cwin);
-
     c4_reset_min_rtt(c4_state, c4_state->rtt_min, current_rtt, current_time);
     c4_state->alg_state = c4_slowdown;
     c4_era_reset(path_x, c4_state);
@@ -862,7 +886,6 @@ static void c4_enter_checking(
     uint64_t current_time)
 {
     c4_state->alpha_1024_current = C4_ALPHA_CHECKING_1024;
-    path_x->cwin = MULT1024(C4_ALPHA_CHECKING_1024, c4_state->nominal_cwin);
     c4_state->alg_state = c4_checking;
     c4_era_reset(path_x, c4_state);
 }
@@ -920,11 +943,21 @@ static void c4_end_checking_era(
 void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_ack_state_t* ack_state, uint64_t current_time)
 {
     uint64_t corrected_delivered_bytes = c4_compute_corrected_delivered_bytes(c4_state, ack_state->nb_bytes_delivered_since_packet_sent, ack_state->rtt_measurement, current_time);
+    
+    if (ack_state->nb_bytes_delivered_since_packet_sent > c4_state->max_bytes_ack) {
+        c4_state->max_bytes_ack = ack_state->nb_bytes_delivered_since_packet_sent;
+    }
+
+    if (ack_state->rtt_measurement > 0) {
+        uint64_t rate_measurement = (ack_state->nb_bytes_delivered_since_packet_sent * 1000000) / ack_state->rtt_measurement;
+        if (rate_measurement > c4_state->nominal_rate) {
+            c4_state->nominal_rate = rate_measurement;
+        }
+    }
 
     if (corrected_delivered_bytes > c4_state->nominal_cwin &&
         (!c4_state->use_seed_cwin || c4_state->alg_state == c4_initial)) {
         c4_state->nominal_cwin = corrected_delivered_bytes;
-        path_x->cwin = MULT1024(c4_state->alpha_1024_current, c4_state->nominal_cwin);
     }
 
     c4_state->cruise_bytes_ack += ack_state->nb_bytes_acknowledged;
@@ -1022,23 +1055,16 @@ static void c4_notify_congestion(
         return;
     }
 
-    /* Clear the counter used to filter spruious delay measurements */
-    c4_state->nb_recent_delay_excesses = 0;
+    /* Clear the counter used to filter spurious delay measurements */
+    c4_state->recent_delay_excess = 0;
 
     if (is_delay) {
         /* TODO: we should really use bytes in flight! */
-        beta = C4_BETA_1024;
-        if (rtt_latest > c4_state->rtt_min) {
-            beta = (1024 * (rtt_latest - c4_state->rtt_min)) / c4_state->rtt_min;
-        }
-        if (c4_state->alg_state == c4_initial && beta < C4_BETA_INITIAL_1024) {
-            beta = C4_BETA_INITIAL_1024;
-        }
+        beta = c4_state->recent_delay_excess*1024/c4_state->delay_threshold;
 
-        if (beta > 768) {
-            /* capping beta to 3/4. In any case, it should be lower than 1024,
-             * otherwise the subtraction below would overflow. */
-            beta = 768;
+        if (beta > C4_BETA_LOSS_1024) {
+            /* capping beta to the standard 1/8th. */
+            beta = C4_BETA_LOSS_1024;
         }
     }
 
@@ -1047,6 +1073,8 @@ static void c4_notify_congestion(
     }
     else {
         c4_state->nominal_cwin -= MULT1024(beta, c4_state->nominal_cwin);
+        c4_state->nominal_rate -= MULT1024(beta, c4_state->nominal_rate);
+        c4_state->max_bytes_ack -= MULT1024(beta, c4_state->max_bytes_ack);
 
         if (c4_state->nominal_cwin < PICOQUIC_CWIN_MINIMUM) {
             c4_state->nominal_cwin = PICOQUIC_CWIN_MINIMUM;
@@ -1099,15 +1127,20 @@ static void c4_update_rtt(
         }
 
         if (c4_state->rtt_filter.sample_min > c4_state->rtt_filter.rtt_filtered_min &&
-            c4_state->nb_rtt_update_since_discovery > PICOQUIC_MIN_MAX_RTT_SCOPE &&
-            ((!c4_state->chaotic_jitter &&
-            c4_state->rtt_filter.sample_min > c4_state->rtt_min + c4_state->delay_threshold) ||
-            (c4_state->chaotic_jitter && c4_state->rtt_filter.sample_min > c4_state->rtt_min 
-                + c4_state->delay_threshold + (c4_state->nominal_max_rtt/2)))) {
-            c4_state->nb_recent_delay_excesses++;
+            c4_state->nb_rtt_update_since_discovery > PICOQUIC_MIN_MAX_RTT_SCOPE){
+            uint64_t excess = 0;
+            if (!c4_state->chaotic_jitter &&
+                c4_state->rtt_filter.sample_min > c4_state->rtt_min + c4_state->delay_threshold) {
+                c4_state->recent_delay_excess = c4_state->rtt_filter.sample_min - c4_state->rtt_min + c4_state->delay_threshold;
+            }
+            else if (c4_state->chaotic_jitter && c4_state->rtt_filter.sample_min > c4_state->rtt_min 
+                + c4_state->delay_threshold + (c4_state->nominal_max_rtt / 2)) {
+                c4_state->recent_delay_excess = c4_state->rtt_filter.sample_min - c4_state->rtt_min
+                    + c4_state->delay_threshold + (c4_state->nominal_max_rtt / 2);
+            }
         }
         else {
-            c4_state->nb_recent_delay_excesses = 0;
+            c4_state->recent_delay_excess = 0;
         }
 
         if (rtt_measurement > c4_state->era_max_rtt) {
@@ -1123,7 +1156,7 @@ static void c4_handle_rtt(
     uint64_t rtt_measurement,
     uint64_t current_time)
 {
-    if (c4_state->rtt_min_is_trusted && c4_state->nb_recent_delay_excesses > 0 /* PICOQUIC_MIN_MAX_RTT_SCOPE */) {
+    if (c4_state->rtt_min_is_trusted && c4_state->recent_delay_excess > 0 /* PICOQUIC_MIN_MAX_RTT_SCOPE */) {
         if (!c4_state->chaotic_jitter && !c4_state->pig_war) {
             /* May well be congested */
             c4_notify_congestion(path_x, c4_state, rtt_measurement, 1, current_time);
@@ -1149,7 +1182,7 @@ void c4_notify(
     if (c4_state != NULL) {
         switch (notification) {
         case picoquic_congestion_notification_acknowledgement:
-            c4_handle_ack(path_x, c4_state, ack_state, current_time);\
+            c4_handle_ack(path_x, c4_state, ack_state, current_time);
             c4_apply_rate_and_cwin(path_x, c4_state);
             break;
         case picoquic_congestion_notification_ecn_ec:
@@ -1185,11 +1218,11 @@ void c4_notify(
             c4_update_rtt(c4_state, ack_state->rtt_measurement, current_time);
             if (c4_state->alg_state == c4_initial) {
                 c4_initial_handle_rtt(path_x, c4_state, notification, ack_state->rtt_measurement, current_time);
+                c4_apply_rate_and_cwin(path_x, c4_state);
             }
             else {
                 c4_handle_rtt(cnx, path_x, c4_state, ack_state->rtt_measurement, current_time);
             }
-            c4_apply_rate_and_cwin(path_x, c4_state);
             break;
         case picoquic_congestion_notification_lost_feedback:
             break;

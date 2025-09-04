@@ -1128,7 +1128,6 @@ static void c4_update_rtt(
 
         if (c4_state->rtt_filter.sample_min > c4_state->rtt_filter.rtt_filtered_min &&
             c4_state->nb_rtt_update_since_discovery > PICOQUIC_MIN_MAX_RTT_SCOPE){
-            uint64_t excess = 0;
             if (!c4_state->chaotic_jitter &&
                 c4_state->rtt_filter.sample_min > c4_state->rtt_min + c4_state->delay_threshold) {
                 c4_state->recent_delay_excess = c4_state->rtt_filter.sample_min - c4_state->rtt_min + c4_state->delay_threshold;

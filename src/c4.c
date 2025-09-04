@@ -351,8 +351,8 @@ static void c4_apply_rate_and_cwin(
         uint64_t pacing_rate = MULT1024(c4_state->alpha_1024_current, c4_state->nominal_rate);
         uint64_t quantum;
 
-        if (target_cwin < c4_state->max_bytes_ack) {
-            target_cwin = c4_state->max_bytes_ack;
+        if (c4_state->nominal_cwin < c4_state->max_bytes_ack) {
+            target_cwin += (c4_state->max_bytes_ack - c4_state->nominal_cwin)/2;
             path_x->cwin = target_cwin;
         }
             

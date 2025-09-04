@@ -164,11 +164,46 @@ from the "latecomer advantage". The background connection goes in "initial" mode
 a couple of seconds, after which the two connections share the resource reasonably,
 if not quite evenly.
 
-These experiments seem to validate our approach, but there are a few issues. First,
-C4 seems to be a bit too aggressive. We may want to tune that down a little. Second,
-we sometimes see very brief spikes of bandwidth usage, characterized in the graph
+# A little bit less agressive
+
+These experiments seem to validate our approach, but there are a few issues.
+The obvious one is that
+C4 seems to be a bit too aggressive. We may want to tune that down a little.
+Instead of setting the CWND to the high CWND value, it seems better to
+use a compromise: in case of high jitter, increase the CWND by half the
+difference between the hign and the nominal values. This has two main
+advantages:
+
+- In most cases, the CWND will be lower than the high value, and thus
+  not likely to overfill the path's buffers and cause packet drops.
+- The value of the CWND will increase by 20% of the nominal value
+  in the pushing stages, which should be enough to cause a small amount
+  of disorder and test increases in capacity.
+
+Indeed, doing so appears to tame the C4 behavior a bit, while still
+keeping it aggressive enough to obtain a reasonable share of the bandwidth.
+
+![graph showing final RTT for C4 vs Cubic with WiFi jitter test](./wifi_bad_c4_cubic_v3.png "Final CWND graph of C4 versus Cubic with Wifi Jitter")
+
+The behavior when competing with Cubic retains most of the characteristics
+of the "full Big CWND" behavior seen before but converges on a slightly lower
+share of the bandwidth, as we expected.
+
+![graph showing final RTT for C4 vs BBR with WiFi jitter test](./wifi_bad_c4_bbr_v3.png "Final CWND graph of C4 versus BBR with Wifi Jitter")
+
+The graph of the competition between this version of C4 and BBR also shows
+improved fairness compared to the previous one, with BBR maintaining
+a better share of the bandwidth than before.
+
+![graph showing final RTT for C4 vs C4 with WiFi jitter test](./wifi_bad_c4_c4_v3.png "Final CWND graph of C4 versus C4 with Wifi Jitter")
+
+The graph of the competition between C4 and C4 with the less aggressive code
+also shows what we consider an improvement, with the two connections converging to
+about half of the bandwidth.
+
+We will still need to investigate some details of the behavior.
+We sometimes see very brief spikes of bandwidth usage, characterized in the graph
 by narrow bands in which C4 uses a much higher CWND and having then to rapidly reduce
 it -- we see that for example at about 2 seconds since the start of the Cubic vs C4
-test. Third, we do see cases of the initial startup not happening (in the Cubic graph)
-or giving up very quickly (in the BBR graph). We may want to reconsider the startup
-fixes discussed at the beginning of this paper. 
+test. This does not look quite right. We will have to study that in a follow-up
+investigation.

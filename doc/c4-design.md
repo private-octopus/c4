@@ -255,13 +255,37 @@ we use another algorithm to detect when the competition has ceased,
 and switch back to the delay responsive mode.
 
 In our initial deployments, we detect competition when delay based
-congestion notifications leads to CWND reduction for 3 consecutive
-RTT. The assumption is that if the competition reacted to delays
+congestion notifications leads to CWND reduction for more than 3
+consecutive RTT. The assumption is that if the competition reacted to delays
 variations, it would have reacted to the delay increases before
-3 RTT.
+3 RTT. However, that simple test causes many "false positive"
+detections.
+
+We complement the "more than 3 decrease" test by a comparison of
+the CWND after these reductions to the maximum CWND observed since
+the previous initial phase, which is a direct indicator of the
+presence of competition. We validated this test by comparing the
+ratio `CWND/MAX_CWND` for "valid" decisions, when we are simulating
+a competition scenario, and "spurious" decisions, when the
+"more than 3 consecutive reductions" test fires but we are
+not simulating any competition:
+
+Ratio CWND/Max | valid | spurious
+---------------|-------|----------
+Average | 30% | 75%
+Max | 49% | 100%
+Top 25% | 37% | 91%
+Media | 35% | 83%
+Bottom 25% | 20% | 52%
+Min | 12% | 25%
+<50% | 100% | 20%
+
+C4 will enter the "pig war" mode if both conditions are true: the
+CWND was reduced because of the delay test more than 3 times, and the
+CWND is lower than twice the maximum CWND observed since the last RTT.
 
 Our initial exit competition algorithm is simple. C4 will exit the
-"pig war" mode if the available bandwidth increases..
+"pig war" mode if the available bandwidth increases.
 
 ## Handling Chaotic Delays
 

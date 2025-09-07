@@ -102,7 +102,7 @@
 #define C4_NB_PUSH_BEFORE_RESET 4
 #define C4_MAX_DELAY_ERA_CONGESTIONS 4
 #define C4_SLOWDOWN_DELAY 5000000 /* target seconds after last min RTT validation and slow down */
-#define C4_SLOWDOWN_RTT_COUNT 5 /* slowdown delay must be at least 5 RTT */
+#define C4_SLOWDOWN_RTT_COUNT 10 /* slowdown delay must be at least 10 RTT */
 #define C4_RTT_MARGIN_5PERCENT 51 
 
 typedef enum {
@@ -128,7 +128,7 @@ typedef struct st_c4_state_t {
     uint64_t max_bytes_ack; /* maximum bytes acked since congestion */
 
     int nb_eras_no_increase;
-    int nb_push_no_congestion; /* Number of successive 25% pushes with no congestion */
+    int nb_push_no_congestion; /* Number of successive pushes with no congestion */
     int nb_eras_delay_based_decrease; /* Number of successive delay based decreases */
     uint64_t push_cwin_old;
     uint64_t push_alpha;
@@ -322,18 +322,32 @@ static void c4_apply_rate_and_cwin(
     c4_state_t* c4_state)
 {
     uint64_t target_cwin = MULT1024(c4_state->alpha_1024_current, c4_state->nominal_cwin);
+    uint64_t pacing_rate = MULT1024(c4_state->alpha_1024_current, c4_state->nominal_rate);
+    uint64_t quantum;
+
     if (c4_state->alg_state == c4_initial) {
         /* Initial special case: bandwidth discovery, and seed cwin */
-        if (c4_state->nb_packets_in_startup > 0) {
+        if (c4_state->nb_packets_in_startup > 0 && !c4_state->chaotic_jitter) {
+
             uint64_t min_win = (path_x->peak_bandwidth_estimate * path_x->smoothed_rtt / 1000000) / 2;
             if (min_win > target_cwin) {
                 target_cwin = min_win;
             }
+            if (path_x->peak_bandwidth_estimate > 2*pacing_rate) {
+                pacing_rate = path_x->peak_bandwidth_estimate / 2;
+            }
         }
         if (c4_state->use_seed_cwin && c4_state->seed_cwin > target_cwin) {
+            uint64_t target_rate;
             /* Match half the difference between seed and computed CWIN */
             target_cwin = (c4_state->seed_cwin + target_cwin) / 2;
+            target_rate = (c4_state->seed_cwin * 1000000) / path_x->smoothed_rtt;
+            if (target_rate > pacing_rate) {
+                pacing_rate = target_rate;
+            }
         }
+        /* Increase pacing rate by factor 1.25 to allow for bunching of packets */
+        pacing_rate = MULT1024(1024+256, pacing_rate);
     }
     if (c4_state->alg_state == c4_pushing) {
         if (target_cwin < c4_state->nominal_cwin + path_x->send_mtu) {
@@ -343,15 +357,13 @@ static void c4_apply_rate_and_cwin(
 
     path_x->cwin = target_cwin;
 
-    if (!c4_state->chaotic_jitter || c4_state->alg_state == c4_initial) {
+    if (c4_state->alg_state == c4_initial) {
         /* Assume that cwin was already set */
         picoquic_update_pacing_data(path_x->cnx, path_x, c4_state->alg_state == c4_initial);
     }
-    else {
-        uint64_t pacing_rate = MULT1024(c4_state->alpha_1024_current, c4_state->nominal_rate);
-        uint64_t quantum;
-
-        if (c4_state->nominal_cwin < c4_state->max_bytes_ack) {
+    else
+    {
+        if (c4_state->chaotic_jitter && c4_state->nominal_cwin < c4_state->max_bytes_ack) {
             target_cwin += (c4_state->max_bytes_ack - c4_state->nominal_cwin)/2;
             path_x->cwin = target_cwin;
         }
@@ -525,7 +537,7 @@ static void c4_initial_handle_rtt(picoquic_path_t* path_x, c4_state_t* c4_state,
      */
 
     if (c4_state->rtt_filter.is_init && c4_state->recent_delay_excess > 0
-        && c4_state->nb_eras_no_increase > 0){
+        && c4_state->nb_eras_no_increase > 1){
 
         c4_exit_initial(path_x, c4_state, notification, current_time);
     }
@@ -739,10 +751,24 @@ static void c4_exit_recovery(
     * is indivative of competition with non cooperating connections.
     */
     if (!c4_state->pig_war &&
-        c4_state->nb_eras_delay_based_decrease >= C4_MAX_DELAY_ERA_CONGESTIONS &&
-        2*c4_state->nominal_cwin < c4_state->max_cwin) {
+        (c4_state->nb_eras_delay_based_decrease >= C4_MAX_DELAY_ERA_CONGESTIONS &&
+        2*c4_state->nominal_cwin < c4_state->max_cwin)
+#if 1
+        ||
+        (c4_state->nb_eras_delay_based_decrease > C4_MAX_DELAY_ERA_CONGESTIONS &&
+            5 * c4_state->nominal_cwin < 4*c4_state->max_cwin)
+#endif
+        ) {
         c4_start_pig_war(path_x, c4_state, current_time);
     }
+#if 1
+    else if (c4_state->pig_war && c4_state->nb_push_no_congestion > 0) {
+        /* End the pig war here. Bandwidth has increased, which means the competing
+         * connection is probably gone. */
+        c4_state->pig_war = 0;
+        c4_state->nb_push_no_congestion = 0;
+    }
+#endif
     else if (c4_state->nb_push_no_congestion >= C4_NB_PUSH_BEFORE_RESET) {
         if (c4_state->pig_war) {
             /* End the pig war here. Bandwidth has increased, which means the  competing
@@ -770,7 +796,9 @@ static void c4_enter_cruise(
 {
     c4_era_reset(path_x, c4_state);
     c4_state->use_seed_cwin = 0;
+#if 0
     c4_state->cruise_bytes_ack = 0;
+#endif
 
     if (c4_state->nb_push_no_congestion > 0 && c4_state->do_cascade) {
         c4_state->cruise_bytes_target = 0;
@@ -791,6 +819,9 @@ static void c4_enter_push(
     c4_state_t* c4_state,
     uint64_t current_time)
 {
+#if 1
+    c4_state->cruise_bytes_ack = 0;
+#endif
     if (c4_state->nb_push_no_congestion == 0 && !c4_state->pig_war && c4_state->do_slow_push) {
         /* If the previous push was not successful, increase by 6.25% instead of 25% */
         c4_state->alpha_1024_current = C4_ALPHA_PUSH_LOW_1024;
@@ -856,6 +887,10 @@ int c4_is_slowdown_needed(c4_state_t* c4_state, uint64_t current_time, uint64_t 
         uint64_t cwnd_target = c4_state->nominal_cwin;
         int is_urgent = 0;
 
+        if (slowdown_delay < c4_state->rtt_min * C4_SLOWDOWN_RTT_COUNT) {
+            slowdown_delay = c4_state->rtt_min * C4_SLOWDOWN_RTT_COUNT;
+        }
+
         if (c4_state->rtt_filter.sample_min > c4_state->rtt_min) {
             uint64_t alpha_delay = c4_state->rtt_min * 1024 / c4_state->rtt_filter.sample_min;
             uint64_t alpha_cwnd = 1024 * c4_state->rtt_filter.sample_min / c4_state->rtt_min;
@@ -866,8 +901,7 @@ int c4_is_slowdown_needed(c4_state_t* c4_state, uint64_t current_time, uint64_t 
 
         *is_natural = (2 * bytes_in_past_flight < cwnd_target);
 
-        if ((*is_natural && is_urgent) || (c4_state->rtt_min_stamp + slowdown_delay < current_time &&
-            c4_state->rtt_min_stamp + c4_state->rtt_min * C4_SLOWDOWN_RTT_COUNT < current_time)) {
+        if ((*is_natural && is_urgent) || (c4_state->rtt_min_stamp + slowdown_delay < current_time)){
             ret = 1;
         }
     }
@@ -926,10 +960,15 @@ static void c4_end_checking_era(
     c4_state->last_slowdown_rtt_min = c4_state->running_rtt_min;
     if (c4_state->running_rtt_min > c4_state->rtt_min &&
         last_slowdown_rtt_min > c4_state->rtt_min) {
-        c4_state->nb_eras_delay_based_decrease = 0; /* do not get into pig war just after changing RTT */
-        c4_reset_min_rtt(c4_state, c4_state->running_rtt_min, path_x->rtt_sample, current_time);
-        c4_reset_rtt_filter(c4_state);
-        c4_enter_initial(path_x, c4_state, current_time);
+        if (!c4_state->pig_war && path_x->rtt_sample > 2 * c4_state->rtt_min) {
+            c4_start_pig_war(path_x, c4_state, current_time);
+        }
+        else {
+            c4_state->nb_eras_delay_based_decrease = 0; /* do not get into pig war just after changing RTT */
+            c4_reset_min_rtt(c4_state, c4_state->running_rtt_min, path_x->rtt_sample, current_time);
+            c4_reset_rtt_filter(c4_state);
+            c4_enter_initial(path_x, c4_state, current_time);
+        }
     }
     else {
         /* Leave RTT_MIN unchanged, but reset time stamp, running min, then move to cruising. */

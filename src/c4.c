@@ -643,7 +643,6 @@ static void c4_reset_rtt_filter(c4_state_t* c4_state)
 */
 #define PIG_WAR_STATS
 #ifdef PIG_WAR_STATS
-#include <processthreadsapi.h>
 
 typedef enum {
     pig_war_none = 0,
@@ -659,7 +658,7 @@ static void pig_war_log(
     pig_war_stat_entry pwe,
     uint64_t current_time)
 {
-    static DWORD rd_id = 0;
+    static uint32_t rd_id = 0;
     if (rd_id == 0 && !path_x->cnx->client_mode) {
         char file_name[256];
         size_t written = 0;
@@ -672,8 +671,8 @@ static void pig_war_log(
         for (int i = 0; i < 4; i++) {
             (void)picoquic_sprintf(&file_name[4 + 2 * i], 252 - (2 * i), &written, "%02x", path_x->cnx->initial_cnxid.id[i]);
         }
-        rd_id = GetCurrentProcessId();
-        (void)picoquic_sprintf(&file_name[12], 244, &written, ".%d.txt", rd_id);
+        rd_id = (uint32_t)picoquic_uniform_random(100000);
+        (void)picoquic_sprintf(&file_name[12], 244, &written, ".%u.txt", rd_id);
         if ((F = picoquic_file_open(file_name, "wt")) != NULL) {
             int pig_war = c4_state->pig_war;
             if (pwe == pig_war_start || pwe == pig_war_checking) {

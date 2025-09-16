@@ -634,8 +634,10 @@ static void c4_reset_rtt_filter(c4_state_t* c4_state)
 * file name is obtained by combining the initial connection
 * id with a random number to differentiate between
 * multiple runs of the same simulation.
+* 
+* By default, this code is not compiled.
 */
-#define PIG_WAR_STATS
+/* #define PIG_WAR_STATS */
 #ifdef PIG_WAR_STATS
 
 typedef enum {
@@ -769,8 +771,7 @@ static void c4_exit_recovery(
     /* Check whether we have too many delay based events, as this
     * is indivative of competition with non cooperating connections.
     */
-    if (
-        !c4_state->pig_war &&
+    if (!c4_state->pig_war &&
         (c4_state->nb_eras_delay_based_decrease >= C4_MAX_DELAY_ERA_CONGESTIONS &&
         2*c4_state->nominal_cwin < c4_state->max_cwin) ||
         (c4_state->nb_eras_delay_based_decrease > C4_MAX_DELAY_ERA_CONGESTIONS &&

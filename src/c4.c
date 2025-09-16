@@ -131,7 +131,7 @@ typedef struct st_c4_state_t {
     int nb_eras_no_increase;
     int nb_push_no_congestion; /* Number of successive pushes with no congestion */
     int nb_eras_delay_based_decrease; /* Number of successive delay based decreases */
-    uint64_t push_cwin_old;
+    uint64_t push_rate_old;
     uint64_t push_alpha;
 
     uint64_t rtt_min;
@@ -319,6 +319,13 @@ static uint64_t c4_compute_corrected_delivered_bytes(c4_state_t* c4_state, uint6
     return nb_bytes_delivered;
 }
 
+/*
+* c4_apply_rate_and_cwin:
+* Manage all setting of the actual cwin, pacing rate and quantum
+* at a single place, based on the state parameters computed
+* in the other functions.
+*/
+
 static void c4_apply_rate_and_cwin(
     picoquic_path_t* path_x,
     c4_state_t* c4_state)
@@ -358,28 +365,22 @@ static void c4_apply_rate_and_cwin(
     }
 
     path_x->cwin = target_cwin;
-#if 0
-    if (c4_state->alg_state == c4_initial) {
-        /* Assume that cwin was already set */
-        picoquic_update_pacing_data(path_x->cnx, path_x, c4_state->alg_state == c4_initial);
+    if (c4_state->chaotic_jitter && c4_state->nominal_cwin < c4_state->max_bytes_ack) {
+        /* In the chaotic jitter state, we need to loosen the congestion window
+         * in order to continue sending through jitter events. We do that by
+         * adding half of the difference between the nominal window and the
+         * max window acknowledged so far. See design spec for details. */
+        target_cwin += (c4_state->max_bytes_ack - c4_state->nominal_cwin) / 2;
+        path_x->cwin = target_cwin;
+    } 
+    quantum = target_cwin / 4;
+    if (quantum > 0x10000) {
+        quantum = 0x10000;
     }
-    else
-#endif
-    {
-        if (c4_state->chaotic_jitter && c4_state->nominal_cwin < c4_state->max_bytes_ack) {
-            target_cwin += (c4_state->max_bytes_ack - c4_state->nominal_cwin)/2;
-            path_x->cwin = target_cwin;
-        }
-            
-        quantum = target_cwin / 4;
-        if (quantum > 0x10000) {
-            quantum = 0x10000;
-        }
-        else if (quantum < 2 * path_x->send_mtu) {
-            quantum = 2 * path_x->send_mtu;
-        }
-        picoquic_update_pacing_rate(path_x->cnx, path_x, (double)pacing_rate, quantum);
+    else if (quantum < 2 * path_x->send_mtu) {
+        quantum = 2 * path_x->send_mtu;
     }
+    picoquic_update_pacing_rate(path_x->cnx, path_x, (double)pacing_rate, quantum);
 }
 
 /* Perform evaluation. Assess whether the previous era resulted
@@ -391,15 +392,15 @@ static void c4_growth_evaluate(c4_state_t* c4_state)
     if (c4_state->push_alpha > C4_ALPHA_PUSH_LOW_1024) {
         /* If the value of "push_alpha" was large enough, we can reasonably
          * measure growth. */
-        uint64_t target_cwin = (c4_state->push_cwin_old +
-            MULT1024(c4_state->push_alpha, c4_state->push_cwin_old)) / 2;
-        is_growing = (c4_state->nominal_cwin > target_cwin);
+        uint64_t target_rate = (3*c4_state->push_rate_old +
+            MULT1024(c4_state->push_alpha, c4_state->push_rate_old)) / 4;
+        is_growing = (c4_state->nominal_rate > target_rate);
     }
     else {
         /* If the value was not big enough, we have to make decision
          * based on congestion signals.
          */
-        is_growing = (c4_state->nominal_cwin > c4_state->push_cwin_old &&
+        is_growing = (c4_state->nominal_rate > c4_state->push_rate_old &&
             !c4_state->congestion_notified);
     }
     if (is_growing) {
@@ -423,7 +424,7 @@ static void c4_growth_reset(c4_state_t* c4_state)
     c4_state->congestion_notified = 0;
     c4_state->congestion_delay_notified = 0;
     c4_state->push_was_not_limited = 0;
-    c4_state->push_cwin_old = c4_state->nominal_cwin;
+    c4_state->push_rate_old = c4_state->nominal_rate;
     /* Push alpha will have to be reset to the correct value when entering push */
     c4_state->push_alpha = c4_state->alpha_1024_current;
 }
@@ -667,7 +668,7 @@ static void pig_war_log(
         file_name[0] = 'p';
         file_name[1] = 'w';
         file_name[2] = 'l';
-        file_name[3] = '//';
+        file_name[3] = '\\';
         for (int i = 0; i < 4; i++) {
             (void)picoquic_sprintf(&file_name[4 + 2 * i], 252 - (2 * i), &written, "%02x", path_x->cnx->initial_cnxid.id[i]);
         }
@@ -772,38 +773,35 @@ static void c4_exit_recovery(
     * is indivative of competition with non cooperating connections.
     */
     if (
-        !c4_state->pig_war && !c4_state->chaotic_jitter &&
+        !c4_state->pig_war &&
         (c4_state->nb_eras_delay_based_decrease >= C4_MAX_DELAY_ERA_CONGESTIONS &&
-        2*c4_state->nominal_cwin < c4_state->max_cwin)
-#if 1
-        ||
+        2*c4_state->nominal_cwin < c4_state->max_cwin) ||
         (c4_state->nb_eras_delay_based_decrease > C4_MAX_DELAY_ERA_CONGESTIONS &&
-            5 * c4_state->nominal_cwin < 4*c4_state->max_cwin)
-#endif
-        ) {
+            5 * c4_state->nominal_cwin < 4*c4_state->max_cwin)) {
 #ifdef PIG_WAR_STATS
         pig_war_log(path_x, c4_state, pig_war_start, current_time);
 #endif
+        picoquic_log_app_message(path_x->cnx, "C4-Start pig war on decrease, chaotic: %d", c4_state->chaotic_jitter);
         c4_start_pig_war(path_x, c4_state, current_time);
     }
-#if 1
-    else if (c4_state->pig_war && c4_state->nb_push_no_congestion > 0) {
-        /* End the pig war here. Bandwidth has increased, which means the competing
-         * connection is probably gone. */
-        c4_state->pig_war = 0;
-        c4_state->nb_push_no_congestion = 0;
-    }
-#endif
     else if (c4_state->nb_push_no_congestion >= C4_NB_PUSH_BEFORE_RESET) {
         if (c4_state->pig_war) {
             /* End the pig war here. Bandwidth has increased, which means the  competing
              * connection is probably gone. */
+            picoquic_log_app_message(path_x->cnx, "C4-Stop pig war, chaotic: %d", c4_state->chaotic_jitter);
             c4_state->pig_war = 0;
             c4_state->nb_push_no_congestion = 0;
         }
         else {
             c4_enter_initial(path_x, c4_state, current_time);
         }
+    }
+    else if (c4_state->pig_war && c4_state->nb_push_no_congestion > 0) {
+        /* End the pig war here. Bandwidth has increased, which means the competing
+         * connection is probably gone. */
+        picoquic_log_app_message(path_x->cnx, "C4-Stop pig war early, chaotic: %d", c4_state->chaotic_jitter);
+        c4_state->pig_war = 0;
+        c4_state->nb_push_no_congestion = 0;
     }
     else {
 #ifdef PIG_WAR_STATS
@@ -826,9 +824,6 @@ static void c4_enter_cruise(
 {
     c4_era_reset(path_x, c4_state);
     c4_state->use_seed_cwin = 0;
-#if 0
-    c4_state->cruise_bytes_ack = 0;
-#endif
 
     if (c4_state->nb_push_no_congestion > 0 && c4_state->do_cascade) {
         c4_state->cruise_bytes_target = 0;
@@ -849,9 +844,7 @@ static void c4_enter_push(
     c4_state_t* c4_state,
     uint64_t current_time)
 {
-#if 1
     c4_state->cruise_bytes_ack = 0;
-#endif
     if (c4_state->nb_push_no_congestion == 0 && !c4_state->pig_war && c4_state->do_slow_push) {
         /* If the previous push was not successful, increase by 6.25% instead of 25% */
         c4_state->alpha_1024_current = C4_ALPHA_PUSH_LOW_1024;
@@ -994,6 +987,7 @@ static void c4_end_checking_era(
 #ifdef PIG_WAR_STATS
             pig_war_log(path_x, c4_state, pig_war_checking, current_time);
 #endif
+            picoquic_log_app_message(path_x->cnx, "C4-Start pig war on checking, chaotic: %d", c4_state->chaotic_jitter);
             c4_start_pig_war(path_x, c4_state, current_time);
         }
         else {

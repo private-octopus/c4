@@ -151,41 +151,5 @@ in a following effort.
 # Evaluation and further efforts
 
 After we switched from just using a CWND based control to using both rate and CWND,
-we observed that the competition detection did not work so well any more. A typical
-log would be:
-
-![Graph of delays in C4 vs Cubic test after rate control](./c4_vs_cubic_rate_no_pig.png "Graph showing delays and CWND for C4 vs Cubic with rate control")
-
-We can see in the graph that the C4 connection is not collapsing as in the
-catastrophic example shown in the introduction, but is stabilizing at a low rate,
-about one third of the rate achieved by the Cubic connection. It is easy to see
-why: the connection exited slow start early, discovered what it believed was the
-target rate, and stuck to that.
-
-![Graph of delays in long C4 vs Cubic test after rate control](./c4_vs_cubic_lg_no_pig2.png "Graph showing delays and CWND for long C4 vs Cubic test with rate control")
-
-If we run the same test on a longer connection, we see a similar pattern. In that
-test, the C4 connection achieved a slightly higher rate. It exited slightly less
-early than in the previous case, probably due to random variations at the
-beginning of the simulation, then maintained that rate for the beginning of
-the Cubic era, before the inflection in the Cubic growth curve. After that,
-we see a dip in the C4 value of CWND, caused by congestion detection, and an
-attempt at competition by C4. In our test, the Cubic connection stopped
-shortly after that.
-
-
-We looked at 2502 simulations,
-including 254 simulations that involve competition between C4 and Cubic. The first
-obvious observation is that the "chaotic jitter" condition was detected before
-"pig war" in 1518 simulations, while only 410 of these attempted to simulate
-a "wifi" scenario, and 1 of those 410 was not detected. That test seems too
-sensitive, with 1109 out of 1518 detection being false positives!
-
-The "pig war" condition was detected in just 19 of the C4 versus Cubic case, and once for a
-C4 versus C4 simulations. The "chaotic jitter" condition was detected before
-"pig war" in 172 C4 versus Cubic trials. Of these,
-71 were legitimate "chaotic" simulations, and 101 were simple competition scenarios,
-with the C4 connection starting before the Cubic connection.
-
-
-
+we observed had to do a couple of changes. The main change was to use tests based
+on rates or delays, not based on CWND values.

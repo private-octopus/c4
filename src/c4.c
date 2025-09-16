@@ -676,8 +676,8 @@ static void pig_war_log(
             if (pwe == pig_war_start || pwe == pig_war_checking) {
                 pig_war = 1;
             }
-            (void)fprintf(F, "%" PRIu64 ", %d, % "PRIu64", % "PRIu64", % "PRIu64", % "PRIu64", % "PRIu64", % "
-                          PRIu64", % "PRIu64", % "PRIu64", % "PRIu64", % d, %d, %d\n",
+            (void)fprintf(F, "%" PRIu64 ", %d, %" PRIu64", %" PRIu64", %" PRIu64", %" PRIu64", %" PRIu64", %"
+                          PRIu64", %" PRIu64", %" PRIu64", %" PRIu64", %d, %d, %d\n",
                 current_time, c4_state->nb_eras_delay_based_decrease, c4_state->nominal_cwin, c4_state->nominal_rate,
                 c4_state->max_cwin, c4_state->max_rate,
                 c4_state->rtt_min, c4_state->rtt_filter.sample_min,

@@ -632,14 +632,8 @@ static void c4_reset_rtt_filter(c4_state_t* c4_state)
 * The code writes a file per trial in the
 * "pwl" (pig war log) folder in the current directory. The
 * file name is obtained by combining the initial connection
-* id, which should be different for every simulation
-* specification, and a process id to differentiate between
+* id with a random number to differentiate between
 * multiple runs of the same simulation.
-* 
-* Note that the code is currently written for Windows, using
-* the '//' separator between folder and file name and using
-* the windows API to get the process ID, That could be
-* easily fixed if needed. 
 */
 #define PIG_WAR_STATS
 #ifdef PIG_WAR_STATS
@@ -667,7 +661,11 @@ static void pig_war_log(
         file_name[0] = 'p';
         file_name[1] = 'w';
         file_name[2] = 'l';
+#ifdef _WINDOWS
         file_name[3] = '\\';
+#else
+        file_name[3] = '/';
+#endif
         for (int i = 0; i < 4; i++) {
             (void)picoquic_sprintf(&file_name[4 + 2 * i], 252 - (2 * i), &written, "%02x", path_x->cnx->initial_cnxid.id[i]);
         }

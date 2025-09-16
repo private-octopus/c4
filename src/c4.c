@@ -772,10 +772,10 @@ static void c4_exit_recovery(
     * is indivative of competition with non cooperating connections.
     */
     if (!c4_state->pig_war &&
-        (c4_state->nb_eras_delay_based_decrease >= C4_MAX_DELAY_ERA_CONGESTIONS &&
+        ((c4_state->nb_eras_delay_based_decrease >= C4_MAX_DELAY_ERA_CONGESTIONS &&
         2*c4_state->nominal_cwin < c4_state->max_cwin) ||
         (c4_state->nb_eras_delay_based_decrease > C4_MAX_DELAY_ERA_CONGESTIONS &&
-            5 * c4_state->nominal_cwin < 4*c4_state->max_cwin)) {
+            5 * c4_state->nominal_cwin < 4*c4_state->max_cwin))) {
 #ifdef PIG_WAR_STATS
         pig_war_log(path_x, c4_state, pig_war_start, current_time);
 #endif
@@ -1009,7 +1009,6 @@ static void c4_end_checking_era(
  */
 void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_ack_state_t* ack_state, uint64_t current_time)
 {
-    uint64_t previous_cwin = c4_state->nominal_cwin;
     uint64_t previous_rate = c4_state->nominal_rate;
     uint64_t rate_measurement = 0;
 

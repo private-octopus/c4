@@ -147,3 +147,9 @@ is caused by the "slowdown" mechanism. It detected that the measured RTT was sli
 above the min RTT, and to correct that re-entered the "initial" state. This is
 by design, but the resulting spike in delay is inconvenient. It will be addressed
 in a following effort.
+
+# Evaluation and further efforts
+
+After we switched from just using a CWND based control to using both rate and CWND,
+we observed had to do a couple of changes. The main change was to use tests based
+on rates or delays, not based on CWND values.

@@ -2,8 +2,8 @@
 
 We noticed the "Wi-Fi jitter" issue two years ago
 (see [the weird case of Wi-Fi latency spikes](https://www.privateoctopus.com/2023/05/18/the-weird-case-of-wifi-latency-spikes.html)).
-We would see sudden jumps in measured RTT, from 1 or 2 milliseconds to 50 to 200ms.
-Since that, have been looking for explanations of these observation.
+We would see sudden jumps in measured RTT, from 1 or 2 milliseconds to 50 tor even 200ms.
+Since that, we have been looking for explanations of these observation.
 Our early hypotheses were that the whole Wi-Fi operation was "suspended"
 for short intervals, either to allow the Wi-Fi device to explore alternative
 radio frequencies, or perhaps to comply with regulations requiring that
@@ -109,7 +109,7 @@ perform tests and simulations of algorithms operating in different Wi-Fi conditi
 
 We are still not quite sure of the processes causing this latency, but
 this should not prevent us from doing an useful model that more or less mimics the
-latency variations of WI-Fi networks. After all, the models used by Hellenistic
+latency variations of Wi-Fi networks. After all, the models used by Hellenistic
 astronomers to predict the movement of planets where not exactly based on
 the formulas later refined by Kepler and then Newton, but their complex
 combinations of epicycloids was precise enough to build devices like

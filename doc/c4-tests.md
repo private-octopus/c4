@@ -184,7 +184,7 @@ capacity of the path. At the beginning of the simulation,
 the simulated bandwidth is set at 5 Mbps. It increases to
 10 Mbps after 2.5 seconds. The RTT remains constant at
 100ms. The test verifies that 100 simulations of a
-7MB download all complete in less than 7.4 seconds.
+7MB download all complete in less than 7.6 seconds.
 
 The goal of the test is to verify that C4 promptly
 discovers the increase in bandwidth, and
@@ -199,7 +199,7 @@ the simulated bandwidth is set at 10 Mbps. It decreases
 to 5 Mbps after 1.5 second, then returns to 10 Mbps
 after 2 seconds. The RTT remains constant at
 100ms. The test verifies that 100 simulations of a
-7MB download all complete in less than 8.1 seconds.
+7MB download all complete in less than 8 seconds.
 
 The goal of the test is to verify that C4 adapts
 promptly to changes in the available bandwidth on a
@@ -280,7 +280,7 @@ The "bad Wi-Fi" test simulates a connection experiencing a high level of
 jitter. The average jitter is set to 7ms, which implies multiple spikes
 of 100 to 200ms every second. The data rate is set to 10Mbps, and the base
 RTT before jitter is set to 2ms, i.e., simulating a local server. The test
-pass if 100 different 10MB downloads each complete in less than 8 seconds.
+pass if 100 different 10MB downloads each complete in less than 4.3 seconds.
 
 ### Wifi fade trial {#wifi-fade}
 
@@ -325,7 +325,7 @@ same time and using the same path. The path has a 20Mbps data rate
 and 80ms RTT. The background connection
 tries to download 10MB, the main connection downloads 5MB.
 The test pass if in 100 trials the main connection completes
-in less than 6.75 seconds.
+in less than 5.75 seconds.
 
 ### Short background C4 connection first
 
@@ -433,7 +433,7 @@ the same jitter characteristics as in the "bad Wi-Fi" test (see {{bad-wifi}}).
 The background connection
 tries to download 10MB, the main connection downloads 4MB.
 The test pass if in each of 100 trials the main connection completes
-in less than 13.5 seconds after the beginning of the trial.
+in less than 8 seconds after the beginning of the trial.
 
 ## Competition with BBR
 
@@ -465,7 +465,7 @@ same time and using the same path. The path has a 20Mbps data rate
 and 80ms RTT. The background connection
 tries to download 30MB, the main connection downloads 20MB.
 The test pass if in 100 trials the main connection completes
-in less than 22.4 seconds.
+in less than 22 seconds.
 
 ### Long BBR background connection last
 
@@ -489,7 +489,7 @@ the same jitter characteristics as in the "bad Wi-Fi" test (see {{bad-wifi}}).
 The background connection
 tries to download 10MB, the main connection downloads 4MB.
 The test pass if in each of 100 trials the main connection completes
-in less than 12 seconds after the beginning of the trial.
+in less than 8 seconds after the beginning of the trial.
 
 
 ## Handling of Multimedia Applications

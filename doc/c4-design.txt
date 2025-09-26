@@ -5,9 +5,9 @@
 Network Working Group                                         C. Huitema
 Internet-Draft                                      Private Octopus Inc.
 Intended status: Informational                             S. Nandakumar
-Expires: 22 March 2026                                       C. Jennings
+Expires: 29 March 2026                                       C. Jennings
                                                                    Cisco
-                                                       18 September 2025
+                                                       25 September 2025
 
 
            Design of Christian's Congestion Control Code (C4)
@@ -40,7 +40,7 @@ Status of This Memo
    time.  It is inappropriate to use Internet-Drafts as reference
    material or to cite them other than as "work in progress."
 
-   This Internet-Draft will expire on 22 March 2026.
+   This Internet-Draft will expire on 29 March 2026.
 
 Copyright Notice
 
@@ -53,7 +53,7 @@ Copyright Notice
 
 
 
-Huitema, et al.           Expires 22 March 2026                 [Page 1]
+Huitema, et al.           Expires 29 March 2026                 [Page 1]
 
 Internet-Draft                  C4 Design                 September 2025
 
@@ -67,26 +67,26 @@ Internet-Draft                  C4 Design                 September 2025
 Table of Contents
 
    1.  Introduction  . . . . . . . . . . . . . . . . . . . . . . . .   2
-   2.  React to delays . . . . . . . . . . . . . . . . . . . . . . .   3
+   2.  Studying the reaction to delays . . . . . . . . . . . . . . .   3
      2.1.  Filtering of Delay measurements . . . . . . . . . . . . .   4
      2.2.  Managing Competition with Loss Based Algorithms . . . . .   5
      2.3.  Handling Chaotic Delays . . . . . . . . . . . . . . . . .   6
-     2.4.  Monitor min RTT . . . . . . . . . . . . . . . . . . . . .   7
+     2.4.  Monitor min RTT . . . . . . . . . . . . . . . . . . . . .   8
    3.  React quickly to changing network conditions  . . . . . . . .   8
-     3.1.  Do not react to Probe Time Out  . . . . . . . . . . . . .   9
-     3.2.  Update the Nominal Rate and CWND after Pushing  . . . . .   9
-     3.3.  Driving for fairness  . . . . . . . . . . . . . . . . . .  10
-     3.4.  Cascade of Increases  . . . . . . . . . . . . . . . . . .  13
-   4.  Supporting Application Limited Connections  . . . . . . . . .  13
-     4.1.  Coordinated Pushing . . . . . . . . . . . . . . . . . . .  14
-     4.2.  Variable Pushing Rate . . . . . . . . . . . . . . . . . .  15
-     4.3.  Pushing rate and Cascades . . . . . . . . . . . . . . . .  15
-   5.  State Machine . . . . . . . . . . . . . . . . . . . . . . . .  16
-   6.  Security Considerations . . . . . . . . . . . . . . . . . . .  18
-   7.  IANA Considerations . . . . . . . . . . . . . . . . . . . . .  19
-   8.  Informative References  . . . . . . . . . . . . . . . . . . .  19
-   Acknowledgments . . . . . . . . . . . . . . . . . . . . . . . . .  21
-   Authors' Addresses  . . . . . . . . . . . . . . . . . . . . . . .  21
+     3.1.  Do not react to Probe Time Out  . . . . . . . . . . . . .  10
+     3.2.  Update the Nominal Rate and CWND after Pushing  . . . . .  10
+     3.3.  Driving for fairness  . . . . . . . . . . . . . . . . . .  11
+     3.4.  Cascade of Increases  . . . . . . . . . . . . . . . . . .  14
+   4.  Supporting Application Limited Connections  . . . . . . . . .  14
+     4.1.  Coordinated Pushing . . . . . . . . . . . . . . . . . . .  15
+     4.2.  Variable Pushing Rate . . . . . . . . . . . . . . . . . .  16
+     4.3.  Pushing rate and Cascades . . . . . . . . . . . . . . . .  16
+   5.  State Machine . . . . . . . . . . . . . . . . . . . . . . . .  17
+   6.  Security Considerations . . . . . . . . . . . . . . . . . . .  19
+   7.  IANA Considerations . . . . . . . . . . . . . . . . . . . . .  20
+   8.  Informative References  . . . . . . . . . . . . . . . . . . .  20
+   Acknowledgments . . . . . . . . . . . . . . . . . . . . . . . . .  22
+   Authors' Addresses  . . . . . . . . . . . . . . . . . . . . . . .  22
 
 1.  Introduction
 
@@ -109,7 +109,7 @@ Table of Contents
 
 
 
-Huitema, et al.           Expires 22 March 2026                 [Page 2]
+Huitema, et al.           Expires 29 March 2026                 [Page 2]
 
 Internet-Draft                  C4 Design                 September 2025
 
@@ -128,9 +128,9 @@ Internet-Draft                  C4 Design                 September 2025
    setting the congestion window (CWND) and the pacing rate.
 
    C4 tracks the state of the network by keeping a small set of
-   variables, the main ones being the "nominal CWND", the "nominal
-   rate", the "min RTT", and the current state of the algorithm.  The
-   details on using and tracking the min RTT are discussed in Section 2.
+   variables, the main ones being the "nominal rate", the "nominal max
+   RTT", and the current state of the algorithm.  The details on using
+   and tracking the min RTT are discussed in Section 2.
 
    The nominal rate is the pacing rate corresponding to the most recent
    estimate of the bandwidth available to the connection.  The nominal
@@ -144,10 +144,34 @@ Internet-Draft                  C4 Design                 September 2025
    before returning to cruising.  The design of these mechanisms is
    discussed in Section 3.
 
-2.  React to delays
+   The nominal max RTT is the best estimate of the maximum RTT that can
+   occur on the network in the absence of queues.  When we do not
+   observe delay jitter, this coincides with the min RTT.  In the
+   presence of jitter, it should be the sum of the min RTT and the
+   maximum jitter.  C4 will compute a pacing rate as the nominal rate
+   multiplied by a coefficient that depends on the state of the
+   protocol, and set the CWND for the path to the product of that pacing
+   rate by the max RTT.
+
+2.  Studying the reaction to delays
+
+   TODO: we don't actually do that.  But it is important to discuss
+   these techniques, and point out the issues.  Discuss why tracking the
+   min RTT is problematic.  Rewite the section as a reasoning why this
+   is an issue.
+
+
+
+
+
+
+Huitema, et al.           Expires 29 March 2026                 [Page 3]
+
+Internet-Draft                  C4 Design                 September 2025
+
 
    If we want to drive for low delays, the obvious choice is to react to
-   delay variations.  Our baseline is to use the reaction to delays
+   delay variations.  Our first design was to use the reaction to delays
    found in congestion control algorithms like TCP Vegas or LEDBAT:
 
    *  monitor the current RTT and the min RTT
@@ -159,16 +183,6 @@ Internet-Draft                  C4 Design                 September 2025
    LEDBAT.  That was adequate when these algorithms were designed, but
    it can be considered excessive in high speed low latency networks.
    For C4, we set it to the lowest of 1/8th of the min RTT and 25ms.
-
-
-
-
-
-
-Huitema, et al.           Expires 22 March 2026                 [Page 3]
-
-Internet-Draft                  C4 Design                 September 2025
-
 
    The min RTT itself is measured over time.  We know from deployment of
    Hystart that delay based algorithms are very sensitive to an
@@ -205,6 +219,13 @@ Internet-Draft                  C4 Design                 September 2025
       the min RTT, causing the delay threshold to be set at an
       excessively low value.
 
+
+
+Huitema, et al.           Expires 29 March 2026                 [Page 4]
+
+Internet-Draft                  C4 Design                 September 2025
+
+
    We corrected the issue by implementing a low pass filter of the the
    delay measurements.  The low pass filter retained the last N
    measurements.  We modified delay tests as follow:
@@ -218,14 +239,6 @@ Internet-Draft                  C4 Design                 September 2025
    There is of course a tension between the number of samples considered
    (the value N) and the responsiveness of delay-based congestion
    control.  The delay-based congestion notification will only happen
-
-
-
-Huitema, et al.           Expires 22 March 2026                 [Page 4]
-
-Internet-Draft                  C4 Design                 September 2025
-
-
    after N measurements.  This depends on the frequency of
    acknowledgements, which itself depends on configuration parameters of
    the QUIC implementation.  This frequency is itself compromise: too
@@ -256,6 +269,19 @@ Internet-Draft                  C4 Design                 September 2025
    mode, we use another algorithm to detect when the competition has
    ceased, and switch back to the delay responsive mode.
 
+
+
+
+
+
+
+
+
+Huitema, et al.           Expires 29 March 2026                 [Page 5]
+
+Internet-Draft                  C4 Design                 September 2025
+
+
    In our initial deployments, we detect competition when delay based
    congestion notifications leads to CWND and rate reduction for more
    than 3 consecutive RTT.  The assumption is that if the competition
@@ -273,14 +299,6 @@ Internet-Draft                  C4 Design                 September 2025
    "valid" decisions, when we are simulating a competition scenario, and
    "spurious" decisions, when the "more than 3 consecutive reductions"
    test fires but we are not simulating any competition:
-
-
-
-
-Huitema, et al.           Expires 22 March 2026                 [Page 5]
-
-Internet-Draft                  C4 Design                 September 2025
-
 
                    +================+=======+==========+
                    | Ratio CWND/Max | valid | spurious |
@@ -307,6 +325,19 @@ Internet-Draft                  C4 Design                 September 2025
 
 2.3.  Handling Chaotic Delays
 
+   TODO: maybe start here.  This is why we really want to have rate
+   control, but if we have rate control we can use larger windows.
+
+
+
+
+
+
+Huitema, et al.           Expires 29 March 2026                 [Page 6]
+
+Internet-Draft                  C4 Design                 September 2025
+
+
    Some Wi-Fi networks exhibit spikes in latency.  These spikes are
    probably what caused the delay jitter discussed in [Cubic-QUIC-Blog].
    We discussed them in more details in [Wi-Fi-Suspension-Blog].  We are
@@ -328,15 +359,6 @@ Internet-Draft                  C4 Design                 September 2025
    exponentially averaged "nominal max RTT":
 
    nominal_max_rtt = (7 * nominal_max_rtt + era_max_rtt) / 8;
-
-
-
-
-
-Huitema, et al.           Expires 22 March 2026                 [Page 6]
-
-Internet-Draft                  C4 Design                 September 2025
-
 
    If the nominal max RTT is more than twice the min RTT, we set the
    "chaotic jitter" condition.  When that condition is set, we stop
@@ -365,11 +387,20 @@ Internet-Draft                  C4 Design                 September 2025
    Using the pacing rate that way prevents the larger window to cause
    big spikes in traffic.
 
+
+
+Huitema, et al.           Expires 29 March 2026                 [Page 7]
+
+Internet-Draft                  C4 Design                 September 2025
+
+
    The network conditions can evolve over time.  C4 will keep monitoring
    the nominal max RTT, and will reset the "chaotic jitter" condition if
    nominal max RTT decreases below a threshold of 1.5 times the min RTT.
 
 2.4.  Monitor min RTT
+
+   TODO: we will not in fact track the min RTT.
 
    Delay based algorithm like CWND rely on a correct estimate of the min
    RTT.  They will naturally discover a reduction in the min RTT, but
@@ -385,14 +416,6 @@ Internet-Draft                  C4 Design                 September 2025
    implementation, the slowdown occurs if more than 5 seconds have
    elapsed since the previous slowdown, or since the last time the min
    RTT was set.
-
-
-
-
-Huitema, et al.           Expires 22 March 2026                 [Page 7]
-
-Internet-Draft                  C4 Design                 September 2025
-
 
    The measurement of min RTT in the period that follows the slowdown is
    considered a "clean" measurement.  If two consecutive slowdown
@@ -415,6 +438,17 @@ Internet-Draft                  C4 Design                 September 2025
    equalization of the min RTT observed by these connections.
 
 3.  React quickly to changing network conditions
+
+   TODO: only use rate, not CWND.
+
+
+
+
+
+Huitema, et al.           Expires 29 March 2026                 [Page 8]
+
+Internet-Draft                  C4 Design                 September 2025
+
 
    Our focus is on maintaining low delays, and thus reacting to delay
    increases as explained in Section 2.  However, only relying on
@@ -441,15 +475,6 @@ Internet-Draft                  C4 Design                 September 2025
        nominal_CWND = (1-beta)*nominal_CWND
        nominal_rate = (1-beta)*nominal_rate
 
-
-
-
-
-Huitema, et al.           Expires 22 March 2026                 [Page 8]
-
-Internet-Draft                  C4 Design                 September 2025
-
-
    The cofficient beta differs depending on the nature of the congestion
    signal.  For packet losses, it is set to 1/4, similar to the value
    used in Cubic.  For delay based losses, it is proportional to the
@@ -463,6 +488,23 @@ Internet-Draft                  C4 Design                 September 2025
    period ends when the first packet sent after entering recovery is
    acknowledged.  Congestion signals are processed when entering
    recovery; further signals are ignored until the end of recovery.
+
+
+
+
+
+
+
+
+
+
+
+
+
+Huitema, et al.           Expires 29 March 2026                 [Page 9]
+
+Internet-Draft                  C4 Design                 September 2025
+
 
    Network conditions may change for the better or for the worse.
    Worsening is detected through congestion signals, but increases can
@@ -489,6 +531,8 @@ Internet-Draft                  C4 Design                 September 2025
 
 3.2.  Update the Nominal Rate and CWND after Pushing
 
+   TODO: only the nominal rate.
+
    C4 configures the transport with a larger rate and CWND than the
    nominal CWND during "pushing" periods.  The peer will acknowledge the
    data sent during these periods in the round trip that followed.
@@ -498,13 +542,6 @@ Internet-Draft                  C4 Design                 September 2025
    received before N was sent and the acknowledgement of the last packet
    of this period.  We use that number to compute the observed data rate
    as:
-
-
-
-Huitema, et al.           Expires 22 March 2026                 [Page 9]
-
-Internet-Draft                  C4 Design                 September 2025
-
 
    observed_rate = bytes_acked / max(observed_rtt, min_rtt)
 
@@ -516,6 +553,14 @@ Internet-Draft                  C4 Design                 September 2025
 
    We use the observed rate to compute a "corrected" value of the bytes
    acked;
+
+
+
+
+Huitema, et al.           Expires 29 March 2026                [Page 10]
+
+Internet-Draft                  C4 Design                 September 2025
+
 
    corrected_bytes_acked = observed_rate*min_rtt
 
@@ -540,6 +585,9 @@ Internet-Draft                  C4 Design                 September 2025
 
 3.3.  Driving for fairness
 
+   TODO: move to appendix, unproven.  Consider that Max RTT is in fact a
+   shared variable, implicitly tracked by Cubic.
+
    The duration of cruising is expressed as a number of bytes.  This
    number of bytes is computed with two goals:
 
@@ -554,14 +602,6 @@ Internet-Draft                  C4 Design                 September 2025
 
    We achieve those two goals using the following formula:
 
-
-
-
-Huitema, et al.           Expires 22 March 2026                [Page 10]
-
-Internet-Draft                  C4 Design                 September 2025
-
-
        target = nominal_CWND*7* (1 +
                 (max(11, min(28, log2(nominal_CWND))) - 11)/(28 - 11))
 
@@ -569,6 +609,14 @@ Internet-Draft                  C4 Design                 September 2025
 
    *  The number 7 corresponds to 7 RTT.  Depending of bandwidth, the
       connection will remain between 7 and 14 RTT in cruise state.
+
+
+
+
+Huitema, et al.           Expires 29 March 2026                [Page 11]
+
+Internet-Draft                  C4 Design                 September 2025
+
 
    *  The value 11 corresponds to 2048 bytes.  We use that as a minimum.
 
@@ -613,7 +661,15 @@ Internet-Draft                  C4 Design                 September 2025
 
 
 
-Huitema, et al.           Expires 22 March 2026                [Page 11]
+
+
+
+
+
+
+
+
+Huitema, et al.           Expires 29 March 2026                [Page 12]
 
 Internet-Draft                  C4 Design                 September 2025
 
@@ -669,7 +725,7 @@ Internet-Draft                  C4 Design                 September 2025
 
 
 
-Huitema, et al.           Expires 22 March 2026                [Page 12]
+Huitema, et al.           Expires 29 March 2026                [Page 13]
 
 Internet-Draft                  C4 Design                 September 2025
 
@@ -725,7 +781,7 @@ Internet-Draft                  C4 Design                 September 2025
 
 
 
-Huitema, et al.           Expires 22 March 2026                [Page 13]
+Huitema, et al.           Expires 29 March 2026                [Page 14]
 
 Internet-Draft                  C4 Design                 September 2025
 
@@ -781,7 +837,7 @@ Internet-Draft                  C4 Design                 September 2025
 
 
 
-Huitema, et al.           Expires 22 March 2026                [Page 14]
+Huitema, et al.           Expires 29 March 2026                [Page 15]
 
 Internet-Draft                  C4 Design                 September 2025
 
@@ -837,7 +893,7 @@ Internet-Draft                  C4 Design                 September 2025
 
 
 
-Huitema, et al.           Expires 22 March 2026                [Page 15]
+Huitema, et al.           Expires 29 March 2026                [Page 16]
 
 Internet-Draft                  C4 Design                 September 2025
 
@@ -855,6 +911,8 @@ Internet-Draft                  C4 Design                 September 2025
    that we intend to test, but have not implemented yet.
 
 5.  State Machine
+
+   TODO: we do not need the slowdown and checking states.
 
    The state machine for C4 has the following states:
 
@@ -891,9 +949,7 @@ Internet-Draft                  C4 Design                 September 2025
 
 
 
-
-
-Huitema, et al.           Expires 22 March 2026                [Page 16]
+Huitema, et al.           Expires 29 March 2026                [Page 17]
 
 Internet-Draft                  C4 Design                 September 2025
 
@@ -949,7 +1005,7 @@ Internet-Draft                  C4 Design                 September 2025
 
 
 
-Huitema, et al.           Expires 22 March 2026                [Page 17]
+Huitema, et al.           Expires 29 March 2026                [Page 18]
 
 Internet-Draft                  C4 Design                 September 2025
 
@@ -1005,7 +1061,7 @@ Internet-Draft                  C4 Design                 September 2025
 
 
 
-Huitema, et al.           Expires 22 March 2026                [Page 18]
+Huitema, et al.           Expires 29 March 2026                [Page 19]
 
 Internet-Draft                  C4 Design                 September 2025
 
@@ -1061,7 +1117,7 @@ Internet-Draft                  C4 Design                 September 2025
 
 
 
-Huitema, et al.           Expires 22 March 2026                [Page 19]
+Huitema, et al.           Expires 29 March 2026                [Page 20]
 
 Internet-Draft                  C4 Design                 September 2025
 
@@ -1117,7 +1173,7 @@ Internet-Draft                  C4 Design                 September 2025
 
 
 
-Huitema, et al.           Expires 22 March 2026                [Page 20]
+Huitema, et al.           Expires 29 March 2026                [Page 21]
 
 Internet-Draft                  C4 Design                 September 2025
 
@@ -1173,4 +1229,4 @@ Authors' Addresses
 
 
 
-Huitema, et al.           Expires 22 March 2026                [Page 21]
+Huitema, et al.           Expires 29 March 2026                [Page 22]

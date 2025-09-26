@@ -100,6 +100,7 @@
 #define C4_BETA_INITIAL_1024 512 /* 50% */
 #define C4_NB_PACKETS_BEFORE_LOSS 20
 #define C4_NB_PUSH_BEFORE_RESET 4
+#define C4_NB_CRUISE_BEFORE_PUSH 4
 #define C4_MAX_DELAY_ERA_CONGESTIONS 4
 #define C4_SLOWDOWN_DELAY 5000000 /* target seconds after last min RTT validation and slow down */
 #define C4_SLOWDOWN_RTT_COUNT 10 /* slowdown delay must be at least 10 RTT */
@@ -121,6 +122,7 @@ typedef struct st_c4_state_t {
     uint64_t alpha_1024_current;
     uint64_t nb_packets_in_startup;
     uint64_t era_sequence; /* sequence number of first packet in era */
+    uint64_t nb_cruise_before_push; /* Number of cruise periods required before push */
     uint64_t cruise_bytes_ack; /* accumulate bytes count in cruise state */
     uint64_t cruise_bytes_target; /* expected bytes count until end of cruise */
     uint64_t seed_cwin; /* Value of CWIN remembered from previous trials */
@@ -825,9 +827,11 @@ static void c4_enter_cruise(
 
     if (c4_state->nb_push_no_congestion > 0 && c4_state->do_cascade) {
         c4_state->cruise_bytes_target = 0;
+        c4_state->nb_cruise_before_push = 0;
     }
     else {
         c4_state->cruise_bytes_target = c4_cruise_bytes_target(c4_state->nominal_cwin);
+        c4_state->nb_cruise_before_push = C4_NB_CRUISE_BEFORE_PUSH;
     }
     c4_state->alpha_1024_current = C4_ALPHA_CRUISE_1024;
     c4_state->alg_state = c4_cruising;
@@ -1088,8 +1092,12 @@ void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_a
                 c4_exit_recovery(path_x, c4_state, current_time);
                 break;
             case c4_cruising:
+                if (c4_state->nb_cruise_before_push > 0) {
+                    c4_state->nb_cruise_before_push--;
+                }
                 c4_era_reset(path_x, c4_state);
-                if (c4_state->cruise_bytes_ack >= c4_state->cruise_bytes_target &&
+                if (
+                    c4_state->nb_cruise_before_push <= 0 &&
                     path_x->last_time_acked_data_frame_sent > path_x->last_sender_limited_time) {
                     c4_enter_push(path_x, c4_state, current_time);
                 }

@@ -88,14 +88,14 @@
 #define C4_DELAY_THRESHOLD_MAX 25000
 #define MULT1024(c, v) (((v)*(c)) >> 10)
 #define C4_ALPHA_NEUTRAL_1024 1024 /* 100% */
-#define C4_ALPHA_RECOVER_1024 921 /* 90% */
-#define C4_ALPHA_CRUISE_1024 1024 /* 98% */
+#define C4_ALPHA_RECOVER_1024 960 /* 93.75% */
+#define C4_ALPHA_CRUISE_1024 1024 /* 100% */
 #define C4_ALPHA_PUSH_1024 1280 /* 125 % */
 #define C4_ALPHA_PUSH_LOW_1024 1088 /* 106.25 % */
 #define C4_ALPHA_INITIAL 2048 /* 200% */
 #define C4_ALPHA_SLOWDOWN_1024 512 /* 50% */
 #define C4_ALPHA_CHECKING_1024 1024 /* 100% */
-#define C4_ALPHA_PREVIOUS_LOW 921 /* 90% */
+#define C4_ALPHA_PREVIOUS_LOW 960 /* 93.75% */
 #define C4_BETA_1024 128 /* 0.125 */
 #define C4_BETA_LOSS_1024 256 /* 25%, 1/4th */
 #define C4_BETA_INITIAL_1024 512 /* 50% */
@@ -126,8 +126,6 @@ typedef struct st_c4_state_t {
     uint64_t nb_packets_in_startup;
     uint64_t era_sequence; /* sequence number of first packet in era */
     uint64_t nb_cruise_left_before_push; /* Number of cruise periods required before push */
-    uint64_t cruise_bytes_ack; /* accumulate bytes count in cruise state */
-    uint64_t cruise_bytes_target; /* expected bytes count until end of cruise */
     uint64_t seed_cwin; /* Value of CWIN remembered from previous trials */
     uint64_t max_rate; /* max nominal rate since initial */
     uint64_t max_cwin; /* max nominal CWIN since initial */
@@ -189,115 +187,6 @@ uint64_t c4_delay_threshold(uint64_t rtt_min)
         delay = C4_DELAY_THRESHOLD_MAX;
     }
     return delay;
-}
-
-/* Compute the base 2 logarithm of an uint64 number. 
-* This is used to compute the number of bytes to wait for until
-* exit cruising
- */
-static uint64_t c4_uint64_log_exp(uint64_t v)
-{
-    uint64_t l = 0;
-    if (v > 0xFFFFFFFFull) {
-        l += 32;
-        v >>= 32;
-    }
-    if (v > 0xFFFFull) {
-        l += 16;
-        v >>= 16;
-    }
-    if (v > 0xFFull) {
-        l += 8;
-        v >>= 8;
-    }
-    if (v > 0x0Full) {
-        l += 4;
-        v >>= 4;
-    }
-    if (v > 0x3ull) {
-        l += 2;
-        v >>= 2;
-    }
-    if (v > 0x1ull) {
-        l += 1;
-    }
-    return l;
-}
-
-static uint64_t c4_uint64_log_decpart(uint64_t dec_1024)
-{
-    uint64_t log_decpart = 0;
-
-    dec_1024 += 1024;
-
-    if (dec_1024 >= 1449) {
-        log_decpart += 512;
-        dec_1024 = (dec_1024 * 1024) / 1449;
-    }
-    if (dec_1024 >= 1218) {
-        log_decpart += 256;
-        dec_1024 = (dec_1024 * 1024) / 1218;
-    }
-    if (dec_1024 >= 1117) {
-        log_decpart += 128;
-        dec_1024 = (dec_1024 * 1024) / 1117;
-    }
-    if (dec_1024 >= 1070) {
-        log_decpart += 64;
-        dec_1024 = (dec_1024 * 1024) / 1070;
-    }
-    if (dec_1024 >= 1047) {
-        log_decpart += 32;
-        dec_1024 = (dec_1024 * 1024) / 1047;
-    }
-    dec_1024 += (((dec_1024 - 1024) * 1477) / 1024);
-    return dec_1024;
-}
-
-uint64_t c4_uint64_log_1024(uint64_t v)
-{
-    uint64_t l_exp = c4_uint64_log_exp(v);
-    uint64_t decimal_part = v;
-    uint64_t l_1024 = l_exp << 10;
-
-    if (l_exp > 10) {
-        decimal_part >>= (l_exp - 10);
-    }
-    else if (l_exp < 10) {
-        decimal_part <<= (10 - l_exp);
-    }
-    decimal_part &= 1023;
-
-    l_1024 += c4_uint64_log_decpart(decimal_part);
-
-    return l_1024;
-}
-
-/* Compute the cruising interval, as a function of the window.
-* We want the number of RTT to grow as the log of the window,
-* with an extreme coefficient 1 if the window is < 2096 and 
-* 8 if the window is > 2^28 bytes.
-* the formula is 1 + 7*(x-11)/(28 -11)
-* TODO: the value varies from 1.0 to 8.0. Even with four or five
-* steps by unit, we should be able to use a precomputed table
-* instead of having to compute logs. The code would be
-* simpler.
- */
-uint64_t c4_cruise_bytes_target(uint64_t w)
-{
-    uint64_t x_1024;
-    uint64_t l_1024 = c4_uint64_log_1024(w);
-    uint64_t target = w;
-
-    if (l_1024 > 28*1024) {
-        l_1024 = 28*1024;
-    }
-    else if (l_1024 < 11*1024) {
-        l_1024 = 11*1024;
-    }
-    x_1024 = 1024 + (7*(l_1024 - 11*1024))/((28-11)*1024);
-    target += MULT1024(x_1024, w);
-    return target;
 }
 
 /* On an ACK event, compute the corrected value of the number of bytes delivered */
@@ -737,22 +626,13 @@ static void c4_enter_recovery(
 {
     if (!is_congested) {
         c4_state->last_freeze_was_not_delay = 0;
-        c4_state->alpha_1024_current = C4_ALPHA_NEUTRAL_1024;
     }
     else {
         c4_state->nb_push_no_congestion = 0;
         c4_state->last_freeze_was_not_delay = !is_delay;
-#if 1
-        c4_state->alpha_1024_current = C4_ALPHA_RECOVER_1024;
-#else
-        if (c4_state->alpha_1024_current > C4_ALPHA_PUSH_LOW_1024) {
-            c4_state->alpha_1024_current = C4_ALPHA_RECOVER_1024;
-        }
-        else {
-            c4_state->alpha_1024_current = C4_ALPHA_NEUTRAL_1024;
-        }
-#endif
     }
+    c4_state->alpha_1024_current = C4_ALPHA_RECOVER_1024;
+
     if (c4_state->alg_state == c4_initial) {
         c4_growth_reset(c4_state);
     }
@@ -836,11 +716,9 @@ static void c4_enter_cruise(
     c4_state->use_seed_cwin = 0;
 
     if (c4_state->nb_push_no_congestion > 0 && c4_state->do_cascade) {
-        c4_state->cruise_bytes_target = 0;
         c4_state->nb_cruise_left_before_push = 0;
     }
     else {
-        c4_state->cruise_bytes_target = c4_cruise_bytes_target(c4_state->nominal_cwin);
         c4_state->nb_cruise_left_before_push = C4_NB_CRUISE_BEFORE_PUSH;
     }
     c4_state->alpha_1024_current = C4_ALPHA_CRUISE_1024;
@@ -856,7 +734,6 @@ static void c4_enter_push(
     c4_state_t* c4_state,
     uint64_t current_time)
 {
-    c4_state->cruise_bytes_ack = 0;
     if (c4_state->nb_push_no_congestion == 0 && !c4_state->pig_war && c4_state->do_slow_push) {
         /* If the previous push was not successful, increase by 6.25% instead of 25% */
         c4_state->alpha_1024_current = C4_ALPHA_PUSH_LOW_1024;
@@ -1049,7 +926,6 @@ void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_a
         c4_state->push_was_not_limited = 1;
     }
 
-    c4_state->cruise_bytes_ack += ack_state->nb_bytes_acknowledged;
     if (rate_measurement >= previous_rate &&
         ack_state->nb_bytes_delivered_since_packet_sent > c4_state->max_bytes_ack) {
         c4_state->max_bytes_ack = ack_state->nb_bytes_delivered_since_packet_sent;
@@ -1234,22 +1110,10 @@ static void c4_update_rtt(
 
         if (c4_state->rtt_filter.sample_min > c4_state->rtt_filter.rtt_filtered_min &&
             c4_state->nb_rtt_update_since_discovery > PICOQUIC_MIN_MAX_RTT_SCOPE){
-#if 1
             uint64_t target_rtt = c4_state->nominal_max_rtt + c4_state->delay_threshold;
             if (c4_state->rtt_filter.sample_min > target_rtt) {
                 c4_state->recent_delay_excess = c4_state->rtt_filter.sample_min - target_rtt;
             }
-#else
-            if (!c4_state->chaotic_jitter &&
-                c4_state->rtt_filter.sample_min > c4_state->rtt_min + c4_state->delay_threshold) {
-                c4_state->recent_delay_excess = c4_state->rtt_filter.sample_min - c4_state->rtt_min + c4_state->delay_threshold;
-            }
-            else if (c4_state->chaotic_jitter && c4_state->rtt_filter.sample_min > c4_state->rtt_min 
-                + c4_state->delay_threshold + (c4_state->nominal_max_rtt / 2)) {
-                c4_state->recent_delay_excess = c4_state->rtt_filter.sample_min - c4_state->rtt_min
-                    + c4_state->delay_threshold + (c4_state->nominal_max_rtt / 2);
-            }
-#endif
         }
         else {
             c4_state->recent_delay_excess = 0;
@@ -1369,7 +1233,7 @@ void c4_observe(picoquic_path_t* path_x, uint64_t* cc_state, uint64_t* cc_param)
 {
     c4_state_t* c4_state = (c4_state_t*)path_x->congestion_alg_state;
     *cc_state = (uint64_t)c4_state->alg_state;
-    *cc_param = c4_state->rtt_min;
+    *cc_param = c4_state->nominal_max_rtt;
 }
 
 /* Definition record for the FAST CC algorithm */

@@ -150,8 +150,8 @@ controls the transport stack by setting the congestion window
 (CWND) and the pacing rate.
 
 C4 tracks the state of the network by keeping a small set of
-variables, the main ones being the "nominal CWND",
-the "nominal rate", the "min RTT",
+variables, the main ones being 
+the "nominal rate", the "nominal max RTT",
 and the current state of the algorithm. The details on using and
 tracking the min RTT are discussed in {{react-to-delays}}.
 
@@ -171,10 +171,24 @@ and move to "recovery",
 before returning to cruising. The design of these mechanisms is
 discussed in {{congestion}}.
 
-# React to delays {#react-to-delays}
+The nominal max RTT is the best estimate of the maximum RTT
+that can occur on the network in the absence of queues. When we
+do not observe delay jitter, this coincides with the min RTT.
+In the presence of jitter, it should be the sum of the
+min RTT and the maximum jitter. C4 will compute a pacing
+rate as the nominal rate multiplied by a coefficient that
+depends on the state of the protocol, and set the CWND for
+the path to the product of that pacing rate by the max RTT.
+
+# Studying the reaction to delays {#react-to-delays}
+
+TODO: we don't actually do that. But it is important to discuss
+these techniques, and point out the issues. Discuss why
+tracking the min RTT is problematic. Rewite the section
+as a reasoning why this is an issue.
 
 If we want to drive for low delays, the obvious choice is to
-react to delay variations. Our baseline is to use the reaction to
+react to delay variations. Our first design was to use the reaction to
 delays found in congestion control algorithms like TCP Vegas or LEDBAT:
 
 - monitor the current RTT and the min RTT
@@ -298,6 +312,9 @@ Our initial exit competition algorithm is simple. C4 will exit the
 
 ## Handling Chaotic Delays
 
+TODO: maybe start here. This is why we really want to have rate control,
+but if we have rate control we can use larger windows.
+
 Some Wi-Fi networks exhibit spikes in latency. These spikes are
 probably what caused the delay jitter discussed in
 {{Cubic-QUIC-Blog}}. We discussed them in more details in
@@ -360,6 +377,8 @@ min RTT.
 
 ## Monitor min RTT
 
+TODO: we will not in fact track the min RTT.
+
 Delay based algorithm like CWND rely on a correct estimate of the
 min RTT. They will naturally discover a reduction in the min
 RTT, but detecting an increase in the max RTT is difficult.
@@ -400,7 +419,10 @@ bottleneck, each of these connections may experience cleaner
 RTT measurements, leading to equalization of the min RTT
 observed by these connections.
 
+
 # React quickly to changing network conditions {#congestion}
+
+TODO: only use rate, not CWND.
 
 Our focus is on maintaining low delays, and thus reacting
 to delay increases as explained in {{react-to-delays}}.
@@ -466,6 +488,8 @@ only react to those losses that are detected by gaps in acknowledgements.
 
 ## Update the Nominal Rate and CWND after Pushing {#cwnd-update}
 
+TODO: only the nominal rate.
+
 C4 configures the transport with a larger rate and CWND
 than the nominal CWND during "pushing" periods.
 The peer will acknowledge the data sent during these periods in
@@ -514,6 +538,9 @@ capacity available, C4 does not increase the nominal CWND and
 the connection continues with the previous value.
 
 ## Driving for fairness {#fairness}
+
+TODO: move to appendix, unproven. Consider that Max RTT is in fact
+a shared variable, implicitly tracked by Cubic.
 
 The duration of `cruising` is expressed as a number of bytes.
 This number of bytes is computed with two goals:
@@ -721,6 +748,8 @@ available. This is something that we intend to test, but have not
 implemented yet.
 
 # State Machine
+
+TODO: we do not need the slowdown and checking states.
 
 The state machine for C4 has the following states:
 

@@ -88,18 +88,20 @@
 #define C4_DELAY_THRESHOLD_MAX 25000
 #define MULT1024(c, v) (((v)*(c)) >> 10)
 #define C4_ALPHA_NEUTRAL_1024 1024 /* 100% */
-#define C4_ALPHA_RECOVER_1024 921 /* 90% */
-#define C4_ALPHA_CRUISE_1024 1024 /* 98% */
+#define C4_ALPHA_RECOVER_1024 960 /* 93.75% */
+#define C4_ALPHA_CRUISE_1024 1024 /* 100% */
 #define C4_ALPHA_PUSH_1024 1280 /* 125 % */
 #define C4_ALPHA_PUSH_LOW_1024 1088 /* 106.25 % */
 #define C4_ALPHA_INITIAL 2048 /* 200% */
 #define C4_ALPHA_SLOWDOWN_1024 512 /* 50% */
 #define C4_ALPHA_CHECKING_1024 1024 /* 100% */
+#define C4_ALPHA_PREVIOUS_LOW 960 /* 93.75% */
 #define C4_BETA_1024 128 /* 0.125 */
 #define C4_BETA_LOSS_1024 256 /* 25%, 1/4th */
 #define C4_BETA_INITIAL_1024 512 /* 50% */
 #define C4_NB_PACKETS_BEFORE_LOSS 20
 #define C4_NB_PUSH_BEFORE_RESET 4
+#define C4_NB_CRUISE_BEFORE_PUSH 4
 #define C4_MAX_DELAY_ERA_CONGESTIONS 4
 #define C4_SLOWDOWN_DELAY 5000000 /* target seconds after last min RTT validation and slow down */
 #define C4_SLOWDOWN_RTT_COUNT 10 /* slowdown delay must be at least 10 RTT */
@@ -119,10 +121,11 @@ typedef struct st_c4_state_t {
     uint64_t nominal_cwin; /* Control variable if CWIN based. */
     uint64_t nominal_rate; /* Control variable if not delay based. */
     uint64_t alpha_1024_current;
+    uint64_t alpha_1024_previous;
+    uint64_t nominal_max_rtt;
     uint64_t nb_packets_in_startup;
     uint64_t era_sequence; /* sequence number of first packet in era */
-    uint64_t cruise_bytes_ack; /* accumulate bytes count in cruise state */
-    uint64_t cruise_bytes_target; /* expected bytes count until end of cruise */
+    uint64_t nb_cruise_left_before_push; /* Number of cruise periods required before push */
     uint64_t seed_cwin; /* Value of CWIN remembered from previous trials */
     uint64_t max_rate; /* max nominal rate since initial */
     uint64_t max_cwin; /* max nominal CWIN since initial */
@@ -138,7 +141,6 @@ typedef struct st_c4_state_t {
     uint64_t rtt_min_stamp;
     uint64_t running_rtt_min;
     uint64_t era_max_rtt;
-    uint64_t nominal_max_rtt;
     uint64_t last_slowdown_rtt_min; /* Handling of slowdown */
 
     uint64_t delay_threshold;
@@ -185,115 +187,6 @@ uint64_t c4_delay_threshold(uint64_t rtt_min)
         delay = C4_DELAY_THRESHOLD_MAX;
     }
     return delay;
-}
-
-/* Compute the base 2 logarithm of an uint64 number. 
-* This is used to compute the number of bytes to wait for until
-* exit cruising
- */
-static uint64_t c4_uint64_log_exp(uint64_t v)
-{
-    uint64_t l = 0;
-    if (v > 0xFFFFFFFFull) {
-        l += 32;
-        v >>= 32;
-    }
-    if (v > 0xFFFFull) {
-        l += 16;
-        v >>= 16;
-    }
-    if (v > 0xFFull) {
-        l += 8;
-        v >>= 8;
-    }
-    if (v > 0x0Full) {
-        l += 4;
-        v >>= 4;
-    }
-    if (v > 0x3ull) {
-        l += 2;
-        v >>= 2;
-    }
-    if (v > 0x1ull) {
-        l += 1;
-    }
-    return l;
-}
-
-static uint64_t c4_uint64_log_decpart(uint64_t dec_1024)
-{
-    uint64_t log_decpart = 0;
-
-    dec_1024 += 1024;
-
-    if (dec_1024 >= 1449) {
-        log_decpart += 512;
-        dec_1024 = (dec_1024 * 1024) / 1449;
-    }
-    if (dec_1024 >= 1218) {
-        log_decpart += 256;
-        dec_1024 = (dec_1024 * 1024) / 1218;
-    }
-    if (dec_1024 >= 1117) {
-        log_decpart += 128;
-        dec_1024 = (dec_1024 * 1024) / 1117;
-    }
-    if (dec_1024 >= 1070) {
-        log_decpart += 64;
-        dec_1024 = (dec_1024 * 1024) / 1070;
-    }
-    if (dec_1024 >= 1047) {
-        log_decpart += 32;
-        dec_1024 = (dec_1024 * 1024) / 1047;
-    }
-    dec_1024 += (((dec_1024 - 1024) * 1477) / 1024);
-    return dec_1024;
-}
-
-uint64_t c4_uint64_log_1024(uint64_t v)
-{
-    uint64_t l_exp = c4_uint64_log_exp(v);
-    uint64_t decimal_part = v;
-    uint64_t l_1024 = l_exp << 10;
-
-    if (l_exp > 10) {
-        decimal_part >>= (l_exp - 10);
-    }
-    else if (l_exp < 10) {
-        decimal_part <<= (10 - l_exp);
-    }
-    decimal_part &= 1023;
-
-    l_1024 += c4_uint64_log_decpart(decimal_part);
-
-    return l_1024;
-}
-
-/* Compute the cruising interval, as a function of the window.
-* We want the number of RTT to grow as the log of the window,
-* with an extreme coefficient 1 if the window is < 2096 and 
-* 8 if the window is > 2^28 bytes.
-* the formula is 1 + 7*(x-11)/(28 -11)
-* TODO: the value varies from 1.0 to 8.0. Even with four or five
-* steps by unit, we should be able to use a precomputed table
-* instead of having to compute logs. The code would be
-* simpler.
- */
-uint64_t c4_cruise_bytes_target(uint64_t w)
-{
-    uint64_t x_1024;
-    uint64_t l_1024 = c4_uint64_log_1024(w);
-    uint64_t target = w;
-
-    if (l_1024 > 28*1024) {
-        l_1024 = 28*1024;
-    }
-    else if (l_1024 < 11*1024) {
-        l_1024 = 11*1024;
-    }
-    x_1024 = 1024 + (7*(l_1024 - 11*1024))/((28-11)*1024);
-    target += MULT1024(x_1024, w);
-    return target;
 }
 
 /* On an ACK event, compute the corrected value of the number of bytes delivered */
@@ -358,6 +251,17 @@ static void c4_apply_rate_and_cwin(
         /* Increase pacing rate by factor 1.25 to allow for bunching of packets */
         pacing_rate = MULT1024(1024+256, pacing_rate);
     }
+    if (c4_state->chaotic_jitter || c4_state->pig_war || c4_state->nominal_cwin < c4_state->nominal_max_rtt){
+        /* In the chaotic jitter state, we need to loosen the congestion window
+         * in order to continue sending through jitter events. We do that by
+         * adding half of the difference between the nominal window and the
+         * max window acknowledged so far. See design spec for details. */
+        uint64_t jitter_cwin = (pacing_rate * c4_state->nominal_max_rtt)/1000000;
+        if (jitter_cwin > target_cwin) {
+            target_cwin = jitter_cwin;
+        }
+    }
+
     if (c4_state->alg_state == c4_pushing) {
         if (target_cwin < c4_state->nominal_cwin + path_x->send_mtu) {
             target_cwin = c4_state->nominal_cwin + path_x->send_mtu;
@@ -365,14 +269,6 @@ static void c4_apply_rate_and_cwin(
     }
 
     path_x->cwin = target_cwin;
-    if (c4_state->chaotic_jitter && c4_state->nominal_cwin < c4_state->max_bytes_ack) {
-        /* In the chaotic jitter state, we need to loosen the congestion window
-         * in order to continue sending through jitter events. We do that by
-         * adding half of the difference between the nominal window and the
-         * max window acknowledged so far. See design spec for details. */
-        target_cwin += (c4_state->max_bytes_ack - c4_state->nominal_cwin) / 2;
-        path_x->cwin = target_cwin;
-    } 
     quantum = target_cwin / 4;
     if (quantum > 0x10000) {
         quantum = 0x10000;
@@ -452,6 +348,7 @@ static void c4_era_reset(
 {
     c4_state->era_sequence = picoquic_cc_get_sequence_number(path_x->cnx, path_x);
     c4_state->era_max_rtt = 0;
+    c4_state->alpha_1024_previous = c4_state->alpha_1024_current;
 }
 
 static void c4_enter_initial(picoquic_path_t* path_x, c4_state_t* c4_state, uint64_t current_time)
@@ -729,18 +626,13 @@ static void c4_enter_recovery(
 {
     if (!is_congested) {
         c4_state->last_freeze_was_not_delay = 0;
-        c4_state->alpha_1024_current = C4_ALPHA_NEUTRAL_1024;
     }
     else {
         c4_state->nb_push_no_congestion = 0;
         c4_state->last_freeze_was_not_delay = !is_delay;
-        if (c4_state->alpha_1024_current > C4_ALPHA_PUSH_LOW_1024) {
-            c4_state->alpha_1024_current = C4_ALPHA_RECOVER_1024;
-        }
-        else {
-            c4_state->alpha_1024_current = C4_ALPHA_NEUTRAL_1024;
-        }
     }
+    c4_state->alpha_1024_current = C4_ALPHA_RECOVER_1024;
+
     if (c4_state->alg_state == c4_initial) {
         c4_growth_reset(c4_state);
     }
@@ -824,10 +716,10 @@ static void c4_enter_cruise(
     c4_state->use_seed_cwin = 0;
 
     if (c4_state->nb_push_no_congestion > 0 && c4_state->do_cascade) {
-        c4_state->cruise_bytes_target = 0;
+        c4_state->nb_cruise_left_before_push = 0;
     }
     else {
-        c4_state->cruise_bytes_target = c4_cruise_bytes_target(c4_state->nominal_cwin);
+        c4_state->nb_cruise_left_before_push = C4_NB_CRUISE_BEFORE_PUSH;
     }
     c4_state->alpha_1024_current = C4_ALPHA_CRUISE_1024;
     c4_state->alg_state = c4_cruising;
@@ -842,7 +734,6 @@ static void c4_enter_push(
     c4_state_t* c4_state,
     uint64_t current_time)
 {
-    c4_state->cruise_bytes_ack = 0;
     if (c4_state->nb_push_no_congestion == 0 && !c4_state->pig_war && c4_state->do_slow_push) {
         /* If the previous push was not successful, increase by 6.25% instead of 25% */
         c4_state->alpha_1024_current = C4_ALPHA_PUSH_LOW_1024;
@@ -1035,7 +926,6 @@ void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_a
         c4_state->push_was_not_limited = 1;
     }
 
-    c4_state->cruise_bytes_ack += ack_state->nb_bytes_acknowledged;
     if (rate_measurement >= previous_rate &&
         ack_state->nb_bytes_delivered_since_packet_sent > c4_state->max_bytes_ack) {
         c4_state->max_bytes_ack = ack_state->nb_bytes_delivered_since_packet_sent;
@@ -1051,15 +941,21 @@ void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_a
             * This code is only executed if the era ends "naturally" -- if the era
             * was cut short by a congestion event, we do not update the max RTT
              */
-            if (path_x->rtt_sample > c4_state->era_max_rtt) {
+            if (path_x->rtt_sample > c4_state->era_max_rtt){
                 c4_state->era_max_rtt = path_x->rtt_sample;
             }
             if (c4_state->nominal_max_rtt == 0) {
                 c4_state->nominal_max_rtt = c4_state->era_max_rtt;
             }
-            else {
-                c4_state->nominal_max_rtt = (7 * c4_state->nominal_max_rtt + c4_state->era_max_rtt) / 8;
+            else if (c4_state->alpha_1024_previous <= C4_ALPHA_PREVIOUS_LOW) {
+                if (c4_state->era_max_rtt >= c4_state->nominal_max_rtt) {
+                    c4_state->nominal_max_rtt = c4_state->era_max_rtt;
+                }
+                else {
+                    c4_state->nominal_max_rtt = (7 * c4_state->nominal_max_rtt + c4_state->era_max_rtt) / 8;
+                }
             }
+            
             if (!c4_state->chaotic_jitter && c4_state->nominal_max_rtt > 2 * c4_state->rtt_min) {
                 c4_state->chaotic_jitter = 1;
 #ifdef PIG_WAR_STATS
@@ -1088,8 +984,11 @@ void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_a
                 c4_exit_recovery(path_x, c4_state, current_time);
                 break;
             case c4_cruising:
+                if (c4_state->nb_cruise_left_before_push > 0) {
+                    c4_state->nb_cruise_left_before_push--;
+                }
                 c4_era_reset(path_x, c4_state);
-                if (c4_state->cruise_bytes_ack >= c4_state->cruise_bytes_target &&
+                if (c4_state->nb_cruise_left_before_push <= 0 &&
                     path_x->last_time_acked_data_frame_sent > path_x->last_sender_limited_time) {
                     c4_enter_push(path_x, c4_state, current_time);
                 }
@@ -1211,14 +1110,9 @@ static void c4_update_rtt(
 
         if (c4_state->rtt_filter.sample_min > c4_state->rtt_filter.rtt_filtered_min &&
             c4_state->nb_rtt_update_since_discovery > PICOQUIC_MIN_MAX_RTT_SCOPE){
-            if (!c4_state->chaotic_jitter &&
-                c4_state->rtt_filter.sample_min > c4_state->rtt_min + c4_state->delay_threshold) {
-                c4_state->recent_delay_excess = c4_state->rtt_filter.sample_min - c4_state->rtt_min + c4_state->delay_threshold;
-            }
-            else if (c4_state->chaotic_jitter && c4_state->rtt_filter.sample_min > c4_state->rtt_min 
-                + c4_state->delay_threshold + (c4_state->nominal_max_rtt / 2)) {
-                c4_state->recent_delay_excess = c4_state->rtt_filter.sample_min - c4_state->rtt_min
-                    + c4_state->delay_threshold + (c4_state->nominal_max_rtt / 2);
+            uint64_t target_rtt = c4_state->nominal_max_rtt + c4_state->delay_threshold;
+            if (c4_state->rtt_filter.sample_min > target_rtt) {
+                c4_state->recent_delay_excess = c4_state->rtt_filter.sample_min - target_rtt;
             }
         }
         else {
@@ -1339,7 +1233,7 @@ void c4_observe(picoquic_path_t* path_x, uint64_t* cc_state, uint64_t* cc_param)
 {
     c4_state_t* c4_state = (c4_state_t*)path_x->congestion_alg_state;
     *cc_state = (uint64_t)c4_state->alg_state;
-    *cc_param = c4_state->rtt_min;
+    *cc_param = c4_state->nominal_max_rtt;
 }
 
 /* Definition record for the FAST CC algorithm */

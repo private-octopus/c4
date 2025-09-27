@@ -259,7 +259,7 @@ Internet-Draft                  C4 Tests                  September 2025
    of the path.  At the beginning of the simulation, the simulated
    bandwidth is set at 5 Mbps.  It increases to 10 Mbps after 2.5
    seconds.  The RTT remains constant at 100ms.  The test verifies that
-   100 simulations of a 7MB download all complete in less than 7.4
+   100 simulations of a 7MB download all complete in less than 7.6
    seconds.
 
    The goal of the test is to verify that C4 promptly discovers the
@@ -272,7 +272,7 @@ Internet-Draft                  C4 Tests                  September 2025
    simulation, the simulated bandwidth is set at 10 Mbps.  It decreases
    to 5 Mbps after 1.5 second, then returns to 10 Mbps after 2 seconds.
    The RTT remains constant at 100ms.  The test verifies that 100
-   simulations of a 7MB download all complete in less than 8.1 seconds.
+   simulations of a 7MB download all complete in less than 8 seconds.
 
 
 
@@ -361,7 +361,7 @@ Internet-Draft                  C4 Tests                  September 2025
    spikes of 100 to 200ms every second.  The data rate is set to 10Mbps,
    and the base RTT before jitter is set to 2ms, i.e., simulating a
    local server.  The test pass if 100 different 10MB downloads each
-   complete in less than 8 seconds.
+   complete in less than 4.3 seconds.
 
 2.3.2.  Wifi fade trial
 
@@ -413,7 +413,7 @@ Internet-Draft                  C4 Tests                  September 2025
    and using the same path.  The path has a 20Mbps data rate and 80ms
    RTT.  The background connection tries to download 10MB, the main
    connection downloads 5MB.  The test pass if in 100 trials the main
-   connection completes in less than 6.75 seconds.
+   connection completes in less than 5.75 seconds.
 
 2.4.2.  Short background C4 connection first
 
@@ -534,8 +534,8 @@ Internet-Draft                  C4 Tests                  September 2025
    the same jitter characteristics as in the "bad Wi-Fi" test (see
    Section 2.3.1).  The background connection tries to download 10MB,
    the main connection downloads 4MB.  The test pass if in each of 100
-   trials the main connection completes in less than 13.5 seconds after
-   the beginning of the trial.
+   trials the main connection completes in less than 8 seconds after the
+   beginning of the trial.
 
 2.6.  Competition with BBR
 
@@ -576,8 +576,7 @@ Internet-Draft                  C4 Tests                  September 2025
    starting at the same time and using the same path.  The path has a
    20Mbps data rate and 80ms RTT.  The background connection tries to
    download 30MB, the main connection downloads 20MB.  The test pass if
-   in 100 trials the main connection completes in less than 22.4
-   seconds.
+   in 100 trials the main connection completes in less than 22 seconds.
 
 2.6.3.  Long BBR background connection last
 
@@ -598,8 +597,8 @@ Internet-Draft                  C4 Tests                  September 2025
    -- the same jitter characteristics as in the "bad Wi-Fi" test (see
    Section 2.3.1).  The background connection tries to download 10MB,
    the main connection downloads 4MB.  The test pass if in each of 100
-   trials the main connection completes in less than 12 seconds after
-   the beginning of the trial.
+   trials the main connection completes in less than 8 seconds after the
+   beginning of the trial.
 
 2.7.  Handling of Multimedia Applications
 
@@ -609,6 +608,7 @@ Internet-Draft                  C4 Tests                  September 2025
 
    *  a simulated audio stream sending 80 bytes simulated audio segments
       every 20 ms.
+
 
 
 

@@ -34,6 +34,7 @@
 * - Tuning the interval: no bw increase => larger, bw increase => sooner, how soon?
 * - stopping the compete mode: ECN? ECN as signal that the bottleneck is actively managed.
 * - compete with self? Maybe introduce some random behavior.
+* Principles were later revised to track data rate and max RTT.
  */
 
 /* States of C4:
@@ -57,10 +58,6 @@
 * Modes:
 * pig_war: If we detect the need to compete with Cubic. In that mode, stop
 *           treating delay variations as congestion signals.
-* 
-* chaotic_jitter: if we detect significant delay jitter. In that mode,
-*           instead of tracking the min delay, track a target
-*           delay as (5*min delay + 3*running_max)/8
 * 
 * Transitions:
 *            initial to recovery -- similar to hystart for now.
@@ -153,7 +150,6 @@ typedef struct st_c4_state_t {
     unsigned int congestion_delay_notified : 1;
     unsigned int push_was_not_limited : 1;
     unsigned int pig_war : 1;
-    unsigned int chaotic_jitter : 1;
     unsigned int use_seed_cwin : 1;
     unsigned int do_cascade : 1;
     unsigned int do_slow_push : 1;
@@ -194,16 +190,6 @@ static uint64_t c4_compute_corrected_delivered_bytes(c4_state_t* c4_state, uint6
 {
     uint64_t duration_max = MULT1024(1024 + 51, c4_state->rtt_min);
 
-    if (c4_state->rtt_min_is_trusted && c4_state->chaotic_jitter &&
-        c4_state->rtt_min_stamp + 1000000 > current_time) {
-        if (c4_state->rtt_min < c4_state->nominal_max_rtt) {
-            duration_max = MULT1024(128, 5 * c4_state->rtt_min + 3 * c4_state->nominal_max_rtt);
-        }
-        else {
-            duration_max = MULT1024(1024 + 51, c4_state->rtt_min + 5000);
-        }
-    }
-
     if (rtt_measurement > duration_max) {
         uint64_t ratio_1024 = (duration_max * 1024) / rtt_measurement;
         nb_bytes_delivered = MULT1024(ratio_1024, nb_bytes_delivered);
@@ -229,7 +215,7 @@ static void c4_apply_rate_and_cwin(
 
     if (c4_state->alg_state == c4_initial) {
         /* Initial special case: bandwidth discovery, and seed cwin */
-        if (c4_state->nb_packets_in_startup > 0 && !c4_state->chaotic_jitter) {
+        if (c4_state->nb_packets_in_startup > 0) {
 
             uint64_t min_win = (path_x->peak_bandwidth_estimate * path_x->smoothed_rtt / 1000000) / 2;
             if (min_win > target_cwin) {
@@ -251,8 +237,8 @@ static void c4_apply_rate_and_cwin(
         /* Increase pacing rate by factor 1.25 to allow for bunching of packets */
         pacing_rate = MULT1024(1024+256, pacing_rate);
     }
-    if (c4_state->chaotic_jitter || c4_state->pig_war || c4_state->nominal_cwin < c4_state->nominal_max_rtt){
-        /* In the chaotic jitter state, we need to loosen the congestion window
+    if (c4_state->pig_war || c4_state->nominal_cwin < c4_state->nominal_max_rtt){
+        /* In the pig war state, we need to loosen the congestion window
          * in order to continue sending through jitter events. We do that by
          * adding half of the difference between the nominal window and the
          * max window acknowledged so far. See design spec for details. */
@@ -576,12 +562,12 @@ static void pig_war_log(
                 pig_war = 1;
             }
             (void)fprintf(F, "%" PRIu64 ", %d, %" PRIu64", %" PRIu64", %" PRIu64", %" PRIu64", %" PRIu64", %"
-                          PRIu64", %" PRIu64", %" PRIu64", %" PRIu64", %d, %d, %d\n",
+                          PRIu64", %" PRIu64", %" PRIu64", %" PRIu64", %d, %d\n",
                 current_time, c4_state->nb_eras_delay_based_decrease, c4_state->nominal_cwin, c4_state->nominal_rate,
                 c4_state->max_cwin, c4_state->max_rate,
                 c4_state->rtt_min, c4_state->rtt_filter.sample_min,
                 c4_state->rtt_filter.sample_max, path_x->rtt_variant, path_x->smoothed_rtt,
-                c4_state->chaotic_jitter, pig_war, pwe);
+                pig_war, pwe);
             picoquic_file_close(F);
         }
     }
@@ -671,14 +657,14 @@ static void c4_exit_recovery(
 #ifdef PIG_WAR_STATS
         pig_war_log(path_x, c4_state, pig_war_start, current_time);
 #endif
-        picoquic_log_app_message(path_x->cnx, "C4-Start pig war on decrease, chaotic: %d", c4_state->chaotic_jitter);
+        picoquic_log_app_message(path_x->cnx, "C4-Start pig war on decrease, chaotic: %d", 0);
         c4_start_pig_war(path_x, c4_state, current_time);
     }
     else if (c4_state->nb_push_no_congestion >= C4_NB_PUSH_BEFORE_RESET) {
         if (c4_state->pig_war) {
             /* End the pig war here. Bandwidth has increased, which means the  competing
              * connection is probably gone. */
-            picoquic_log_app_message(path_x->cnx, "C4-Stop pig war, chaotic: %d", c4_state->chaotic_jitter);
+            picoquic_log_app_message(path_x->cnx, "C4-Stop pig war, chaotic: %d", 0);
             c4_state->pig_war = 0;
             c4_state->nb_push_no_congestion = 0;
         }
@@ -689,7 +675,7 @@ static void c4_exit_recovery(
     else if (c4_state->pig_war && c4_state->nb_push_no_congestion > 0) {
         /* End the pig war here. Bandwidth has increased, which means the competing
          * connection is probably gone. */
-        picoquic_log_app_message(path_x->cnx, "C4-Stop pig war early, chaotic: %d", c4_state->chaotic_jitter);
+        picoquic_log_app_message(path_x->cnx, "C4-Stop pig war early, chaotic: %d", 0);
         c4_state->pig_war = 0;
         c4_state->nb_push_no_congestion = 0;
     }
@@ -876,7 +862,7 @@ static void c4_end_checking_era(
 #ifdef PIG_WAR_STATS
             pig_war_log(path_x, c4_state, pig_war_checking, current_time);
 #endif
-            picoquic_log_app_message(path_x->cnx, "C4-Start pig war on checking, chaotic: %d", c4_state->chaotic_jitter);
+            picoquic_log_app_message(path_x->cnx, "C4-Start pig war on checking, chaotic: %d", 0);
             c4_start_pig_war(path_x, c4_state, current_time);
         }
         else {
@@ -954,16 +940,6 @@ void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_a
                 else {
                     c4_state->nominal_max_rtt = (7 * c4_state->nominal_max_rtt + c4_state->era_max_rtt) / 8;
                 }
-            }
-            
-            if (!c4_state->chaotic_jitter && c4_state->nominal_max_rtt > 2 * c4_state->rtt_min) {
-                c4_state->chaotic_jitter = 1;
-#ifdef PIG_WAR_STATS
-                pig_war_log(path_x, c4_state, pig_war_chaotic, current_time);
-#endif
-            }
-            if (c4_state->chaotic_jitter && 2*c4_state->nominal_max_rtt < 3* c4_state->rtt_min) {
-                c4_state->chaotic_jitter = 0;
             }
 
             /* Manage the transition to the next state */
@@ -1133,7 +1109,7 @@ static void c4_handle_rtt(
     uint64_t current_time)
 {
     if (c4_state->rtt_min_is_trusted && c4_state->recent_delay_excess > 0 /* PICOQUIC_MIN_MAX_RTT_SCOPE */) {
-        if (!c4_state->chaotic_jitter && !c4_state->pig_war) {
+        if (!c4_state->pig_war) {
             /* May well be congested */
             c4_notify_congestion(path_x, c4_state, rtt_measurement, 1, current_time);
         }

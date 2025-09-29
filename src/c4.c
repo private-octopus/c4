@@ -897,6 +897,18 @@ void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_a
             corrected_rtt = c4_state->rtt_min;
         }
         rate_measurement = (ack_state->nb_bytes_delivered_since_packet_sent * 1000000) / corrected_rtt;
+
+        if (c4_state->alg_state != c4_initial) {
+            /* We find some cases where ACK compression causes the rate measurement
+             * to return some really weird values. Outside of the initial phase,
+             * we know that the sender will never send faster than the push rate.
+             * We limit the possible rate increase to that value */
+            uint64_t max_rate = MULT1024(C4_ALPHA_PUSH_1024, c4_state->nominal_rate);
+            if (rate_measurement > max_rate) {
+                rate_measurement = max_rate;
+            }
+        }
+
         if (rate_measurement > c4_state->nominal_rate) {
             c4_state->nominal_rate = rate_measurement;
             c4_state->push_was_not_limited = 1;

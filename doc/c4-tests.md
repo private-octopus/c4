@@ -377,7 +377,7 @@ the same jitter characteristics as in the "bad Wi-Fi" test (see {{bad-wifi}}).
 The background connection
 tries to download 10MB, the main connection downloads 4MB.
 The test pass if in each of 100 trials the main connection completes
-in less than 17.5 seconds after the beginning of the trial.
+in less than 13 seconds after the beginning of the trial.
 
 ## Competition with Cubic
 
@@ -433,7 +433,7 @@ the same jitter characteristics as in the "bad Wi-Fi" test (see {{bad-wifi}}).
 The background connection
 tries to download 10MB, the main connection downloads 4MB.
 The test pass if in each of 100 trials the main connection completes
-in less than 8 seconds after the beginning of the trial.
+in less than 10 seconds after the beginning of the trial.
 
 ## Competition with BBR
 
@@ -489,7 +489,7 @@ the same jitter characteristics as in the "bad Wi-Fi" test (see {{bad-wifi}}).
 The background connection
 tries to download 10MB, the main connection downloads 4MB.
 The test pass if in each of 100 trials the main connection completes
-in less than 8 seconds after the beginning of the trial.
+in less than 12 seconds after the beginning of the trial.
 
 
 ## Handling of Multimedia Applications

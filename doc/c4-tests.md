@@ -214,7 +214,7 @@ the simulated bandwidth is set at . After 2 seconds,
 the path capacity is set to 0, and is restored to normal
 2 seconds later. The RTT remains constant at
 70ms. The test verifies that 100 simulations of a
-10MB download all complete in less than 6.07 seconds.
+10MB download all complete in less than 6.1 seconds.
 
 The goal of the test is to verify that C4 recovers
 promptly after a short suspension of the path.

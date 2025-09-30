@@ -154,7 +154,7 @@ the RTT remains very close to the path RTT, except for
 periodic small bumps during the "push" transitions. The typical
 test completes in 4.85 seconds.
 
-### Simulation of a simple 20Mbps connection
+### Simulation of a simple 200Mbps connection
 
 This scenario simulates a 20MB download over a 200 Mbps link,
 with a 40ms RTT, and a bottleneck buffer capacity corresponding
@@ -330,7 +330,7 @@ in less than 5.75 seconds.
 ### Short background C4 connection first
 
 The "background first" test simulates two C4 connections using the same path
-with the background connection starting at the
+with the background connection starting
 0.5 seconds before the main connection. The path has a 20Mbps data rate
 and 80ms RTT. The background connection
 tries to download 10MB, the main connection downloads 5MB.
@@ -345,7 +345,7 @@ with the background connection starting at the
 and 30ms RTT. The background connection
 tries to download 20MB, the main connection downloads 10MB.
 The test pass if in 100 trials the main connection completes
-in less than 3 seconds after the beginning of the trial.
+in less than 3.6 seconds after the beginning of the trial.
 
 ### Two long C4 connections
 

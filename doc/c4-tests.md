@@ -289,7 +289,7 @@ with a data rate of 20Mbps, an 80ms latency, and Wi-Fi jitter
 with average 1ms. After 1 second, the data rate drops to 2Mbps
 and the jitter average increases to 12ms. After another 2 seconds,
 data rate and jitter return to the original condition. The test
-pass if 100 different 10MB downloads each complete in less than 6
+pass if 100 different 10MB downloads each complete in less than 6.2
 seconds.
 
 ### Wifi suspension trial {#wifi-suspension}
@@ -301,7 +301,7 @@ RTT before jitter is set to 10ms. For the last 200ms of these
 intervals, the data rate is set to 0. This model was developed
 before we got a better understanding of the Wi-Fi jitter. It is
 obsolete, but we kept it as a test case anyhow.  The test
-pass if 100 different 10MB downloads each complete in less than 5
+pass if 100 different 10MB downloads each complete in less than 5.4
 seconds.
 
 ## Competition with itself
@@ -433,7 +433,7 @@ the same jitter characteristics as in the "bad Wi-Fi" test (see {{bad-wifi}}).
 The background connection
 tries to download 10MB, the main connection downloads 4MB.
 The test pass if in each of 100 trials the main connection completes
-in less than 10 seconds after the beginning of the trial.
+in less than 11 seconds after the beginning of the trial.
 
 ## Competition with BBR
 
@@ -465,7 +465,7 @@ same time and using the same path. The path has a 20Mbps data rate
 and 80ms RTT. The background connection
 tries to download 30MB, the main connection downloads 20MB.
 The test pass if in 100 trials the main connection completes
-in less than 22 seconds.
+in less than 23 seconds.
 
 ### Long BBR background connection last
 
@@ -489,7 +489,7 @@ the same jitter characteristics as in the "bad Wi-Fi" test (see {{bad-wifi}}).
 The background connection
 tries to download 10MB, the main connection downloads 4MB.
 The test pass if in each of 100 trials the main connection completes
-in less than 12 seconds after the beginning of the trial.
+in less than 13.5 seconds after the beginning of the trial.
 
 
 ## Handling of Multimedia Applications

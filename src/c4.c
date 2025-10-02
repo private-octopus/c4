@@ -600,7 +600,11 @@ static void c4_enter_push(
     c4_era_reset(path_x, c4_state);
     c4_state->alg_state = c4_pushing;
 }
-
+#if 0
+/* Keeping the unused code here for now. It will be removed when
+* we also remove the RTT filtering code, but that has to be a
+* separate commit.
+*/
 /* Reset the min RTT and the associated tracking variables.
  */
 static void c4_reset_min_rtt(
@@ -613,6 +617,7 @@ static void c4_reset_min_rtt(
     c4_state->running_min_rtt = last_rtt;
     c4_state->rtt_min_is_trusted = 1;
 }
+#endif
 
 void c4_update_min_max_rtt(picoquic_path_t* path_x, c4_state_t* c4_state)
 {
@@ -701,7 +706,6 @@ void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_a
     }
     else {
         if (c4_era_check(path_x, c4_state)) {
-            int is_natural_slowdown = 0;
             /* Update max rtt and running min rtt */
             c4_update_min_max_rtt(path_x, c4_state);
 

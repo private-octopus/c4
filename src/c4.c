@@ -164,7 +164,20 @@ static void c4_enter_cruise(
     c4_state_t* c4_state,
     uint64_t current_time);
 
-static uint64_t sensitivity_1024(c4_state_t* c4_state)
+/* The sensitivity function provides a value from 0 to 1
+* indicating how sensitive this flow is to congestion event.
+* The idea is that flow consuming lots of resource should react
+* faster than flow that consume little, leading eventually
+* to good sharing of resource.
+* 
+* The current value is a place holder: return 0 for flows
+* using less than 50kB/s, 1 for flows using more than 1MB,
+* and a linear interpolation in between. We should probably
+* use a more sophisticated curve, but the current placeholder
+* is good enough to demostrate the value of the concept.
+*/
+
+static uint64_t c4_sensitivity_1024(c4_state_t* c4_state)
 {
     uint64_t sensitivity = 1024;
     if (c4_state->nominal_rate < 50000) {
@@ -182,7 +195,7 @@ static uint64_t sensitivity_1024(c4_state_t* c4_state)
 
 uint64_t c4_delay_threshold(c4_state_t* c4_state)
 {
-    uint64_t sensitivity = sensitivity_1024(c4_state);
+    uint64_t sensitivity = c4_sensitivity_1024(c4_state);
     uint64_t fraction = 128 + MULT1024(1024 - sensitivity, 128);
     uint64_t delay = MULT1024(fraction, c4_state->nominal_max_rtt);
     if (delay > C4_DELAY_THRESHOLD_MAX) {
@@ -195,7 +208,7 @@ uint64_t c4_delay_threshold(c4_state_t* c4_state)
 */
 double c4_loss_threshold(c4_state_t* c4_state)
 {
-    uint64_t sensitivity = sensitivity_1024(c4_state);
+    uint64_t sensitivity = c4_sensitivity_1024(c4_state);
     double fraction = ((double)sensitivity) / 1024.0;
     double loss_threshold = 0.55 - 0.50 * fraction;
 

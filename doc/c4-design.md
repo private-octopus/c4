@@ -643,16 +643,17 @@ by trying less hard to increase their bandwidth or by reacting
 more to congestion events. We considered adopting a similar
 strategy for C4.
 
-The aggressiveness of C4 is driven by three main considerations:
+The aggressiveness of C4 is driven by several considerations:
 
 * the frequency of the "pushing" periods,
 * the coefficient `alpha` used during pushing,
-* and the coefficient `beta` used during response to congestion events.
+* the coefficient `beta` used during response to congestion events,
+* the delay threshold above a nominal value to detect congestion,
+* the ratio of packet losses considered excessive,
+* the ratio of ECN marks considered excessive.
 
-We could adopt strategies in which larger flows push
-less often, smaller flows use a larger value of `alpha`,
-or larger flows use a larger value of `beta`.
-
+We clearly want to have some or all of these parameters depend
+on how much resource the flow is using.
 There are know limits to these strategies. For example,
 consider TCP Reno, in which the growth rate of CWND during the
 "congestion avoidance" phase" is inversely proportional to its size.
@@ -678,10 +679,75 @@ We also reduced the default rate increase during Pushing to
 par with the aggressiveness of RENO when
 operating at low bandwidth (lower than 34 Mbps).
 
-We might consider adopting some fairness response in the future,
-such as either increasing the default rate by more than 6.25%
-or maybe using a lower value of `beta` 
-when the connection is not using much bandwidth.
+## Absence of constraints is unfair
+
+Once we fixed the push frequency and the default increase rate, we were
+left with responses that were mostly proportional to the amount
+of resource used by a connection. Such design makes the resource sharing
+very dependent on initial conditions. We saw simulations where
+after some initial period, one of two competing connections on
+a 20 Mbps path might settle at a 15 Mbps rate and the other at 5 Mbps.
+Both connections would react to a congestion event by dropping
+their bandwidth by 25%, to 15 or 3.75 Mbps. And then once the condition
+eased, both would increase their data rate by the same amount. If
+everything went well the two connection will share the bandwidth
+without exceeding it, and the situation would be very stable --
+but also very much unfair.
+
+We also had some simulations in which a first connection will
+grab all the available bandwidth, and a late comer connection
+would struggle to get any bandwidth at all. The analysis 
+showed that the second connection was
+exiting the initial phase early, after encountering either
+excess delay or excess packet loss. The first
+connection was saturating the path, any additional traffic
+did cause queuing or losses, and the second connection had
+no chance to grow.
+
+This "second comer shut down" effect happend particularly often
+on high jitter links. The established connections had tuned their
+timers or congestion window to account for the high jitter. The
+second connection was basing their timers on their first
+measurements, before any of the big jitter events had occured.
+This caused an imbalance between the first connection, which
+expected large RTT variations, and the second, which did not
+expect them yet.
+
+These shutdown effects happened in simulations with the first
+connection using either Cubic, BBR or C4. We had to design a response,
+and we first turned to making the response to excess delay or
+packet loss a function of the data rate of the flow.
+
+## Introducing a sensitivity curve
+
+In our second design, we attempted to fix the unfairness and
+shutdowns effect by introducing a sensitivity curve,
+computing a "sensitivity" as a function of the flow data
+rate. Our first implementation is really just a place holder:
+
+* set sensitivity to 0 if data rate is lower than 50000B/s
+* set sensitivity to 1 if data rate is higher than 1000000B/s
+* linear interpolation between 50000 and 1000000B/s.
+
+The sensitivity index is then used to set the value of delay and
+loss thresholds.
+
+~~~
+~~~
+
+This very simple change allowed us to stabilize the results. In our
+competition tests we see sharing of resource almost equitably between
+C4 connections, and reasonably between C4 and Cubic or C4 and BBR.
+We do not observe the shutdown effects that we saw before.
+
+There is no doubt that the current curve will have to be refined.
+In particular, setting sensitivity to 1 if data rate is higher than
+1000000B/s means that there is no sensitivity difference between
+connections running at rates higher than 8 Mbps (1MBps). We have
+a couple such test in our test suite with total capacity higher than
+20Mbps, and for those tests the dependency on initial conditions remain.
+We will revisit the definition of the curve, probably to have the sensitivity
+follow the logarithm of data rate.
 
 ## Cascade of Increases {#cascade}
 
@@ -831,9 +897,6 @@ implemented yet.
 
 # State Machine
 
-Note: we are working on protocol updates, and will remove the slowdown
-and checking states.
-
 The state machine for C4 has the following states:
 
 * "startup": the initial state, during which the CWND is
@@ -845,23 +908,18 @@ The state machine for C4 has the following states:
   "startup", "pushing", or a congestion detection in
   a "cruising" state. It remains in that state for
   at least one roundtrip, until the first packet sent
-  in "discovery" is acknowledged. Once that happens,
-  the connection enters "slowdown" if no "slowdown"
-  has been experienced for 5 seconds, or goes back
+  in "recovery" is acknowledged. Once that happens,
+  the connection goes back
   to "startup" if the last 3 pushing attemps have resulted
-  in increases of "nominal CWND", or enters "cruising"
+  in increases of "nominal rate", or enters "cruising"
   otherwise.
 * "cruising": the connection is sending using the
-  "nominal_rate" and "nominal_cwnd" value. If congestion is detected,
+  "nominal_rate" and "nominal_max_rtt" value. If congestion is detected,
   the connection exits cruising and enters
   "recovery" after lowering the value of
-  "nominal_cwnd". If after a roundtrip the application
-  sent fewer than 1/2 of "nominal_cwnd", and if the
-  last "slowdown" occured more than 4 seconds ago,
-  the connection moves to the "checking" state.
+  "nominal_cwnd".
   Otherwise, the connection will
-  remain in "cruising" state until a sufficient
-  number of bytes have been acknowledged, and
+  remain in "cruising" state until at least 4 RTT and
   the connection is not "app limited". At that
   point, it enters "pushing".
 * "pushing": the connection is using a rate and CWND 25%
@@ -869,22 +927,7 @@ The state machine for C4 has the following states:
   It remains in that state
   for one round trip, i.e., until the first packet
   send while "pushing" is acknowledged. At that point,
-  it enters the "recovery" state. 
-* "slowdown": the connection is using rate and CWND set to
-  1/2 of the nominal values. After one round trip, it exits "slowdown"
-  and enters "checking".
-* "checking": after a forced or natural slowdown,
-  the connection enters the checking state. It is
-  sending using rate and CWND set to the nominal values.
-  The connection remains in
-  checking state for one round trip. After that round trip,
-  it goes back to "cruising" if the lowest RTT measured
-  during the round trip or the previous checking state is lower
-  than or equal to the
-  current min RTT. If not, if the lowest RTT measured during
-  two consecutive slowdown periods is higher than the min RTT,
-  it resets the min RTT to the last measurement and reenters
-  "startup".
+  it enters the "recovery" state.
 
 These transitions are summarized in the following state
 diagram.
@@ -893,41 +936,34 @@ diagram.
                     Start
                       |
                       v
-                      +<-----------------------+-------------------+
-                      |                        |                   ^
-                      v                        |                   |
-                 +----------+                  |                   |
-                 | Startup  |                  |                   |
-                 +----|-----+                  |                   |
-                      |                        |                   |
-                      v                        |                   |
-                 +---------------+             |                   |
-  +--+---------->|   Recovery    |             |                   |
-  ^  ^           +----|---|---|--+             |                   |
-  |  |                |   |   | Rapid Increase |                   |
-  |  |                |   |   +--------------->+                   |
-  |  |                |   |                                        |
-  |  |                |   v   Forced Slowdown                      |
-  |  |                |   +------------------>+                    |
-  |  |                |                       |                    |
-  |  |                +<----------------------|------------------+ |
-  |  |                |                       |                  ^ |
-  |  |                v                       v                  | |
-  |  |           +----------+            +----------+            | |
-  |  |           | Cruising |            | Slowdown |            | |
-  |  |           +-|--|--|--+            +----|-----+            | |
-  |  | Congestion  |  |  |  Natural Slowdown  |                  | |
-  |  +-------------+  |  +------------------->+                  | |
-  |                   |                       |                  | |
-  |                   v                       v                  | |
-  |              +----------+            +-----------+           | |
-  |              | Pushing  |            | Checking  |           | |
-  |              +----|-----+            +---|---|---+           | |
-  |                   |                      |   | RTT Min lower | |
-  +<------------------+                      |   +-------------->+ |
-                                             |                     |
-                                             | RTT Min Higher      |
-                                             +-------------------->+
+                      +<-----------------------+
+                      |                        |
+                      v                        |
+                 +----------+                  |
+                 | Startup  |                  |
+                 +----|-----+                  |
+                      |                        |
+                      v                        |
+                 +------------+                |
+  +--+---------->|  Recovery  |                |
+  ^  ^           +----|---|---+                |
+  |  |                |   |     Rapid Increase |
+  |  |                |   +------------------->+
+  |  |                |
+  |  |                v
+  |  |           +----------+
+  |  |           | Cruising |
+  |  |           +-|--|-----+
+  |  | Congestion  |  |
+  |  +-------------+  |
+  |                   |
+  |                   v
+  |              +----------+
+  |              | Pushing  |
+  |              +----|-----+
+  |                   |
+  +<------------------+
+
 ~~~
   
 

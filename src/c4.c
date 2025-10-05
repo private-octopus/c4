@@ -139,6 +139,9 @@ typedef struct st_c4_state_t {
     uint64_t recent_delay_excess;
     int nb_rtt_update_since_discovery;
 
+    uint64_t last_lost_packet_number; /* Used for computation of loss rate. Init to 0 */
+    double smoothed_drop_rate; /* Average packet loss rate */
+
     unsigned int last_freeze_was_not_delay : 1;
     unsigned int rtt_min_is_trusted : 1;
     unsigned int congestion_notified : 1;
@@ -147,8 +150,9 @@ typedef struct st_c4_state_t {
     unsigned int use_seed_cwin : 1;
     unsigned int do_cascade : 1;
     unsigned int do_slow_push : 1;
-
+#if 0
     picoquic_min_max_rtt_t rtt_filter;
+#endif
     /* Handling of options. */
     char const* option_string;
 } c4_state_t;
@@ -169,12 +173,20 @@ static void c4_enter_cruise(
 * The idea is that flow consuming lots of resource should react
 * faster than flow that consume little, leading eventually
 * to good sharing of resource.
+*/
+/* The sensitivity will be directly translated into a packet
+* loss detection threshold. We want that threshold to be very
+* high at low data rates (lower than 50kB/s), about 2% at
+* high data rate (matching the sensitivity of BBR), and 
+* about 5% at intermediate rates (1MBps), with slopes
+* in between. We assume that the loss threshold is computed as:
+*
+* Threshold = 2% + (1-sensitivity)*50%
 * 
-* The current value is a place holder: return 0 for flows
-* using less than 50kB/s, 1 for flows using more than 1MB,
-* and a linear interpolation in between. We should probably
-* use a more sophisticated curve, but the current placeholder
-* is good enough to demostrate the value of the concept.
+* This gives us the curve points:
+* - 0 to 50kB/s: 0
+* - 1MB/s: (1-0.03/0.5) = 0.94, approximate to 963/1024
+* - 10MB/s: 1
 */
 
 static uint64_t c4_sensitivity_1024(c4_state_t* c4_state)
@@ -183,8 +195,14 @@ static uint64_t c4_sensitivity_1024(c4_state_t* c4_state)
     if (c4_state->nominal_rate < 50000) {
         sensitivity = 0;
     }
+    else if (c4_state->nominal_rate > 10000000) {
+        sensitivity = 0;
+    }
     else if (c4_state->nominal_rate < 1000000) {
-        sensitivity = (c4_state->nominal_rate - 50000) * 1024 / 950000;
+        sensitivity = (c4_state->nominal_rate - 50000) * 963 / 950000;
+    }
+    else {
+        sensitivity = 963 + ((c4_state->nominal_rate - 1000000) * 61 / 9000000);
     }
     return sensitivity;
 }
@@ -196,7 +214,7 @@ static uint64_t c4_sensitivity_1024(c4_state_t* c4_state)
 uint64_t c4_delay_threshold(c4_state_t* c4_state)
 {
     uint64_t sensitivity = c4_sensitivity_1024(c4_state);
-    uint64_t fraction = 128 + MULT1024(1024 - sensitivity, 128);
+    uint64_t fraction = 64 + MULT1024(1024 - sensitivity, 196);
     uint64_t delay = MULT1024(fraction, c4_state->nominal_max_rtt);
     if (delay > C4_DELAY_THRESHOLD_MAX) {
         delay = C4_DELAY_THRESHOLD_MAX;
@@ -210,9 +228,29 @@ double c4_loss_threshold(c4_state_t* c4_state)
 {
     uint64_t sensitivity = c4_sensitivity_1024(c4_state);
     double fraction = ((double)sensitivity) / 1024.0;
-    double loss_threshold = 0.55 - 0.50 * fraction;
+    double loss_threshold = 0.02 + 0.50 * (1-fraction);
 
     return loss_threshold;
+}
+
+/* Compute the loss rate */
+void c4_update_loss_rate(c4_state_t * c4_state, uint64_t lost_packet_number)
+{
+    uint64_t next_number = c4_state->last_lost_packet_number;
+
+    if (lost_packet_number > next_number) {
+        if (next_number + PICOQUIC_SMOOTHED_LOSS_SCOPE < lost_packet_number) {
+            next_number = lost_packet_number - PICOQUIC_SMOOTHED_LOSS_SCOPE;
+        }
+
+        while (next_number < lost_packet_number) {
+            c4_state->smoothed_drop_rate *= (1.0 - PICOQUIC_SMOOTHED_LOSS_FACTOR);
+            next_number++;
+        }
+
+        c4_state->smoothed_drop_rate += (1.0 - c4_state->smoothed_drop_rate) * PICOQUIC_SMOOTHED_LOSS_FACTOR;
+        c4_state->last_lost_packet_number = lost_packet_number;
+    }
 }
 
 /*
@@ -434,8 +472,7 @@ static void c4_initial_handle_rtt(picoquic_path_t* path_x, c4_state_t* c4_state,
     /* we do not directly use "hystart test", because we want to separate the
     * "update_rtt" functions from the actual tests.
      */
-
-    if (c4_state->rtt_filter.is_init && c4_state->recent_delay_excess > 0
+    if (c4_state->recent_delay_excess > 0
         && c4_state->nb_eras_no_increase > 1){
 
         c4_exit_initial(path_x, c4_state, notification, current_time);
@@ -819,52 +856,27 @@ static void c4_update_rtt(
     uint64_t rtt_measurement,
     uint64_t current_time)
 {
-    picoquic_cc_filter_rtt_min_max(&c4_state->rtt_filter, rtt_measurement);
-    c4_state->nb_rtt_update_since_discovery += 1;
-
-    if (c4_state->rtt_filter.rtt_filtered_min == 0 ||
-        c4_state->rtt_filter.rtt_filtered_min > c4_state->rtt_filter.sample_max) {
-        c4_state->rtt_filter.rtt_filtered_min = c4_state->rtt_filter.sample_max;
+    if (rtt_measurement > c4_state->era_max_rtt) {
+        c4_state->era_max_rtt = rtt_measurement;
     }
-
-    if (c4_state->rtt_filter.is_init) {
-        /* We use the maximum of the last samples as the candidate for the
-         * min RTT, in order to filter the rtt jitter */
-        uint64_t samples_min = c4_state->rtt_filter.sample_max;
-        if (2 * c4_state->rtt_filter.sample_min < c4_state->rtt_filter.sample_max) {
-            /* The samples themselves have a chaotic behavior. We should
-             * not just use the "max of sample" as a threshold, because that leads 
-             * to delayed detecting of chaotic jitter. */
-            samples_min = (c4_state->rtt_filter.sample_min + c4_state->rtt_filter.sample_max) / 2;
-        }
-#if 0
-        if (samples_min < c4_state->rtt_min) {
-            c4_reset_min_rtt(c4_state, samples_min, rtt_measurement, current_time);
-        }
-#endif
-
-        if (c4_state->rtt_filter.sample_min > c4_state->rtt_filter.rtt_filtered_min &&
-            c4_state->nb_rtt_update_since_discovery > PICOQUIC_MIN_MAX_RTT_SCOPE){
-            uint64_t target_rtt = c4_state->nominal_max_rtt + c4_state->delay_threshold;
-            if (c4_state->rtt_filter.sample_min > target_rtt) {
-                c4_state->recent_delay_excess = c4_state->rtt_filter.sample_min - target_rtt;
-            }
+    if (rtt_measurement < c4_state->era_min_rtt) {
+        c4_state->era_min_rtt = rtt_measurement;
+    }
+    if (rtt_measurement < c4_state->running_min_rtt) {
+        c4_state->running_min_rtt = rtt_measurement;
+    }
+    if (c4_state->nominal_max_rtt == 0) {
+        c4_state->nominal_max_rtt = rtt_measurement;
+        c4_state->recent_delay_excess = 0;
+    }
+    else {
+        uint64_t target_rtt = c4_state->nominal_max_rtt + c4_state->delay_threshold;
+        if (rtt_measurement > target_rtt) {
+            c4_state->recent_delay_excess = rtt_measurement - target_rtt;
         }
         else {
             c4_state->recent_delay_excess = 0;
         }
-        if (rtt_measurement > c4_state->era_max_rtt) {
-            c4_state->era_max_rtt = rtt_measurement;
-        }
-        if (rtt_measurement > c4_state->era_max_rtt) {
-            c4_state->era_min_rtt = rtt_measurement;
-        }
-        if (samples_min < c4_state->running_min_rtt) {
-            c4_state->running_min_rtt = samples_min;
-        }
-    }
-    if (c4_state->nominal_max_rtt == 0) {
-        c4_state->nominal_max_rtt = rtt_measurement;
     }
 }
 
@@ -916,8 +928,9 @@ void c4_notify(
                 /* Do not worry about loss of packets sent before entering recovery */
                 break;
             }
-            if (picoquic_cc_hystart_loss_test(&c4_state->rtt_filter, notification, ack_state->lost_packet_number,
-                c4_loss_threshold(c4_state))) {
+            c4_update_loss_rate(c4_state, ack_state->lost_packet_number);
+
+            if (c4_state->smoothed_drop_rate > c4_loss_threshold(c4_state)) {
                 if (c4_state->alg_state == c4_initial) {
                     c4_initial_handle_loss(path_x, c4_state, notification, current_time);
                 }

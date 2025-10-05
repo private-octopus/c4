@@ -744,7 +744,7 @@ There is no doubt that the current curve will have to be refined.
 In particular, setting sensitivity to 1 if data rate is higher than
 1000000B/s means that there is no sensitivity difference between
 connections running at rates higher than 8 Mbps (1MBps). We have
-a couple such test in our test suite with total capacity higher than
+a couple of such tests in our test suite with total capacity higher than
 20Mbps, and for those tests the dependency on initial conditions remain.
 We will revisit the definition of the curve, probably to have the sensitivity
 follow the logarithm of data rate.

@@ -939,8 +939,9 @@ void c4_notify(
                 /* Do not worry about loss of packets sent before entering recovery */
                 break;
             }
-            if (picoquic_cc_hystart_loss_test(&c4_state->rtt_filter, notification, ack_state->lost_packet_number,
-                c4_loss_threshold(c4_state))) {
+            c4_update_loss_rate(c4_state, ack_state->lost_packet_number);
+
+            if (c4_state->smoothed_drop_rate > c4_loss_threshold(c4_state)) {
                 if (c4_state->alg_state == c4_initial) {
                     c4_initial_handle_loss(path_x, c4_state, notification, current_time);
                 }

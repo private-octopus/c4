@@ -147,6 +147,9 @@ typedef struct st_c4_state_t {
     uint64_t recent_delay_excess;
     int nb_rtt_update_since_discovery;
 
+    uint64_t last_lost_packet_number; /* Used for computation of loss rate. Init to 0 */
+    double smoothed_drop_rate; /* Average packet loss rate */
+
     unsigned int last_freeze_was_not_delay : 1;
     unsigned int rtt_min_is_trusted : 1;
     unsigned int congestion_notified : 1;
@@ -157,8 +160,6 @@ typedef struct st_c4_state_t {
     unsigned int use_seed_cwin : 1;
     unsigned int do_cascade : 1;
     unsigned int do_slow_push : 1;
-
-
 
     picoquic_min_max_rtt_t rtt_filter;
     /* Handling of options. */
@@ -210,6 +211,26 @@ static uint64_t c4_compute_corrected_delivered_bytes(c4_state_t* c4_state, uint6
     }
 
     return nb_bytes_delivered;
+}
+
+/* Compute the loss rate */
+void c4_update_loss_rate(c4_state_t * c4_state, uint64_t lost_packet_number)
+{
+    uint64_t next_number = c4_state->last_lost_packet_number;
+
+    if (lost_packet_number > next_number) {
+        if (next_number + PICOQUIC_SMOOTHED_LOSS_SCOPE < lost_packet_number) {
+            next_number = lost_packet_number - PICOQUIC_SMOOTHED_LOSS_SCOPE;
+        }
+
+        while (next_number < lost_packet_number) {
+            c4_state->smoothed_drop_rate *= (1.0 - PICOQUIC_SMOOTHED_LOSS_FACTOR);
+            next_number++;
+        }
+
+        c4_state->smoothed_drop_rate += (1.0 - c4_state->smoothed_drop_rate) * PICOQUIC_SMOOTHED_LOSS_FACTOR;
+        c4_state->last_lost_packet_number = lost_packet_number;
+    }
 }
 
 /*

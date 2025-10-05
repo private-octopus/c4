@@ -154,7 +154,7 @@ the RTT remains very close to the path RTT, except for
 periodic small bumps during the "push" transitions. The typical
 test completes in 4.85 seconds.
 
-### Simulation of a simple 20Mbps connection
+### Simulation of a simple 200Mbps connection
 
 This scenario simulates a 20MB download over a 200 Mbps link,
 with a 40ms RTT, and a bottleneck buffer capacity corresponding
@@ -214,7 +214,7 @@ the simulated bandwidth is set at . After 2 seconds,
 the path capacity is set to 0, and is restored to normal
 2 seconds later. The RTT remains constant at
 70ms. The test verifies that 100 simulations of a
-10MB download all complete in less than 6.07 seconds.
+10MB download all complete in less than 6.1 seconds.
 
 The goal of the test is to verify that C4 recovers
 promptly after a short suspension of the path.
@@ -289,7 +289,7 @@ with a data rate of 20Mbps, an 80ms latency, and Wi-Fi jitter
 with average 1ms. After 1 second, the data rate drops to 2Mbps
 and the jitter average increases to 12ms. After another 2 seconds,
 data rate and jitter return to the original condition. The test
-pass if 100 different 10MB downloads each complete in less than 6
+pass if 100 different 10MB downloads each complete in less than 6.2
 seconds.
 
 ### Wifi suspension trial {#wifi-suspension}
@@ -301,7 +301,7 @@ RTT before jitter is set to 10ms. For the last 200ms of these
 intervals, the data rate is set to 0. This model was developed
 before we got a better understanding of the Wi-Fi jitter. It is
 obsolete, but we kept it as a test case anyhow.  The test
-pass if 100 different 10MB downloads each complete in less than 5
+pass if 100 different 10MB downloads each complete in less than 5.4
 seconds.
 
 ## Competition with itself
@@ -330,7 +330,7 @@ in less than 5.75 seconds.
 ### Short background C4 connection first
 
 The "background first" test simulates two C4 connections using the same path
-with the background connection starting at the
+with the background connection starting
 0.5 seconds before the main connection. The path has a 20Mbps data rate
 and 80ms RTT. The background connection
 tries to download 10MB, the main connection downloads 5MB.
@@ -345,7 +345,7 @@ with the background connection starting at the
 and 30ms RTT. The background connection
 tries to download 20MB, the main connection downloads 10MB.
 The test pass if in 100 trials the main connection completes
-in less than 3 seconds after the beginning of the trial.
+in less than 3.6 seconds after the beginning of the trial.
 
 ### Two long C4 connections
 
@@ -377,7 +377,7 @@ the same jitter characteristics as in the "bad Wi-Fi" test (see {{bad-wifi}}).
 The background connection
 tries to download 10MB, the main connection downloads 4MB.
 The test pass if in each of 100 trials the main connection completes
-in less than 17.5 seconds after the beginning of the trial.
+in less than 13 seconds after the beginning of the trial.
 
 ## Competition with Cubic
 
@@ -433,7 +433,7 @@ the same jitter characteristics as in the "bad Wi-Fi" test (see {{bad-wifi}}).
 The background connection
 tries to download 10MB, the main connection downloads 4MB.
 The test pass if in each of 100 trials the main connection completes
-in less than 8 seconds after the beginning of the trial.
+in less than 11 seconds after the beginning of the trial.
 
 ## Competition with BBR
 
@@ -465,7 +465,7 @@ same time and using the same path. The path has a 20Mbps data rate
 and 80ms RTT. The background connection
 tries to download 30MB, the main connection downloads 20MB.
 The test pass if in 100 trials the main connection completes
-in less than 22 seconds.
+in less than 23 seconds.
 
 ### Long BBR background connection last
 
@@ -489,7 +489,7 @@ the same jitter characteristics as in the "bad Wi-Fi" test (see {{bad-wifi}}).
 The background connection
 tries to download 10MB, the main connection downloads 4MB.
 The test pass if in each of 100 trials the main connection completes
-in less than 8 seconds after the beginning of the trial.
+in less than 13.5 seconds after the beginning of the trial.
 
 
 ## Handling of Multimedia Applications

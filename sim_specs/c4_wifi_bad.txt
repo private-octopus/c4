@@ -8,6 +8,6 @@ data_rate_in_gbps: 0.01
 latency: 1000
 jitter: 7000
 wifi_jitter: 1
-queue_delay_max: 80000
+queue_delay_max: 250000
 icid: badfc400
 qlog_dir: cclog

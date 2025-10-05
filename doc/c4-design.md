@@ -545,7 +545,7 @@ min RTT than older flows. This problem does not exist with
 max RTT, because all competing flows see the same max RTT
 value. The slowdown mechanism is thus not necessary.
 
-Removing the need for a slwdown mechanism allows for a
+Removing the need for a slowdown mechanism allows for a
 simpler protocol, better suited to real time communications.
 
 # React quickly to changing network conditions {#congestion}

@@ -225,10 +225,102 @@ events will be remembered for a several of the
 cruising-pushing-recovery cycles, which is enough time for the
 next jitter event to happen, at least on Wi-Fi networks.
 
-
-
 # States and Transition
 
+The state machine for C4 has the following states:
+
+* "startup": the initial state, during which the CWND is
+  set to twice the "nominal_CWND". The connection
+  exits startup if the "nominal_cwnd" does not
+  increase for 3 consecutive round trips. When the
+  connection exits startup, it enters "recovery".
+* "recovery": the connection enters that state after
+  "startup", "pushing", or a congestion detection in
+  a "cruising" state. It remains in that state for
+  at least one roundtrip, until the first packet sent
+  in "discovery" is acknowledged. Once that happens,
+  the connection goes back
+  to "startup" if the last 3 pushing attemps have resulted
+  in increases of "nominal CWND", or enters "cruising"
+  otherwise.
+* "cruising": the connection is sending using the
+  "nominal_rate" and "nominal_cwnd" value. If congestion is detected,
+  the connection exits cruising and enters
+  "recovery" after lowering the value of
+  "nominal_cwnd". If after a roundtrip the application
+  sent fewer than 1/2 of "nominal_cwnd", and if the
+  last "slowdown" occured more than 4 seconds ago,
+  the connection moves to the "checking" state.
+  Otherwise, the connection will
+  remain in "cruising" state until a sufficient
+  number of bytes have been acknowledged, and
+  the connection is not "app limited". At that
+  point, it enters "pushing".
+* "pushing": the connection is using a rate and CWND 25%
+  larger than "nominal_rate" and "nominal_CWND".
+  It remains in that state
+  for one round trip, i.e., until the first packet
+  send while "pushing" is acknowledged. At that point,
+  it enters the "recovery" state. 
+* "slowdown": the connection is using rate and CWND set to
+  1/2 of the nominal values. After one round trip, it exits "slowdown"
+  and enters "checking".
+* "checking": after a forced or natural slowdown,
+  the connection enters the checking state. It is
+  sending using rate and CWND set to the nominal values.
+  The connection remains in
+  checking state for one round trip. After that round trip,
+  it goes back to "cruising" if the lowest RTT measured
+  during the round trip or the previous checking state is lower
+  than or equal to the
+  current min RTT. If not, if the lowest RTT measured during
+  two consecutive slowdown periods is higher than the min RTT,
+  it resets the min RTT to the last measurement and reenters
+  "startup".
+
+These transitions are summarized in the following state
+diagram.
+
+~~~
+                    Start
+                      |
+                      v
+                      +<-----------------------+-------------------+
+                      |                        |                   ^
+                      v                        |                   |
+                 +----------+                  |                   |
+                 | Startup  |                  |                   |
+                 +----|-----+                  |                   |
+                      |                        |                   |
+                      v                        |                   |
+                 +---------------+             |                   |
+  +--+---------->|   Recovery    |             |                   |
+  ^  ^           +----|---|---|--+             |                   |
+  |  |                |   |   | Rapid Increase |                   |
+  |  |                |   |   +--------------->+                   |
+  |  |                |   |                                        |
+  |  |                |   v   Forced Slowdown                      |
+  |  |                |   +------------------>+                    |
+  |  |                |                       |                    |
+  |  |                +<----------------------|------------------+ |
+  |  |                |                       |                  ^ |
+  |  |                v                       v                  | |
+  |  |           +----------+            +----------+            | |
+  |  |           | Cruising |            | Slowdown |            | |
+  |  |           +-|--|--|--+            +----|-----+            | |
+  |  | Congestion  |  |  |  Natural Slowdown  |                  | |
+  |  +-------------+  |  +------------------->+                  | |
+  |                   |                       |                  | |
+  |                   v                       v                  | |
+  |              +----------+            +-----------+           | |
+  |              | Pushing  |            | Checking  |           | |
+  |              +----|-----+            +---|---|---+           | |
+  |                   |                      |   | RTT Min lower | |
+  +<------------------+                      |   +-------------->+ |
+                                             |                     |
+                                             | RTT Min Higher      |
+                                             +-------------------->+
+~~~
 # Handling of congestion signals
 
 

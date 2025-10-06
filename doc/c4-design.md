@@ -189,13 +189,7 @@ That was adequate when these algorithms were designed, but it can be
 considered excessive in high speed low latency networks.
 For the initial C4 design, we set it to the lowest of 1/8th of the min RTT and 25ms.
 
-The min RTT itself is measured over time. We knew from deployment
-of Hystart that delay based algorithms are very sensitive to an
-underestimation of min RTT, which can be cause for example by delay jitter
-and ACK compression. Instead of simply retaining the minimum of
-all measurements, we applied filtering.
-
-After applying filtering, the detection of congestion by comparing
+The min RTT itself is measured over time. The detection of congestion by comparing
 delays to min RTT plus margin works well, except in two conditions:
 
 - if the C4 connection is competing with a another connection that
@@ -207,48 +201,6 @@ We also know that if several connection using delay-based algorithms
 compete, the competition is only fair if they all have the same
 estimate of the min RTT. We handle that by using a "periodic slow down"
 mechanism.
-
-## Filtering of Delay measurements
-
-When testing an implementation of Cubic in QUIC in 2019, we noticed
-that delay jitter was causing Hystart to exit early, resulting in
-poor performance for the affected connection (see {{Cubic-QUIC-Blog}}).
-There was a double effect:
-
-- Latency jitter sometimes resulted in measurements exceeding the
-  target delay, causing Hystart to exit,
-- Latency jitter also resulted sometimes in measurements lower
-  than the min RTT, causing the delay threshold to be set at
-  an excessively low value.
-
-We corrected the issue by implementing a low pass filter of the
-the delay measurements. The low pass filter retained the last N
-measurements. We modified delay tests as follow:
-
-- We only considered a measurement as exceeding the delay target
-  if all last N measurements exceeded that target,
-- We only updated the min RTT if the maximum of the last
-  N measurements exceeded the min RTT.
-
-There is of course a tension between the number of samples
-considered (the value N) and the responsiveness of delay-based
-congestion control. The delay-based congestion notification will
-only happen after N measurements. This depends on the frequency
-of acknowledgements, which itself depends on configuration
-parameters of the QUIC implementation. This frequency is itself
-compromise: too frequent ACKs cause too many interruptions
-and slow down the transmission, but spacing ACKs too much
-means that detection of packet losses will be delayed.
-QUIC ACK Frequency draft {{I-D.ietf-quic-ack-frequency}} allows
-sender to specify a maximum delay and a maximum number of packets
-between ACKs, and we can expect different implementations
-to use different parameters.
-
-In our early implementation, we set N=7, because we
-assume that we will get at least 8 ACKs per RTT most of the
-time. We might want to reduce that number when the congestion
-window is small, for example smaller than 16 packets, but
-we have not tested that yet.
 
 ## Managing Competition with Loss Based Algorithms {#vegas-struggle}
 
@@ -512,7 +464,7 @@ This algorithm only measures increases in the rate. The rate will
 be reduced if congestion signals are received, as explained
 in {{congestion}}.
 
-## Competition with other algorithms
+# Competition with other algorithms
 
 We saw in {{vegas-struggle}} that delay based algorithms required
 a special "escape mode" when facing competition from algorithms
@@ -635,7 +587,7 @@ If there was no extra
 capacity available, C4 does not increase the nominal CWND and
 the connection continues with the previous value.
 
-## Driving for fairness {#fairness}
+# Driving for fairness {#fairness}
 
 Many protocols enforce fairness by tuning their behavior so
 that large flows become less aggressive than smaller ones, either
@@ -723,16 +675,28 @@ packet loss a function of the data rate of the flow.
 In our second design, we attempted to fix the unfairness and
 shutdowns effect by introducing a sensitivity curve,
 computing a "sensitivity" as a function of the flow data
-rate. Our first implementation is really just a place holder:
+rate. Our first implementation is simple:
 
 * set sensitivity to 0 if data rate is lower than 50000B/s
-* set sensitivity to 1 if data rate is higher than 1000000B/s
-* linear interpolation between 50000 and 1000000B/s.
+* linear interpolation between 0 and 0.92 for values
+  between 50,000 and 1,000,000B/s.
+* linear interpolation between 0.92 and 1 for values
+  between 1,000,000 and 10,000,000B/s.
+* set sensitivity to 1 if data rate is higher than
+  10,000,000B/s
 
 The sensitivity index is then used to set the value of delay and
-loss thresholds.
+loss thresholds. For the delay threshold, the rule is:
 
 ~~~
+    delay_fraction = 1/16 + (1 - sensitivity)*3/16
+    delay_threshold = min(25ms, delay_fraction*nominal_max_rtt)
+~~~
+
+For the loss threshold, the rule is:
+
+~~~
+loss_threshold = 0.02 + 0.50 * (1-sensitivity);
 ~~~
 
 This very simple change allowed us to stabilize the results. In our
@@ -740,10 +704,7 @@ competition tests we see sharing of resource almost equitably between
 C4 connections, and reasonably between C4 and Cubic or C4 and BBR.
 We do not observe the shutdown effects that we saw before.
 
-There is no doubt that the current curve will have to be refined.
-In particular, setting sensitivity to 1 if data rate is higher than
-1000000B/s means that there is no sensitivity difference between
-connections running at rates higher than 8 Mbps (1MBps). We have
+There is no doubt that the current curve will have to be refined. We have
 a couple of such tests in our test suite with total capacity higher than
 20Mbps, and for those tests the dependency on initial conditions remain.
 We will revisit the definition of the curve, probably to have the sensitivity

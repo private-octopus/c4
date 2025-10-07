@@ -196,7 +196,7 @@ static uint64_t c4_sensitivity_1024(c4_state_t* c4_state)
         sensitivity = 0;
     }
     else if (c4_state->nominal_rate > 10000000) {
-        sensitivity = 0;
+        sensitivity = 1024;
     }
     else if (c4_state->nominal_rate < 1000000) {
         sensitivity = (c4_state->nominal_rate - 50000) * 963 / 950000;

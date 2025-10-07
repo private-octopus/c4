@@ -41,6 +41,7 @@ informative:
    I-D.ietf-ccwg-bbr:
    RFC6817:
    RFC6582:
+   RFC3649:
 
    TCP-Vegas:
     target: https://ieeexplore.ieee.org/document/464716
@@ -113,9 +114,13 @@ with good support for the "application limited" behavior
 frequently found when using variable rate encoding, and
 with fast reaction to congestion to avoid the "priority
 inversion" happening when congestion control overestimates
-the available capacity. The design emphasizes simplicity and
+the available capacity. It pays special attention to the
+high jitter conditions encountered in Wi-Fi networks.
+The design emphasizes simplicity and
 avoids making too many assumption about the "model" of
-the network.
+the network. The main control variables are the estimate
+of the data rate and of the maximum path delay in the
+absence of queues.
 
 --- middle
 
@@ -157,20 +162,6 @@ tracking the min RTT are discussed in {{react-to-delays}}.
 
 The nominal rate is the pacing rate corresponding to the most recent
 estimate of the bandwidth available to the connection.
-The nominal CWND is a congestion window that, if applied, would not cause
-the building of queues and network congestion.
-C4 discovers these value during
-the "initial" phase. C4 will spend most of its time following
-these parameters, i.e.,
-in "cruising" mode. It will use larger rate and CWND during
-"pushing" periods,
-to try discover whether the network capacity has increased.
-If it encounters
-congestion, C4 will reduce the nominal rate and nominal CWND
-and move to "recovery",
-before returning to cruising. The design of these mechanisms is
-discussed in {{congestion}}.
-
 The nominal max RTT is the best estimate of the maximum RTT
 that can occur on the network in the absence of queues. When we
 do not observe delay jitter, this coincides with the min RTT.
@@ -179,17 +170,15 @@ min RTT and the maximum jitter. C4 will compute a pacing
 rate as the nominal rate multiplied by a coefficient that
 depends on the state of the protocol, and set the CWND for
 the path to the product of that pacing rate by the max RTT.
+The design of these mechanisms is
+discussed in {{congestion}}.
 
 # Studying the reaction to delays {#react-to-delays}
 
-TODO: we don't actually do that. But it is important to discuss
-these techniques, and point out the issues. Discuss why
-tracking the min RTT is problematic. Rewite the section
-as a reasoning why this is an issue.
-
-If we want to drive for low delays, the obvious choice is to
-react to delay variations. Our first design was to use the reaction to
-delays found in congestion control algorithms like TCP Vegas or LEDBAT:
+The current design of C4 is the result of a series of experiments.
+Our initial design was to monitor delays and react to
+dellay increases in much the same way as
+congestion control algorithms like TCP Vegas or LEDBAT:
 
 - monitor the current RTT and the min RTT
 - if the current RTT sample exceed the min RTT by more than a preset
@@ -198,15 +187,9 @@ delays found in congestion control algorithms like TCP Vegas or LEDBAT:
 The "preset margin" is set by default to 10 ms in TCP Vegas and LEDBAT.
 That was adequate when these algorithms were designed, but it can be
 considered excessive in high speed low latency networks.
-For C4, we set it to the lowest of 1/8th of the min RTT and 25ms.
+For the initial C4 design, we set it to the lowest of 1/8th of the min RTT and 25ms.
 
-The min RTT itself is measured over time. We know from deployment
-of Hystart that delay based algorithms are very sensitive to an
-underestimation of min RTT, which can be cause for example by delay jitter
-and ACK compression. Instead of simply retaining the minimum of
-all measurements, we apply filtering.
-
-After applying filtering, the detection of congestion by comparing
+The min RTT itself is measured over time. The detection of congestion by comparing
 delays to min RTT plus margin works well, except in two conditions:
 
 - if the C4 connection is competing with a another connection that
@@ -219,49 +202,7 @@ compete, the competition is only fair if they all have the same
 estimate of the min RTT. We handle that by using a "periodic slow down"
 mechanism.
 
-## Filtering of Delay measurements
-
-When testing an implementation of Cubic in QUIC in 2019, we noticed
-that delay jitter was causing Hystart to exit early, resulting in
-poor performance for the affected connection (see {{Cubic-QUIC-Blog}}).
-There was a double effect:
-
-- Latency jitter sometimes resulted in measurements exceeding the
-  target delay, causing Hystart to exit,
-- Latency jitter also resulted sometimes in measurements lower
-  than the min RTT, causing the delay threshold to be set at
-  an excessively low value.
-
-We corrected the issue by implementing a low pass filter of the
-the delay measurements. The low pass filter retained the last N
-measurements. We modified delay tests as follow:
-
-- We only considered a measurement as exceeding the delay target
-  if all last N measurements exceeded that target,
-- We only updated the min RTT if the maximum of the last
-  N measurements exceeded the min RTT.
-
-There is of course a tension between the number of samples
-considered (the value N) and the responsiveness of delay-based
-congestion control. The delay-based congestion notification will
-only happen after N measurements. This depends on the frequency
-of acknowledgements, which itself depends on configuration
-parameters of the QUIC implementation. This frequency is itself
-compromise: too frequent ACKs cause too many interruptions
-and slow down the transmission, but spacing ACKs too much
-means that detection of packet losses will be delayed.
-QUIC ACK Frequency draft {{I-D.ietf-quic-ack-frequency}} allows
-sender to specify a maximum delay and a maximum number of packets
-between ACKs, and we can expect different implementations
-to use different parameters.
-
-In our early implementation, we set N=7, because we
-assume that we will get at least 8 ACKs per RTT most of the
-time. We might want to reduce that number when the congestion
-window is small, for example smaller than 16 packets, but
-we have not tested that yet.
-
-## Managing Competition with Loss Based Algorithms
+## Managing Competition with Loss Based Algorithms {#vegas-struggle}
 
 Competition between Cubic and a delay based algorithm leads to Cubic
 consuming all the bandwidth and the delay based connection starving.
@@ -269,14 +210,14 @@ This phenomenon force TCP Vegas to only be deployed in controlled
 environments, in which it does not have to compete with
 TCP Reno {{RFC6582}} or Cubic. 
 
-We handle this competition issue by using a simple detection algorithm.
-If C4 detect competition with a loss based algorithm, it switches
-to "pig war" mode and stops reacting to changes in delays -- it will
+We handled this competition issue by using a simple detection algorithm.
+If C4 detected competition with a loss based algorithm, it switched
+to a "pig war" mode and stopped reacting to changes in delays -- it would
 instead only react to packet losses and ECN signals. In that mode,
-we use another algorithm to detect when the competition has ceased,
+we used another algorithm to detect when the competition has ceased,
 and switch back to the delay responsive mode.
 
-In our initial deployments, we detect competition when delay based
+In our initial deployments, we detected competition when delay based
 congestion notifications leads to CWND and rate
 reduction for more than 3
 consecutive RTT. The assumption is that if the competition reacted to delays
@@ -284,10 +225,10 @@ variations, it would have reacted to the delay increases before
 3 RTT. However, that simple test caused many "false positive"
 detections.
 
-We have refined this test to start the pig war
-if we have observed 4 consecutive delay-based rate reductions
-and the nominal CWND is less than half the max nominal CWND
-observed since the last "initial" phase, or if we have observed
+We refined this test to start the pig war
+if we observed 4 consecutive delay-based rate reductions
+and the nominal CWND was less than half the max nominal CWND
+observed since the last "initial" phase, or if we observed
 at least 5 reductions and the nominal CWND is less than 4/5th of
 the max nominal CWND.
 
@@ -307,13 +248,15 @@ Bottom 25% | 20% | 52%
 Min | 12% | 25%
 <50% | 100% | 20%
 
-Our initial exit competition algorithm is simple. C4 will exit the
+Note that this validation was based on simulations, and that we cannot
+claim that our simulations perfectly reflect the real world. We will
+discuss in {{simplify}} how this imperfections lead us to use change
+our overall design.
+
+Our initial exit competition algorithm was simple. C4 will exit the
 "pig war" mode if the available bandwidth increases.
 
 ## Handling Chaotic Delays
-
-TODO: maybe start here. This is why we really want to have rate control,
-but if we have rate control we can use larger windows.
 
 Some Wi-Fi networks exhibit spikes in latency. These spikes are
 probably what caused the delay jitter discussed in
@@ -331,20 +274,20 @@ can cause large delays. The Wi-Fi layer 2 algorithm will also
 try to maintain delivery order, and subsequent packets will
 be queued behind the packet that caused the collisions.
 
-We detect the advent of such "chaotic delay jitter" by computing
-a running estimate of the max RTT. We measure the max RTT observed
-in each round trip, to obtain the "era max RTT". We then compute
+In our initial design, we detected the advent of such "chaotic delay jitter" by computing
+a running estimate of the max RTT. We measured the max RTT observed
+in each round trip, to obtain the "era max RTT". We then computed
 an exponentially averaged "nominal max RTT":
 
 ~~~
 nominal_max_rtt = (7 * nominal_max_rtt + era_max_rtt) / 8;
 ~~~
 
-If the nominal max RTT is more than twice the min RTT, we set the
-"chaotic jitter" condition. When that condition is set, we stop
+If the nominal max RTT was more than twice the min RTT, we set the
+"chaotic jitter" condition. When that condition was set, we stopped
 considering excess delay as an indication of congestion,
-and we change
-the way we compute the "current CWND" used for the controlled
+and we changed
+the way we computed the "current CWND" used for the controlled
 path. Instead of simply setting it to "nominal CWND", we set it
 to a larger value:
 
@@ -358,7 +301,7 @@ if "pushing" (see {{congestion}}), and `max_bytes_acked` is the largest
 amount of bytes in flight that was succesfully acknowledged since
 the last initial phase.
 
-The increased `target_cwnd` enables C4 to keep sending data through
+The increased `target_cwnd` enabled C4 to keep sending data through
 most jitter events. There is of course a risk that this increased
 value will cause congestion. We limit that risk by only using half
 the value of `max_bytes_ack`, and by the setting a
@@ -375,17 +318,15 @@ the nominal max RTT, and will reset the "chaotic jitter" condition
 if nominal max RTT decreases below a threshold of 1.5 times the
 min RTT.
 
-## Monitor min RTT
+## Monitor min RTT {#slowdown}
 
-TODO: we will not in fact track the min RTT.
-
-Delay based algorithm like CWND rely on a correct estimate of the
+Delay based algorithm rely on a correct estimate of the
 min RTT. They will naturally discover a reduction in the min
 RTT, but detecting an increase in the max RTT is difficult.
 There are known failure modes when multiple delay based
-algortihms compete, in particular the "late comer advantage".
+algorithms compete, in particular the "late comer advantage".
 
-The connections ensure that their min RTT is valid by
+In our initial design, the connections ensured that their min RTT is valid by
 occasionally entering a "slowdown" period, during which they set
 CWND to half the nominal value. This is similar to
 the "Probe RTT" mechanism implemented in BBR, or the
@@ -397,7 +338,7 @@ since the last time the min RTT was set.
 
 The measurement of min RTT in the period
 that follows the slowdown is considered a "clean"
-measurement. If two consecutive slowdown periods are
+measurement. If two consecutive slowdown periods were
 followed by clean measurements larger than the current
 min RTT, we detect an RTT change and reset the
 connection. If the measurement results in the same
@@ -407,11 +348,11 @@ operation.
 Some applications exhibit periods of natural slow down. This
 is the case for example of multimedia applications, when
 they only send differentially encoded frames. Natural
-slowdown is detected if an application sends less than
+slowdown was detected if an application sent less than
 half the nominal CWND during a period, and more than 4 seconds
-have elapsed since the previous slowdown or the previous
+had elapsed since the previous slowdown or the previous
 min RTT update. The measurement that follows a natural
-slowdown is also considered a clean measurement.
+slowdown was also considered a clean measurement.
 
 A slowdown period corresponds to a reduction in offered
 traffic. If multiple connections are competing for the same
@@ -419,15 +360,152 @@ bottleneck, each of these connections may experience cleaner
 RTT measurements, leading to equalization of the min RTT
 observed by these connections.
 
+# Simplifying the initial design {#simplify}
+
+After extensive testing of our initial design, we felt we had
+drifted away from our initial "simplicity" tenet. The algorithms
+used to detect "pig war" and "chaotic jitter" were difficult
+to tune, and despite our efforts they resulted in many
+false positive or false negative. The "slowdown" algorithm
+made C4 less friendly to "real time" applications that
+prefer using stable estimated rates. These algorithms
+interacted with each other in ways that were sometimes
+hard to predict.
+
+## Chaotic jitter and rate control
+
+As we observed the chaotic jitter behavior, we came to the
+conclusion that only controlling the CWND did not work well.
+we had a dilemma: either use a small CWND to guarantee that
+RTTs remain small, or use a large CWND so that transmission
+would not stall during peaks in jitter. But if we use a large
+CWND, we need some form of pacing to prevent senders from
+sending a large amount of packets too quickly. And then we
+realized that if we do have to set a pacing rate, we can simplify
+the algorithm.
+
+Suppose that we compute a pacing rate that matches the network
+capacity, just like BBR does. Then, in first approximation, the
+setting the CWND too high does not matter too much. 
+The number of bytes in flight will be limited by the product
+of the pacing rate by the actual RTT. We are thus free to
+set the CWND to a large value.
+
+## Monitoring the nominal max RTT
+
+The observation on chaotic jitter leads to the idea of monitoring
+the maximum RTT. There is some difficulty here, because the
+observed RTT has three components:
+
+* The minimum RTT in the absence of jitter
+* The jitter caused by access networks such as Wi-Fi
+* The delays caused by queues in the network
+
+We cannot merely use the maximum value of the observed RTT,
+because of the queing delay component. In pushing periods, we
+are going to use data rate slightly higher than the measured
+value. This will create a bit of queuing, pushing the queing
+delay component ever higher -- and eventually resulting in
+"buffer bloat".
+
+To avoid that, we can have periodic periods in which the
+endpoint sends data at deliberately slower than the
+rate estimate. This enables us to get a "clean" measurement
+of the Max RTT.
+
+If we are dealing with jitter, the clean Max RTT measurements
+will include whatever jitter was happening at the time of the
+measurement. It is not sufficient to measure the Max RTT once,
+we must keep the maximum value of a long enough series of measurement
+to capture the maximum jitter than the network can cause. But
+we are also aware that jitter conditions change over time, so
+we have to make sure that if the jitter diminished, the
+Max RTT also diminishes. 
+
+We solved that by measuring the Max RTT during the "recovery"
+periods that follow every "push". These periods occur about every 6 RTT,
+giving us reasonably frequent measurements. During these periods, we
+try to ensure clean measurements by
+setting the pacing rate a bit lower than the nominal rate -- 6.25%
+slower in our initial trials. We apply the following algorithm:
+
+* compute the `max_rtt_sample` as the maximum RTT observed for
+packets sent during the recovery period.
+* if `max_rtt_sample` is large than `nominal_max_rtt`, set
+`nominal_max_rtt` to that value.
+* else, set `nominal_max_rtt` to:
+~~~
+   nominal_max_rtt = gamma*max_rtt_sample + 
+                     (1-gamma)*nominal_max_rtt
+~~~
+The `gamma` coefficient is set to `1/8` in our initial trials.
+
+## Monitoring the nominal rate {#monitor-rate}
+
+The nominal rate is measured on each acknowledgement by dividing
+the number of bytes acknowledged since the packet was sent
+by the RTT measured with the acknowledgement of the packet. However,
+that measurement is noisy, because delay jitter can cause the
+underestimation of the RTT, resulting in over estimation of the
+rate. We protect from these underestimates by observing that
+delivery rates cannot be larger than the rate at which the
+packets were sent, thus keeping the lower of the estimated
+receive rate and the send rate. The algorithm is thus:
+
+~~~
+measured_rate = bytes_acknowledged / rtt_sample
+if measured_rate > send_rate:
+    measured_rate = send_rate
+if measured_rate > nominal_rate:
+    nominal_rate = measured_rate
+~~~
+
+This algorithm only measures increases in the rate. The rate will
+be reduced if congestion signals are received, as explained
+in {{congestion}}.
+
+# Competition with other algorithms
+
+We saw in {{vegas-struggle}} that delay based algorithms required
+a special "escape mode" when facing competition from algorithms
+like Cubic. Relying on pacing rate and max RTT instead of CWND
+and min RTT makes this problem much simpler. The measured max RTT
+will naturally increase as algorithms like Cubic cause buffer
+bloat and increased queues. Instead of being shut down,
+C4 will just keep increasing its max RTT and thus its running
+CWND, automatically matching the other algorithm's values.
+
+We verified that behavior in a number of simulations. We also
+verified that when the competition ceases, C4 will progressively
+drop its nominal max RTT, returning to situations with very low
+queuing delays.
+
+## No need for slowdowns
+
+The fairness of delay based algorithm depends on all competing
+flows having similar estimates of the min RTT. As discussed
+in {{slowdown}}, this ends up creating variants of the
+`latecomer advantage` issue, requiring a periodic slowdown
+mechanism to ensure that all competing flow have chance to
+update the RTT value. 
+
+This problem is caused by the default algorithm of setting
+min RTT to the minimum of all RTT sample values since the beginning 
+of the connection. Flows that started more recently compute
+that minimum over a longer period, and thus discover a larger
+min RTT than older flows. This problem does not exist with
+max RTT, because all competing flows see the same max RTT
+value. The slowdown mechanism is thus not necessary.
+
+Removing the need for a slowdown mechanism allows for a
+simpler protocol, better suited to real time communications.
 
 # React quickly to changing network conditions {#congestion}
 
-TODO: only use rate, not CWND.
-
 Our focus is on maintaining low delays, and thus reacting
-to delay increases as explained in {{react-to-delays}}.
-However, only relying on increased delays would be a mistake.
-Experience with the early version of BBR showed that
+quickly to changes in network conditions. We can detect some of these
+changes by monitoring the RTT and the data rate, but
+experience with the early version of BBR showed that
 completely ignoring packet losses can lead to very unfair
 competition with Cubic. The L4S effort is promoting the use
 of ECN feedback by network elements (see {{RFC9331}}),
@@ -436,17 +514,16 @@ more precisely than the monitoring of end-to-end delays.
 C4 will thus detect changing network conditions by monitoring
 3 congestion control signals:
 
-1. Excessive increase of measured RTT (except in pig war mode),
+1. Excessive increase of measured RTT (above the nominal Max RTT),
 2. Excessive rate of packet losses (but not mere Probe Time Out, see {{no-pto}}),
 3. Excessive rate of ECN/CE marks
 
 If any of these signals is detected, C4 enters a "recovery"
-state. On entering recovery, C4 reduces the `nominal_CWND`
-and `nominal_rate` by a factor "beta":
+state. On entering recovery, C4 reduces the `nominal_rate`
+by a factor "beta":
 
 ~~~
     // on congestion detected:
-    nominal_CWND = (1-beta)*nominal_CWND
     nominal_rate = (1-beta)*nominal_rate
 ~~~
 The cofficient `beta` differs depending on the nature of the congestion
@@ -459,7 +536,8 @@ use a proportional reduction coefficient in line with
 {{RFC9331}}, again capped to `1/4`.
 
 During the recovery period, target CWND and pacing rate are set
-to the new values of "nominal CWND" and "nominal rate".
+to a fraction of the "nominal rate" multiplied by the
+"nominal max RTT".
 The recovery period ends when the first packet
 sent after entering recovery is acknowledged. Congestion
 signals are processed when entering recovery; further signals
@@ -486,121 +564,151 @@ PTO timeouts. When testing in "high jitter" conditions, we realized that we shou
 not change the state of C4 for losses detected solely based on timer, and
 only react to those losses that are detected by gaps in acknowledgements.
 
-## Update the Nominal Rate and CWND after Pushing {#cwnd-update}
-
-TODO: only the nominal rate.
+## Update the Nominal Rate after Pushing {#rate-update}
 
 C4 configures the transport with a larger rate and CWND
 than the nominal CWND during "pushing" periods.
 The peer will acknowledge the data sent during these periods in
 the round trip that followed.
 
-When we receive an ACK for a newly acknowledged packet number N,
-we compute the number of bytes acknowledged
-between the acknowledgement received before N was sent and
-the acknowledgement of the last packet of this period. 
-We use that number to compute the observed data rate as:
+When we receive an ACK for a newly acknowledged packet,
+we update the nominal rate as explained in {{monitor-rate}}.
 
-~~~
-observed_rate = bytes_acked / max(observed_rtt, min_rtt)
-~~~
-The observed RTT is computed as the delay between the time
-the acknowledged packet was sent and the time at which it was received.
-Using `max(rtt_sample, min_rtt)` in this formula is a precaution against
-under-estimation of this delay due to for example to delay
-jitter or ack compression.
-
-We use the observed rate to compute a "corrected" value of the
-bytes acked;
-
-~~~
-corrected_bytes_acked = observed_rate*min_rtt
-~~~
-We then use these values to update the nominal rate,
-nominal CWND, max CWND and max bytes acked state variables:
-
-~~~
-nominal_rate = max(observed_rate, nominal_rate)
-nominal_CWND = max(corrected_bytes_acked, nominal_CWND)
-max_CWND = max(nominal_CWND, max_CWND)
-max_bytes_acked = max(bytes_acked,max_bytes_acked)
-~~~
 This strategy is effectively a form of "make before break".
 The pushing
-only increase the rate and CWND by a fraction of the nominal values,
+only increase the rate by a fraction of the nominal values,
 and only lasts for one round trip. That limited increase is not
 expected to increase the size of queues by more than a small
 fraction of the bandwidth\*delay product. It might cause a
 slight increase of the measured RTT for a short period, or
 perhaps cause some ECN signalling, but it should not cause packet
-losses -- unless C4 is in "pig war" mode. If there was no extra
+losses -- unless competing connections have caused large queues.
+If there was no extra
 capacity available, C4 does not increase the nominal CWND and
 the connection continues with the previous value.
 
-## Driving for fairness {#fairness}
+# Driving for fairness {#fairness}
 
-TODO: move to appendix, unproven. Consider that Max RTT is in fact
-a shared variable, implicitly tracked by Cubic.
+Many protocols enforce fairness by tuning their behavior so
+that large flows become less aggressive than smaller ones, either
+by trying less hard to increase their bandwidth or by reacting
+more to congestion events. We considered adopting a similar
+strategy for C4.
 
-The duration of `cruising` is expressed as a number of bytes.
-This number of bytes is computed with two goals:
+The aggressiveness of C4 is driven by several considerations:
 
-* The potential increase of 25% divided by the total
-  number of bytes sent during recovery, cruising and
-  pushing should match the aggressiveness of RENO when
-  operating at low bandiwdth (lower than 34 Mbps).
-* Connection using large values of CWND should be less
-  aggressive than those with smaller value, so that
-  all connections sharing the same bottleneck should
-  eventually converge to similar CWND values.
+* the frequency of the "pushing" periods,
+* the coefficient `alpha` used during pushing,
+* the coefficient `beta` used during response to congestion events,
+* the delay threshold above a nominal value to detect congestion,
+* the ratio of packet losses considered excessive,
+* the ratio of ECN marks considered excessive.
 
-We achieve those two goals using the following formula:
+We clearly want to have some or all of these parameters depend
+on how much resource the flow is using.
+There are know limits to these strategies. For example,
+consider TCP Reno, in which the growth rate of CWND during the
+"congestion avoidance" phase" is inversely proportional to its size.
+This drives very good long term fairness, but in practice
+it prevents TCP Reno from operating well on high speed or
+high delay connections, as discussed in the "problem description"
+section of {{RFC3649}}. In that RFC, Sally Floyd was proposing
+using a growth rate inversely proportional to the
+logarithm of the CWND, which would not be so drastic.
+
+In the initial design, we proposed making the frequency of the
+pushing periods inversely proportional to the logarithm of the
+CWND, but that gets in tension with our estimation of
+the max RTT, which requires frequent "recovery" periods.
+We would not want the Max RTT estimate to work less well for
+high speed connections! We solved the tension in favor of
+reliable max RTT estimates, and fixed to 4 the number
+of Cruising periods between Recovery and Pushing. The whole
+cycle takes about 6 RTT.
+
+We also reduced the default rate increase during Pushing to
+6.25%, which means that the default cycle is more on less on
+par with the aggressiveness of RENO when
+operating at low bandwidth (lower than 34 Mbps).
+
+## Absence of constraints is unfair
+
+Once we fixed the push frequency and the default increase rate, we were
+left with responses that were mostly proportional to the amount
+of resource used by a connection. Such design makes the resource sharing
+very dependent on initial conditions. We saw simulations where
+after some initial period, one of two competing connections on
+a 20 Mbps path might settle at a 15 Mbps rate and the other at 5 Mbps.
+Both connections would react to a congestion event by dropping
+their bandwidth by 25%, to 15 or 3.75 Mbps. And then once the condition
+eased, both would increase their data rate by the same amount. If
+everything went well the two connection will share the bandwidth
+without exceeding it, and the situation would be very stable --
+but also very much unfair.
+
+We also had some simulations in which a first connection will
+grab all the available bandwidth, and a late comer connection
+would struggle to get any bandwidth at all. The analysis 
+showed that the second connection was
+exiting the initial phase early, after encountering either
+excess delay or excess packet loss. The first
+connection was saturating the path, any additional traffic
+did cause queuing or losses, and the second connection had
+no chance to grow.
+
+This "second comer shut down" effect happend particularly often
+on high jitter links. The established connections had tuned their
+timers or congestion window to account for the high jitter. The
+second connection was basing their timers on their first
+measurements, before any of the big jitter events had occured.
+This caused an imbalance between the first connection, which
+expected large RTT variations, and the second, which did not
+expect them yet.
+
+These shutdown effects happened in simulations with the first
+connection using either Cubic, BBR or C4. We had to design a response,
+and we first turned to making the response to excess delay or
+packet loss a function of the data rate of the flow.
+
+## Introducing a sensitivity curve
+
+In our second design, we attempted to fix the unfairness and
+shutdowns effect by introducing a sensitivity curve,
+computing a "sensitivity" as a function of the flow data
+rate. Our first implementation is simple:
+
+* set sensitivity to 0 if data rate is lower than 50000B/s
+* linear interpolation between 0 and 0.92 for values
+  between 50,000 and 1,000,000B/s.
+* linear interpolation between 0.92 and 1 for values
+  between 1,000,000 and 10,000,000B/s.
+* set sensitivity to 1 if data rate is higher than
+  10,000,000B/s
+
+The sensitivity index is then used to set the value of delay and
+loss thresholds. For the delay threshold, the rule is:
 
 ~~~
-    target = nominal_CWND*7* (1 + 
-             (max(11, min(28, log2(nominal_CWND))) - 11)/(28 - 11))
+    delay_fraction = 1/16 + (1 - sensitivity)*3/16
+    delay_threshold = min(25ms, delay_fraction*nominal_max_rtt)
 ~~~
-The constants `7`, `11` and `28` in the formula are explained as
-follow:
 
-- The number 7 corresponds to 7 RTT. Depending of bandwidth, the
-  connection will remain between 7 and 14 RTT in cruise state.
-- The value 11 corresponds to 2048 bytes. We use that as a minimum.
-- The value 28 corresponds to 268,435,456 bytes, e.g., a connection
-  at 10 Gbps operating with an RTT a little above 200ms.
+For the loss threshold, the rule is:
 
-For example, assuming an RTT of 50 ms, we will see cruising
-duration in RTT varying with the bandwidth in bps as:
+~~~
+loss_threshold = 0.02 + 0.50 * (1-sensitivity);
+~~~
 
-BW(bps) | BDP(bytes) | Nb RTT
----------|----------|----
-1.00E+05 | 6.25E+02 | 7.0
-2.00E+05 | 1.25E+03 | 7.0
-5.00E+05 | 3.13E+03 | 7.3
-1.00E+06 | 6.25E+03 | 7.7
-2.00E+06 | 1.25E+04 | 8.1
-5.00E+06 | 3.13E+04 | 8.6
-1.00E+07 | 6.25E+04 | 9.0
-2.00E+07 | 1.25E+05 | 9.4
-5.00E+07 | 3.13E+05 | 10.0
-1.00E+08 | 6.25E+05 | 10.4
-2.00E+08 | 1.25E+06 | 10.8
-5.00E+08 | 3.13E+06 | 11.4
-1.00E+09 | 6.25E+06 | 11.8
-2.00E+09 | 1.25E+07 | 12.2
-5.00E+09 | 3.13E+07 | 12.7
-1.00E+10 | 6.25E+07 | 13.1
-2.00E+10 | 1.25E+08 | 13.5
-5.00E+10 | 3.13E+08 | 14.0
-1.00E+11 | 6.25E+08 | 14.0
+This very simple change allowed us to stabilize the results. In our
+competition tests we see sharing of resource almost equitably between
+C4 connections, and reasonably between C4 and Cubic or C4 and BBR.
+We do not observe the shutdown effects that we saw before.
 
-We could have expressed this in fractions of RTT instead of number of bytes,
-which might be more fair for application limited connection.
-
-We could also compute these fractions based on the measured bandwidth, "nominal CWND"
-divided by "target RTT", which would make fairness less dependent on path RTT. we did
-not, because TCP RENO's mechanism are strictly based on CWND size, and thus fairness
-requires using the same criteria.
+There is no doubt that the current curve will have to be refined. We have
+a couple of such tests in our test suite with total capacity higher than
+20Mbps, and for those tests the dependency on initial conditions remain.
+We will revisit the definition of the curve, probably to have the sensitivity
+follow the logarithm of data rate.
 
 ## Cascade of Increases {#cascade}
 
@@ -613,11 +721,13 @@ constellation (see {{ICCRG-LEO}}), with the bandwidth jumping from 10Mbps to
 65Mbps.
 
 Because we aim for fairness with RENO or Cubic, the cycle of recovery, cruising
-and pushing will only result in slow increases increases, maybe 25% after 10 RTT.
-This means we would only double the bandwidth after about 40 RTT, or increase
-from 10 to 65 Mbps after almost 200 RTT -- by which time the LEO station might
+and pushing will only result in slow increases increases, maybe 6.25% after 6 RTT.
+This means we would only double the bandwidth after about 68 RTT, or increase
+from 10 to 65 Mbps after 185 RTT -- by which time the LEO station might
 have connected to a different orbiting satellite. To go faster, we implement
-a "cascade": if three successive pushings all result in increases of the
+a "cascade": if the previous pushing at 6.25% was successful, the next
+pushing will use 25% (see {{variable-pushing}}). If three successive pushings
+all result in increases of the
 nominal rate, C4 will reenter the "startup" mode, during which each RTT
 can result in a 100% increase of rate and CWND.
 
@@ -629,8 +739,7 @@ After testing and simulations of application limited applications,
 we incorporated a number of features.
 
 The first feature is the design decision to only lower the nominal
-rate and CWND
-if congestion is detected. This is in contrast with the BBR design,
+rate if congestion is detected. This is in contrast with the BBR design,
 in which the estimate of bottleneck bandwidth is also lowered
 if the bandwidth measured after a "probe bandwidth" attempt is
 lower than the current estimate while the connection was not
@@ -642,10 +751,10 @@ estimate to "drift down", and the multimedia experience to suffer.
 Our strategy of only reducing the nominal values in
 reaction to congestion notifications much reduces that risk.
 
-The second feature is the "make before break" nature of the rate and CWND
-updates discussed in {{cwnd-update}}. This reduces the risk
-of using rate and CWND that are too large and would cause queues or losses,
-and thus make C4 a good choice for multimedia applications.
+The second feature is the "make before break" nature of the rate
+updates discussed in {{rate-update}}. This reduces the risk
+of using rates that are too large and would cause queues or losses,
+and thus makes C4 a good choice for multimedia applications.
 
 C4 adds two more features to handle multimedia
 applications well: coordinated pushing (see {{coordinated-pushing}}),
@@ -749,8 +858,6 @@ implemented yet.
 
 # State Machine
 
-TODO: we do not need the slowdown and checking states.
-
 The state machine for C4 has the following states:
 
 * "startup": the initial state, during which the CWND is
@@ -762,23 +869,18 @@ The state machine for C4 has the following states:
   "startup", "pushing", or a congestion detection in
   a "cruising" state. It remains in that state for
   at least one roundtrip, until the first packet sent
-  in "discovery" is acknowledged. Once that happens,
-  the connection enters "slowdown" if no "slowdown"
-  has been experienced for 5 seconds, or goes back
+  in "recovery" is acknowledged. Once that happens,
+  the connection goes back
   to "startup" if the last 3 pushing attemps have resulted
-  in increases of "nominal CWND", or enters "cruising"
+  in increases of "nominal rate", or enters "cruising"
   otherwise.
 * "cruising": the connection is sending using the
-  "nominal_rate" and "nominal_cwnd" value. If congestion is detected,
+  "nominal_rate" and "nominal_max_rtt" value. If congestion is detected,
   the connection exits cruising and enters
   "recovery" after lowering the value of
-  "nominal_cwnd". If after a roundtrip the application
-  sent fewer than 1/2 of "nominal_cwnd", and if the
-  last "slowdown" occured more than 4 seconds ago,
-  the connection moves to the "checking" state.
+  "nominal_cwnd".
   Otherwise, the connection will
-  remain in "cruising" state until a sufficient
-  number of bytes have been acknowledged, and
+  remain in "cruising" state until at least 4 RTT and
   the connection is not "app limited". At that
   point, it enters "pushing".
 * "pushing": the connection is using a rate and CWND 25%
@@ -786,22 +888,7 @@ The state machine for C4 has the following states:
   It remains in that state
   for one round trip, i.e., until the first packet
   send while "pushing" is acknowledged. At that point,
-  it enters the "recovery" state. 
-* "slowdown": the connection is using rate and CWND set to
-  1/2 of the nominal values. After one round trip, it exits "slowdown"
-  and enters "checking".
-* "checking": after a forced or natural slowdown,
-  the connection enters the checking state. It is
-  sending using rate and CWND set to the nominal values.
-  The connection remains in
-  checking state for one round trip. After that round trip,
-  it goes back to "cruising" if the lowest RTT measured
-  during the round trip or the previous checking state is lower
-  than or equal to the
-  current min RTT. If not, if the lowest RTT measured during
-  two consecutive slowdown periods is higher than the min RTT,
-  it resets the min RTT to the last measurement and reenters
-  "startup".
+  it enters the "recovery" state.
 
 These transitions are summarized in the following state
 diagram.
@@ -810,41 +897,34 @@ diagram.
                     Start
                       |
                       v
-                      +<-----------------------+-------------------+
-                      |                        |                   ^
-                      v                        |                   |
-                 +----------+                  |                   |
-                 | Startup  |                  |                   |
-                 +----|-----+                  |                   |
-                      |                        |                   |
-                      v                        |                   |
-                 +---------------+             |                   |
-  +--+---------->|   Recovery    |             |                   |
-  ^  ^           +----|---|---|--+             |                   |
-  |  |                |   |   | Rapid Increase |                   |
-  |  |                |   |   +--------------->+                   |
-  |  |                |   |                                        |
-  |  |                |   v   Forced Slowdown                      |
-  |  |                |   +------------------>+                    |
-  |  |                |                       |                    |
-  |  |                +<----------------------|------------------+ |
-  |  |                |                       |                  ^ |
-  |  |                v                       v                  | |
-  |  |           +----------+            +----------+            | |
-  |  |           | Cruising |            | Slowdown |            | |
-  |  |           +-|--|--|--+            +----|-----+            | |
-  |  | Congestion  |  |  |  Natural Slowdown  |                  | |
-  |  +-------------+  |  +------------------->+                  | |
-  |                   |                       |                  | |
-  |                   v                       v                  | |
-  |              +----------+            +-----------+           | |
-  |              | Pushing  |            | Checking  |           | |
-  |              +----|-----+            +---|---|---+           | |
-  |                   |                      |   | RTT Min lower | |
-  +<------------------+                      |   +-------------->+ |
-                                             |                     |
-                                             | RTT Min Higher      |
-                                             +-------------------->+
+                      +<-----------------------+
+                      |                        |
+                      v                        |
+                 +----------+                  |
+                 | Startup  |                  |
+                 +----|-----+                  |
+                      |                        |
+                      v                        |
+                 +------------+                |
+  +--+---------->|  Recovery  |                |
+  ^  ^           +----|---|---+                |
+  |  |                |   |     Rapid Increase |
+  |  |                |   +------------------->+
+  |  |                |
+  |  |                v
+  |  |           +----------+
+  |  |           | Cruising |
+  |  |           +-|--|-----+
+  |  | Congestion  |  |
+  |  +-------------+  |
+  |                   |
+  |                   v
+  |              +----------+
+  |              | Pushing  |
+  |              +----|-----+
+  |                   |
+  +<------------------+
+
 ~~~
   
 

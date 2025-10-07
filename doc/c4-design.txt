@@ -5,9 +5,9 @@
 Network Working Group                                         C. Huitema
 Internet-Draft                                      Private Octopus Inc.
 Intended status: Informational                             S. Nandakumar
-Expires: 29 March 2026                                       C. Jennings
+Expires: 2 April 2026                                        C. Jennings
                                                                    Cisco
-                                                       25 September 2025
+                                                       29 September 2025
 
 
            Design of Christian's Congestion Control Code (C4)
@@ -21,9 +21,12 @@ Abstract
    support for the "application limited" behavior frequently found when
    using variable rate encoding, and with fast reaction to congestion to
    avoid the "priority inversion" happening when congestion control
-   overestimates the available capacity.  The design emphasizes
-   simplicity and avoids making too many assumption about the "model" of
-   the network.
+   overestimates the available capacity.  It pays special attention to
+   the high jitter conditions encountered in Wi-Fi networks.  The design
+   emphasizes simplicity and avoids making too many assumption about the
+   "model" of the network.  The main control variables are the estimate
+   of the data rate and of the maximum path delay in the absence of
+   queues.
 
 Status of This Memo
 
@@ -40,24 +43,24 @@ Status of This Memo
    time.  It is inappropriate to use Internet-Drafts as reference
    material or to cite them other than as "work in progress."
 
-   This Internet-Draft will expire on 29 March 2026.
+   This Internet-Draft will expire on 2 April 2026.
 
 Copyright Notice
 
    Copyright (c) 2025 IETF Trust and the persons identified as the
    document authors.  All rights reserved.
 
-   This document is subject to BCP 78 and the IETF Trust's Legal
-   Provisions Relating to IETF Documents (https://trustee.ietf.org/
-   license-info) in effect on the date of publication of this document.
 
 
 
-Huitema, et al.           Expires 29 March 2026                 [Page 1]
+Huitema, et al.           Expires 2 April 2026                  [Page 1]
 
 Internet-Draft                  C4 Design                 September 2025
 
 
+   This document is subject to BCP 78 and the IETF Trust's Legal
+   Provisions Relating to IETF Documents (https://trustee.ietf.org/
+   license-info) in effect on the date of publication of this document.
    Please review these documents carefully, as they describe your rights
    and restrictions with respect to this document.  Code Components
    extracted from this document must include Revised BSD License text as
@@ -71,20 +74,26 @@ Table of Contents
      2.1.  Filtering of Delay measurements . . . . . . . . . . . . .   4
      2.2.  Managing Competition with Loss Based Algorithms . . . . .   5
      2.3.  Handling Chaotic Delays . . . . . . . . . . . . . . . . .   6
-     2.4.  Monitor min RTT . . . . . . . . . . . . . . . . . . . . .   8
-   3.  React quickly to changing network conditions  . . . . . . . .   8
-     3.1.  Do not react to Probe Time Out  . . . . . . . . . . . . .  10
-     3.2.  Update the Nominal Rate and CWND after Pushing  . . . . .  10
-     3.3.  Driving for fairness  . . . . . . . . . . . . . . . . . .  11
-     3.4.  Cascade of Increases  . . . . . . . . . . . . . . . . . .  14
-   4.  Supporting Application Limited Connections  . . . . . . . . .  14
-     4.1.  Coordinated Pushing . . . . . . . . . . . . . . . . . . .  15
-     4.2.  Variable Pushing Rate . . . . . . . . . . . . . . . . . .  16
-     4.3.  Pushing rate and Cascades . . . . . . . . . . . . . . . .  16
-   5.  State Machine . . . . . . . . . . . . . . . . . . . . . . . .  17
-   6.  Security Considerations . . . . . . . . . . . . . . . . . . .  19
-   7.  IANA Considerations . . . . . . . . . . . . . . . . . . . . .  20
-   8.  Informative References  . . . . . . . . . . . . . . . . . . .  20
+     2.4.  Monitor min RTT . . . . . . . . . . . . . . . . . . . . .   7
+   3.  Simplifying the initial design  . . . . . . . . . . . . . . .   8
+     3.1.  Chaotic jitter and rate control . . . . . . . . . . . . .   8
+     3.2.  Monitoring the nominal max RTT  . . . . . . . . . . . . .   9
+     3.3.  Monitoring the nominal rate . . . . . . . . . . . . . . .  10
+     3.4.  Competition with other algorithms . . . . . . . . . . . .  10
+     3.5.  No need for slowdowns . . . . . . . . . . . . . . . . . .  11
+   4.  React quickly to changing network conditions  . . . . . . . .  11
+     4.1.  Do not react to Probe Time Out  . . . . . . . . . . . . .  12
+     4.2.  Update the Nominal Rate after Pushing . . . . . . . . . .  12
+     4.3.  Driving for fairness  . . . . . . . . . . . . . . . . . .  13
+     4.4.  Cascade of Increases  . . . . . . . . . . . . . . . . . .  14
+   5.  Supporting Application Limited Connections  . . . . . . . . .  14
+     5.1.  Coordinated Pushing . . . . . . . . . . . . . . . . . . .  15
+     5.2.  Variable Pushing Rate . . . . . . . . . . . . . . . . . .  16
+     5.3.  Pushing rate and Cascades . . . . . . . . . . . . . . . .  16
+   6.  State Machine . . . . . . . . . . . . . . . . . . . . . . . .  17
+   7.  Security Considerations . . . . . . . . . . . . . . . . . . .  19
+   8.  IANA Considerations . . . . . . . . . . . . . . . . . . . . .  20
+   9.  Informative References  . . . . . . . . . . . . . . . . . . .  20
    Acknowledgments . . . . . . . . . . . . . . . . . . . . . . . . .  22
    Authors' Addresses  . . . . . . . . . . . . . . . . . . . . . . .  22
 
@@ -97,22 +106,21 @@ Table of Contents
    applications require low delays, and often exhibit a variable data
    rate as they alternate high bandwidth requirements when sending
    reference frames and lower bandwith requirements when sending
+
+
+
+Huitema, et al.           Expires 2 April 2026                  [Page 2]
+
+Internet-Draft                  C4 Design                 September 2025
+
+
    differential frames.  We translate that into 3 main goals:
 
    *  Drive towards low delays (see Section 2),
 
-   *  Support "application limited" behavior (see Section 4),
+   *  Support "application limited" behavior (see Section 5),
 
-   *  React quickly to changing network conditions (see Section 3).
-
-
-
-
-
-Huitema, et al.           Expires 29 March 2026                 [Page 2]
-
-Internet-Draft                  C4 Design                 September 2025
-
+   *  React quickly to changing network conditions (see Section 4).
 
    The design of C4 is inspired by our experience using different
    congestion control algorithms for QUIC, notably Cubic [RFC9438],
@@ -134,61 +142,45 @@ Internet-Draft                  C4 Design                 September 2025
 
    The nominal rate is the pacing rate corresponding to the most recent
    estimate of the bandwidth available to the connection.  The nominal
-   CWND is a congestion window that, if applied, would not cause the
-   building of queues and network congestion.  C4 discovers these value
-   during the "initial" phase.  C4 will spend most of its time following
-   these parameters, i.e., in "cruising" mode.  It will use larger rate
-   and CWND during "pushing" periods, to try discover whether the
-   network capacity has increased.  If it encounters congestion, C4 will
-   reduce the nominal rate and nominal CWND and move to "recovery",
-   before returning to cruising.  The design of these mechanisms is
-   discussed in Section 3.
-
-   The nominal max RTT is the best estimate of the maximum RTT that can
-   occur on the network in the absence of queues.  When we do not
-   observe delay jitter, this coincides with the min RTT.  In the
-   presence of jitter, it should be the sum of the min RTT and the
-   maximum jitter.  C4 will compute a pacing rate as the nominal rate
-   multiplied by a coefficient that depends on the state of the
-   protocol, and set the CWND for the path to the product of that pacing
-   rate by the max RTT.
+   max RTT is the best estimate of the maximum RTT that can occur on the
+   network in the absence of queues.  When we do not observe delay
+   jitter, this coincides with the min RTT.  In the presence of jitter,
+   it should be the sum of the min RTT and the maximum jitter.  C4 will
+   compute a pacing rate as the nominal rate multiplied by a coefficient
+   that depends on the state of the protocol, and set the CWND for the
+   path to the product of that pacing rate by the max RTT.  The design
+   of these mechanisms is discussed in Section 4.
 
 2.  Studying the reaction to delays
 
-   TODO: we don't actually do that.  But it is important to discuss
-   these techniques, and point out the issues.  Discuss why tracking the
-   min RTT is problematic.  Rewite the section as a reasoning why this
-   is an issue.
-
-
-
-
-
-
-Huitema, et al.           Expires 29 March 2026                 [Page 3]
-
-Internet-Draft                  C4 Design                 September 2025
-
-
-   If we want to drive for low delays, the obvious choice is to react to
-   delay variations.  Our first design was to use the reaction to delays
-   found in congestion control algorithms like TCP Vegas or LEDBAT:
+   The current design of C4 is the result of a series of experiments.
+   Our initial design was to monitor delays and react to dellay
+   increases in much the same way as congestion control algorithms like
+   TCP Vegas or LEDBAT:
 
    *  monitor the current RTT and the min RTT
 
    *  if the current RTT sample exceed the min RTT by more than a preset
       margin, treat that as a congestion signal.
 
+
+
+Huitema, et al.           Expires 2 April 2026                  [Page 3]
+
+Internet-Draft                  C4 Design                 September 2025
+
+
    The "preset margin" is set by default to 10 ms in TCP Vegas and
    LEDBAT.  That was adequate when these algorithms were designed, but
    it can be considered excessive in high speed low latency networks.
-   For C4, we set it to the lowest of 1/8th of the min RTT and 25ms.
+   For the initial C4 design, we set it to the lowest of 1/8th of the
+   min RTT and 25ms.
 
-   The min RTT itself is measured over time.  We know from deployment of
+   The min RTT itself is measured over time.  We knew from deployment of
    Hystart that delay based algorithms are very sensitive to an
    underestimation of min RTT, which can be cause for example by delay
    jitter and ACK compression.  Instead of simply retaining the minimum
-   of all measurements, we apply filtering.
+   of all measurements, we applied filtering.
 
    After applying filtering, the detection of congestion by comparing
    delays to min RTT plus margin works well, except in two conditions:
@@ -219,19 +211,20 @@ Internet-Draft                  C4 Design                 September 2025
       the min RTT, causing the delay threshold to be set at an
       excessively low value.
 
-
-
-Huitema, et al.           Expires 29 March 2026                 [Page 4]
-
-Internet-Draft                  C4 Design                 September 2025
-
-
    We corrected the issue by implementing a low pass filter of the the
    delay measurements.  The low pass filter retained the last N
    measurements.  We modified delay tests as follow:
 
    *  We only considered a measurement as exceeding the delay target if
       all last N measurements exceeded that target,
+
+
+
+
+Huitema, et al.           Expires 2 April 2026                  [Page 4]
+
+Internet-Draft                  C4 Design                 September 2025
+
 
    *  We only updated the min RTT if the maximum of the last N
       measurements exceeded the min RTT.
@@ -262,38 +255,32 @@ Internet-Draft                  C4 Design                 September 2025
    environments, in which it does not have to compete with TCP Reno
    [RFC6582] or Cubic.
 
-   We handle this competition issue by using a simple detection
-   algorithm.  If C4 detect competition with a loss based algorithm, it
-   switches to "pig war" mode and stops reacting to changes in delays --
-   it will instead only react to packet losses and ECN signals.  In that
-   mode, we use another algorithm to detect when the competition has
-   ceased, and switch back to the delay responsive mode.
+   We handled this competition issue by using a simple detection
+   algorithm.  If C4 detected competition with a loss based algorithm,
+   it switched to a "pig war" mode and stopped reacting to changes in
+   delays -- it would instead only react to packet losses and ECN
+   signals.  In that mode, we used another algorithm to detect when the
+   competition has ceased, and switch back to the delay responsive mode.
 
-
-
-
-
-
-
-
-
-Huitema, et al.           Expires 29 March 2026                 [Page 5]
-
-Internet-Draft                  C4 Design                 September 2025
-
-
-   In our initial deployments, we detect competition when delay based
+   In our initial deployments, we detected competition when delay based
    congestion notifications leads to CWND and rate reduction for more
    than 3 consecutive RTT.  The assumption is that if the competition
    reacted to delays variations, it would have reacted to the delay
    increases before 3 RTT.  However, that simple test caused many "false
    positive" detections.
 
-   We have refined this test to start the pig war if we have observed 4
-   consecutive delay-based rate reductions and the nominal CWND is less
+   We refined this test to start the pig war if we observed 4
+   consecutive delay-based rate reductions and the nominal CWND was less
    than half the max nominal CWND observed since the last "initial"
-   phase, or if we have observed at least 5 reductions and the nominal
-   CWND is less than 4/5th of the max nominal CWND.
+   phase, or if we observed at least 5 reductions and the nominal CWND
+   is less than 4/5th of the max nominal CWND.
+
+
+
+Huitema, et al.           Expires 2 April 2026                  [Page 5]
+
+Internet-Draft                  C4 Design                 September 2025
+
 
    We validated this test by comparing the ratio CWND/MAX_CWND for
    "valid" decisions, when we are simulating a competition scenario, and
@@ -320,23 +307,15 @@ Internet-Draft                  C4 Design                 September 2025
 
                                   Table 1
 
-   Our initial exit competition algorithm is simple.  C4 will exit the
+   Note that this validation was based on simulations, and that we
+   cannot claim that our simulations perfectly reflect the real world.
+   We will discuss in Section 3 how this imperfections lead us to use
+   change our overall design.
+
+   Our initial exit competition algorithm was simple.  C4 will exit the
    "pig war" mode if the available bandwidth increases.
 
 2.3.  Handling Chaotic Delays
-
-   TODO: maybe start here.  This is why we really want to have rate
-   control, but if we have rate control we can use larger windows.
-
-
-
-
-
-
-Huitema, et al.           Expires 29 March 2026                 [Page 6]
-
-Internet-Draft                  C4 Design                 September 2025
-
 
    Some Wi-Fi networks exhibit spikes in latency.  These spikes are
    probably what caused the delay jitter discussed in [Cubic-QUIC-Blog].
@@ -351,32 +330,40 @@ Internet-Draft                  C4 Design                 September 2025
    repeated collisions occur, the exponential backoff mechanism can
    cause large delays.  The Wi-Fi layer 2 algorithm will also try to
    maintain delivery order, and subsequent packets will be queued behind
+
+
+
+Huitema, et al.           Expires 2 April 2026                  [Page 6]
+
+Internet-Draft                  C4 Design                 September 2025
+
+
    the packet that caused the collisions.
 
-   We detect the advent of such "chaotic delay jitter" by computing a
-   running estimate of the max RTT.  We measure the max RTT observed in
-   each round trip, to obtain the "era max RTT".  We then compute an
-   exponentially averaged "nominal max RTT":
+   In our initial design, we detected the advent of such "chaotic delay
+   jitter" by computing a running estimate of the max RTT.  We measured
+   the max RTT observed in each round trip, to obtain the "era max RTT".
+   We then computed an exponentially averaged "nominal max RTT":
 
    nominal_max_rtt = (7 * nominal_max_rtt + era_max_rtt) / 8;
 
-   If the nominal max RTT is more than twice the min RTT, we set the
-   "chaotic jitter" condition.  When that condition is set, we stop
+   If the nominal max RTT was more than twice the min RTT, we set the
+   "chaotic jitter" condition.  When that condition was set, we stopped
    considering excess delay as an indication of congestion, and we
-   change the way we compute the "current CWND" used for the controlled
-   path.  Instead of simply setting it to "nominal CWND", we set it to a
-   larger value:
+   changed the way we computed the "current CWND" used for the
+   controlled path.  Instead of simply setting it to "nominal CWND", we
+   set it to a larger value:
 
    target_cwnd = alpha*nominal_cwnd +
                  (max_bytes_acked - nominal_cwnd) / 2;
 
    In this formula, alpha is the amplification coefficient corresponding
    to the current state, such as for example 1 if "cruising" or 1.25 if
-   "pushing" (see Section 3), and max_bytes_acked is the largest amount
+   "pushing" (see Section 4), and max_bytes_acked is the largest amount
    of bytes in flight that was succesfully acknowledged since the last
    initial phase.
 
-   The increased target_cwnd enables C4 to keep sending data through
+   The increased target_cwnd enabled C4 to keep sending data through
    most jitter events.  There is of course a risk that this increased
    value will cause congestion.  We limit that risk by only using half
    the value of max_bytes_ack, and by the setting a conservative pacing
@@ -387,124 +374,261 @@ Internet-Draft                  C4 Design                 September 2025
    Using the pacing rate that way prevents the larger window to cause
    big spikes in traffic.
 
-
-
-Huitema, et al.           Expires 29 March 2026                 [Page 7]
-
-Internet-Draft                  C4 Design                 September 2025
-
-
    The network conditions can evolve over time.  C4 will keep monitoring
    the nominal max RTT, and will reset the "chaotic jitter" condition if
    nominal max RTT decreases below a threshold of 1.5 times the min RTT.
 
 2.4.  Monitor min RTT
 
-   TODO: we will not in fact track the min RTT.
-
-   Delay based algorithm like CWND rely on a correct estimate of the min
-   RTT.  They will naturally discover a reduction in the min RTT, but
+   Delay based algorithm rely on a correct estimate of the min RTT.
+   They will naturally discover a reduction in the min RTT, but
    detecting an increase in the max RTT is difficult.  There are known
-   failure modes when multiple delay based algortihms compete, in
+   failure modes when multiple delay based algorithms compete, in
    particular the "late comer advantage".
 
-   The connections ensure that their min RTT is valid by occasionally
-   entering a "slowdown" period, during which they set CWND to half the
-   nominal value.  This is similar to the "Probe RTT" mechanism
-   implemented in BBR, or the "initial and periodic slowdown" proposed
-   as extension to LEDBAT in [I-D.irtf-iccrg-ledbat-plus-plus].  In our
-   implementation, the slowdown occurs if more than 5 seconds have
-   elapsed since the previous slowdown, or since the last time the min
-   RTT was set.
+
+
+
+Huitema, et al.           Expires 2 April 2026                  [Page 7]
+
+Internet-Draft                  C4 Design                 September 2025
+
+
+   In our initial design, the connections ensured that their min RTT is
+   valid by occasionally entering a "slowdown" period, during which they
+   set CWND to half the nominal value.  This is similar to the "Probe
+   RTT" mechanism implemented in BBR, or the "initial and periodic
+   slowdown" proposed as extension to LEDBAT in
+   [I-D.irtf-iccrg-ledbat-plus-plus].  In our implementation, the
+   slowdown occurs if more than 5 seconds have elapsed since the
+   previous slowdown, or since the last time the min RTT was set.
 
    The measurement of min RTT in the period that follows the slowdown is
    considered a "clean" measurement.  If two consecutive slowdown
-   periods are followed by clean measurements larger than the current
+   periods were followed by clean measurements larger than the current
    min RTT, we detect an RTT change and reset the connection.  If the
    measurement results in the same value as the previous min RTT, C4
    continue normal operation.
 
    Some applications exhibit periods of natural slow down.  This is the
    case for example of multimedia applications, when they only send
-   differentially encoded frames.  Natural slowdown is detected if an
-   application sends less than half the nominal CWND during a period,
-   and more than 4 seconds have elapsed since the previous slowdown or
-   the previous min RTT update.  The measurement that follows a natural
-   slowdown is also considered a clean measurement.
+   differentially encoded frames.  Natural slowdown was detected if an
+   application sent less than half the nominal CWND during a period, and
+   more than 4 seconds had elapsed since the previous slowdown or the
+   previous min RTT update.  The measurement that follows a natural
+   slowdown was also considered a clean measurement.
 
    A slowdown period corresponds to a reduction in offered traffic.  If
    multiple connections are competing for the same bottleneck, each of
    these connections may experience cleaner RTT measurements, leading to
    equalization of the min RTT observed by these connections.
 
-3.  React quickly to changing network conditions
+3.  Simplifying the initial design
 
-   TODO: only use rate, not CWND.
+   After extensive testing of our initial design, we felt we had drifted
+   away from our initial "simplicity" tenet.  The algorithms used to
+   detect "pig war" and "chaotic jitter" were difficult to tune, and
+   despite our efforts they resulted in many false positive or false
+   negative.  The "slowdown" algorithm made C4 less friendly to "real
+   time" applications that prefer using stable estimated rates.  These
+   algorithms interacted with each other in ways that were sometimes
+   hard to predict.
+
+3.1.  Chaotic jitter and rate control
+
+   As we observed the chaotic jitter behavior, we came to the conclusion
+   that only controlling the CWND did not work well. we had a dilemma:
+   either use a small CWND to guarantee that RTTs remain small, or use a
+   large CWND so that transmission would not stall during peaks in
+   jitter.  But if we use a large CWND, we need some form of pacing to
+   prevent senders from sending a large amount of packets too quickly.
 
 
 
-
-
-Huitema, et al.           Expires 29 March 2026                 [Page 8]
+Huitema, et al.           Expires 2 April 2026                  [Page 8]
 
 Internet-Draft                  C4 Design                 September 2025
 
 
-   Our focus is on maintaining low delays, and thus reacting to delay
-   increases as explained in Section 2.  However, only relying on
-   increased delays would be a mistake.  Experience with the early
-   version of BBR showed that completely ignoring packet losses can lead
-   to very unfair competition with Cubic.  The L4S effort is promoting
-   the use of ECN feedback by network elements (see [RFC9331]), which
-   could well end up detecting congestion and queues more precisely than
-   the monitoring of end-to-end delays.  C4 will thus detect changing
-   network conditions by monitoring 3 congestion control signals:
+   And then we realized that if we do have to set a pacing rate, we can
+   simplify the algorithm.
 
-   1.  Excessive increase of measured RTT (except in pig war mode),
+   Suppose that we compute a pacing rate that matches the network
+   capacity, just like BBR does.  Then, in first approximation, the
+   setting the CWND too high does not matter too much.  The number of
+   bytes in flight will be limited by the product of the pacing rate by
+   the actual RTT.  We are thus free to set the CWND to a large value.
+
+3.2.  Monitoring the nominal max RTT
+
+   The observation on chaotic jitter leads to the idea of monitoring the
+   maximum RTT.  There is some difficulty here, because the observed RTT
+   has three components:
+
+   *  The minimum RTT in the absence of jitter
+
+   *  The jitter caused by access networks such as Wi-Fi
+
+   *  The delays caused by queues in the network
+
+   We cannot merely use the maximum value of the observed RTT, because
+   of the queing delay component.  In pushing periods, we are going to
+   use data rate slightly higher than the measured value.  This will
+   create a bit of queuing, pushing the queing delay component ever
+   higher -- and eventually resulting in "buffer bloat".
+
+   To avoid that, we can have periodic periods in which the endpoint
+   sends data at deliberately slower than the rate estimate.  This
+   enables us to get a "clean" measurement of the Max RTT.
+
+   If we are dealing with jitter, the clean Max RTT measurements will
+   include whatever jitter was happening at the time of the measurement.
+   It is not sufficient to measure the Max RTT once, we must keep the
+   maximum value of a long enough series of measurement to capture the
+   maximum jitter than the network can cause.  But we are also aware
+   that jitter conditions change over time, so we have to make sure that
+   if the jitter diminished, the Max RTT also diminishes.
+
+   We solved that by measuring the Max RTT during the "recovery" periods
+   that follow every "push".  These periods occur about every 6 RTT,
+   giving us reasonably frequent measurements.  During these periods, we
+   try to ensure clean measurements by setting the pacing rate a bit
+   lower than the nominal rate -- 6.25% slower in our initial trials.
+   We apply the following algorithm:
+
+   *  compute the max_rtt_sample as the maximum RTT observed for packets
+      sent during the recovery period.
+
+
+
+Huitema, et al.           Expires 2 April 2026                  [Page 9]
+
+Internet-Draft                  C4 Design                 September 2025
+
+
+   *  if max_rtt_sample is large than nominal_max_rtt, set
+      nominal_max_rtt to that value.
+
+   *  else, set nominal_max_rtt to: ~~~ nominal_max_rtt =
+      gamma_max_rtt_sample + (1-gamma)_nominal_max_rtt ~~~ The gamma
+      coefficient is set to 1/8 in our initial trials.
+
+3.3.  Monitoring the nominal rate
+
+   The nominal rate is measured on each acknowledgement by dividing the
+   number of bytes acknowledged since the packet was sent by the RTT
+   measured with the acknowledgement of the packet.  However, that
+   measurement is noisy, because delay jitter can cause the
+   underestimation of the RTT, resulting in over estimation of the rate.
+   We protect from these underestimates by observing that delivery rates
+   cannot be larger than the rate at which the packets were sent, thus
+   keeping the lower of the estimated receive rate and the send rate.
+   The algorithm is thus:
+
+   measured_rate = bytes_acknowledged / rtt_sample
+   if measured_rate > send_rate:
+       measured_rate = send_rate
+   if measured_rate > nominal_rate:
+       nominal_rate = measured_rate
+
+   This algorithm only measures increases in the rate.  The rate will be
+   reduced if congestion signals are received, as explained in
+   Section 4.
+
+3.4.  Competition with other algorithms
+
+   We saw in Section 2.2 that delay based algorithms required a special
+   "escape mode" when facing competition from algorithms like Cubic.
+   Relying on pacing rate and max RTT instead of CWND and min RTT makes
+   this problem much simpler.  The measured max RTT will naturally
+   increase as algorithms like Cubic cause buffer bloat and increased
+   queues.  Instead of being shut down, C4 will just keep increasing its
+   max RTT and thus its running CWND, automatically matching the other
+   algorithm's values.
+
+   We verified that behavior in a number of simulations.  We also
+   verified that when the competition ceases, C4 will progressively drop
+   its nominal max RTT, returning to situations with very low queuing
+   delays.
+
+
+
+
+
+
+
+Huitema, et al.           Expires 2 April 2026                 [Page 10]
+
+Internet-Draft                  C4 Design                 September 2025
+
+
+3.5.  No need for slowdowns
+
+   The fairness of delay based algorithm depends on all competing flows
+   having similar estimates of the min RTT.  As discussed in
+   Section 2.4, this ends up creating variants of the latecomer
+   advantage issue, requiring a periodic slowdown mechanism to ensure
+   that all competing flow have chance to update the RTT value.
+
+   This problem is caused by the default algorithm of setting min RTT to
+   the minimum of all RTT sample values since the beginning of the
+   connection.  Flows that started more recently compute that minimum
+   over a longer period, and thus discover a larger min RTT than older
+   flows.  This problem does not exist with max RTT, because all
+   competing flows see the same max RTT value.  The slowdown mechanism
+   is thus not necessary.
+
+   Removing the need for a slwdown mechanism allows for a simpler
+   protocol, better suited to real time communications.
+
+4.  React quickly to changing network conditions
+
+   Our focus is on maintaining low delays, and thus reacting quickly to
+   changes in network conditions.  We can detect some of these changes
+   by monitoring the RTT and the data rate, but experience with the
+   early version of BBR showed that completely ignoring packet losses
+   can lead to very unfair competition with Cubic.  The L4S effort is
+   promoting the use of ECN feedback by network elements (see
+   [RFC9331]), which could well end up detecting congestion and queues
+   more precisely than the monitoring of end-to-end delays.  C4 will
+   thus detect changing network conditions by monitoring 3 congestion
+   control signals:
+
+   1.  Excessive increase of measured RTT (above the nominal Max RTT),
 
    2.  Excessive rate of packet losses (but not mere Probe Time Out, see
-       Section 3.1),
+       Section 4.1),
 
    3.  Excessive rate of ECN/CE marks
 
    If any of these signals is detected, C4 enters a "recovery" state.
-   On entering recovery, C4 reduces the nominal_CWND and nominal_rate by
-   a factor "beta":
+   On entering recovery, C4 reduces the nominal_rate by a factor "beta":
 
        // on congestion detected:
-       nominal_CWND = (1-beta)*nominal_CWND
        nominal_rate = (1-beta)*nominal_rate
 
    The cofficient beta differs depending on the nature of the congestion
    signal.  For packet losses, it is set to 1/4, similar to the value
    used in Cubic.  For delay based losses, it is proportional to the
+
+
+
+Huitema, et al.           Expires 2 April 2026                 [Page 11]
+
+Internet-Draft                  C4 Design                 September 2025
+
+
    difference between the measured RTT and the target RTT divided by the
    acceptable margin, capped to 1/4.  If the signal is an ECN/CE rate,
    we may use a proportional reduction coefficient in line with
    [RFC9331], again capped to 1/4.
 
-   During the recovery period, target CWND and pacing rate are set to
-   the new values of "nominal CWND" and "nominal rate".  The recovery
-   period ends when the first packet sent after entering recovery is
-   acknowledged.  Congestion signals are processed when entering
-   recovery; further signals are ignored until the end of recovery.
-
-
-
-
-
-
-
-
-
-
-
-
-
-Huitema, et al.           Expires 29 March 2026                 [Page 9]
-
-Internet-Draft                  C4 Design                 September 2025
-
+   During the recovery period, target CWND and pacing rate are set to a
+   fraction of the "nominal rate" multiplied by the "nominal max RTT".
+   The recovery period ends when the first packet sent after entering
+   recovery is acknowledged.  Congestion signals are processed when
+   entering recovery; further signals are ignored until the end of
+   recovery.
 
    Network conditions may change for the better or for the worse.
    Worsening is detected through congestion signals, but increases can
@@ -515,9 +639,9 @@ Internet-Draft                  C4 Design                 September 2025
    periodically probe the network by sending at a higher rate, like the
    Probe Bandwidth mechanism of BBR.  C4 adopt the periodic probing
    approach, in particular because it is a better fit for variable rate
-   multimedia applications (see details in Section 4).
+   multimedia applications (see details in Section 5).
 
-3.1.  Do not react to Probe Time Out
+4.1.  Do not react to Probe Time Out
 
    QUIC normally detect losses by observing gaps in the sequences of
    acknowledged packet.  That's a robust signal.  QUIC will also inject
@@ -529,214 +653,94 @@ Internet-Draft                  C4 Design                 September 2025
    and only react to those losses that are detected by gaps in
    acknowledgements.
 
-3.2.  Update the Nominal Rate and CWND after Pushing
-
-   TODO: only the nominal rate.
+4.2.  Update the Nominal Rate after Pushing
 
    C4 configures the transport with a larger rate and CWND than the
    nominal CWND during "pushing" periods.  The peer will acknowledge the
    data sent during these periods in the round trip that followed.
 
-   When we receive an ACK for a newly acknowledged packet number N, we
-   compute the number of bytes acknowledged between the acknowledgement
-   received before N was sent and the acknowledgement of the last packet
-   of this period.  We use that number to compute the observed data rate
-   as:
-
-   observed_rate = bytes_acked / max(observed_rtt, min_rtt)
-
-   The observed RTT is computed as the delay between the time the
-   acknowledged packet was sent and the time at which it was received.
-   Using max(rtt_sample, min_rtt) in this formula is a precaution
-   against under-estimation of this delay due to for example to delay
-   jitter or ack compression.
-
-   We use the observed rate to compute a "corrected" value of the bytes
-   acked;
-
-
-
-
-Huitema, et al.           Expires 29 March 2026                [Page 10]
-
-Internet-Draft                  C4 Design                 September 2025
-
-
-   corrected_bytes_acked = observed_rate*min_rtt
-
-   We then use these values to update the nominal rate, nominal CWND,
-   max CWND and max bytes acked state variables:
-
-   nominal_rate = max(observed_rate, nominal_rate)
-   nominal_CWND = max(corrected_bytes_acked, nominal_CWND)
-   max_CWND = max(nominal_CWND, max_CWND)
-   max_bytes_acked = max(bytes_acked,max_bytes_acked)
+   When we receive an ACK for a newly acknowledged packet, we update the
+   nominal rate as explained in Section 3.3.
 
    This strategy is effectively a form of "make before break".  The
-   pushing only increase the rate and CWND by a fraction of the nominal
-   values, and only lasts for one round trip.  That limited increase is
-   not expected to increase the size of queues by more than a small
-   fraction of the bandwidth*delay product.  It might cause a slight
-   increase of the measured RTT for a short period, or perhaps cause
-   some ECN signalling, but it should not cause packet losses -- unless
-   C4 is in "pig war" mode.  If there was no extra capacity available,
-   C4 does not increase the nominal CWND and the connection continues
-   with the previous value.
-
-3.3.  Driving for fairness
-
-   TODO: move to appendix, unproven.  Consider that Max RTT is in fact a
-   shared variable, implicitly tracked by Cubic.
-
-   The duration of cruising is expressed as a number of bytes.  This
-   number of bytes is computed with two goals:
-
-   *  The potential increase of 25% divided by the total number of bytes
-      sent during recovery, cruising and pushing should match the
-      aggressiveness of RENO when operating at low bandiwdth (lower than
-      34 Mbps).
-
-   *  Connection using large values of CWND should be less aggressive
-      than those with smaller value, so that all connections sharing the
-      same bottleneck should eventually converge to similar CWND values.
-
-   We achieve those two goals using the following formula:
-
-       target = nominal_CWND*7* (1 +
-                (max(11, min(28, log2(nominal_CWND))) - 11)/(28 - 11))
-
-   The constants 7, 11 and 28 in the formula are explained as follow:
-
-   *  The number 7 corresponds to 7 RTT.  Depending of bandwidth, the
-      connection will remain between 7 and 14 RTT in cruise state.
+   pushing only increase the rate by a fraction of the nominal values,
+   and only lasts for one round trip.  That limited increase is not
+   expected to increase the size of queues by more than a small fraction
 
 
 
-
-Huitema, et al.           Expires 29 March 2026                [Page 11]
+Huitema, et al.           Expires 2 April 2026                 [Page 12]
 
 Internet-Draft                  C4 Design                 September 2025
 
 
-   *  The value 11 corresponds to 2048 bytes.  We use that as a minimum.
+   of the bandwidth*delay product.  It might cause a slight increase of
+   the measured RTT for a short period, or perhaps cause some ECN
+   signalling, but it should not cause packet losses -- unless competing
+   connections have caused large queues.  If there was no extra capacity
+   available, C4 does not increase the nominal CWND and the connection
+   continues with the previous value.
 
-   *  The value 28 corresponds to 268,435,456 bytes, e.g., a connection
-      at 10 Gbps operating with an RTT a little above 200ms.
+4.3.  Driving for fairness
 
-   For example, assuming an RTT of 50 ms, we will see cruising duration
-   in RTT varying with the bandwidth in bps as:
+   Many protocols enforce fairness by tuning their behavior so that
+   large flows become less aggressive than smaller ones, either by
+   trying less hard to increase their bandwidth or by reacting more to
+   congestion events.  We considered adopting a similar strategy for C4.
 
+   The aggressiveness of C4 is driven by three main considerations:
 
+   *  the frequency of the "pushing" periods,
 
+   *  the coefficient alpha used during pushing,
 
+   *  and the coefficient beta used during response to congestion
+      events.
 
+   We could adopt strategies in which larger flows push less often,
+   smaller flows use a larger value of alpha, or larger flows use a
+   larger value of beta.
 
+   There are know limits to these strategies.  For example, consider TCP
+   Reno, in which the growth rate of CWND during the "congestion
+   avoidance" phase" is inversely proportional to its size.  This drives
+   very good long term fairness, but in practice it prevents TCP Reno
+   from operating well on high speed or high delay connections, as
+   discussed in the "problem description" section of [RFC3649].  In that
+   RFC, Sally Floyd was proposing using a growth rate inversely
+   proportional to the logarithm of the CWND, which would not be so
+   drastic.
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+   In the initial design, we proposed making the frequency of the
+   pushing periods inversely proportional to the logarithm of the CWND,
+   but that gets in tension with our estimation of the max RTT, which
+   requires frequent "recovery" periods.  We would not want the Max RTT
+   estimate to work less well for high speed connections!  We solved the
+   tension in favor of reliable max RTT estimates, and fixed to 4 the
+   number of Cruising periods between Recovery and Pushing.  The whole
+   cycle takes about 6 RTT.
 
 
 
 
-Huitema, et al.           Expires 29 March 2026                [Page 12]
+
+
+Huitema, et al.           Expires 2 April 2026                 [Page 13]
 
 Internet-Draft                  C4 Design                 September 2025
 
 
-                    +==========+============+========+
-                    | BW(bps)  | BDP(bytes) | Nb RTT |
-                    +==========+============+========+
-                    | 1.00E+05 | 6.25E+02   | 7.0    |
-                    +----------+------------+--------+
-                    | 2.00E+05 | 1.25E+03   | 7.0    |
-                    +----------+------------+--------+
-                    | 5.00E+05 | 3.13E+03   | 7.3    |
-                    +----------+------------+--------+
-                    | 1.00E+06 | 6.25E+03   | 7.7    |
-                    +----------+------------+--------+
-                    | 2.00E+06 | 1.25E+04   | 8.1    |
-                    +----------+------------+--------+
-                    | 5.00E+06 | 3.13E+04   | 8.6    |
-                    +----------+------------+--------+
-                    | 1.00E+07 | 6.25E+04   | 9.0    |
-                    +----------+------------+--------+
-                    | 2.00E+07 | 1.25E+05   | 9.4    |
-                    +----------+------------+--------+
-                    | 5.00E+07 | 3.13E+05   | 10.0   |
-                    +----------+------------+--------+
-                    | 1.00E+08 | 6.25E+05   | 10.4   |
-                    +----------+------------+--------+
-                    | 2.00E+08 | 1.25E+06   | 10.8   |
-                    +----------+------------+--------+
-                    | 5.00E+08 | 3.13E+06   | 11.4   |
-                    +----------+------------+--------+
-                    | 1.00E+09 | 6.25E+06   | 11.8   |
-                    +----------+------------+--------+
-                    | 2.00E+09 | 1.25E+07   | 12.2   |
-                    +----------+------------+--------+
-                    | 5.00E+09 | 3.13E+07   | 12.7   |
-                    +----------+------------+--------+
-                    | 1.00E+10 | 6.25E+07   | 13.1   |
-                    +----------+------------+--------+
-                    | 2.00E+10 | 1.25E+08   | 13.5   |
-                    +----------+------------+--------+
-                    | 5.00E+10 | 3.13E+08   | 14.0   |
-                    +----------+------------+--------+
-                    | 1.00E+11 | 6.25E+08   | 14.0   |
-                    +----------+------------+--------+
+   We also reduced the default rate increase during Pushing to 6.25%,
+   which means that the default cycle is more on less on par with the
+   aggressiveness of RENO when operating at low bandwidth (lower than 34
+   Mbps).
 
-                                 Table 2
+   We might consider adopting some fairness response in the future, such
+   as either increasing the default rate by more than 6.25% or maybe
+   using a lower value of beta when the connection is not using much
+   bandwidth.
 
-   We could have expressed this in fractions of RTT instead of number of
-   bytes, which might be more fair for application limited connection.
-
-
-
-
-
-Huitema, et al.           Expires 29 March 2026                [Page 13]
-
-Internet-Draft                  C4 Design                 September 2025
-
-
-   We could also compute these fractions based on the measured
-   bandwidth, "nominal CWND" divided by "target RTT", which would make
-   fairness less dependent on path RTT. we did not, because TCP RENO's
-   mechanism are strictly based on CWND size, and thus fairness requires
-   using the same criteria.
-
-3.4.  Cascade of Increases
+4.4.  Cascade of Increases
 
    We sometimes encounter networks in which the available bandwidth
    changes rapidly.  For example, when a competing connection stops, the
@@ -748,15 +752,17 @@ Internet-Draft                  C4 Design                 September 2025
 
    Because we aim for fairness with RENO or Cubic, the cycle of
    recovery, cruising and pushing will only result in slow increases
-   increases, maybe 25% after 10 RTT.  This means we would only double
-   the bandwidth after about 40 RTT, or increase from 10 to 65 Mbps
-   after almost 200 RTT -- by which time the LEO station might have
-   connected to a different orbiting satellite.  To go faster, we
-   implement a "cascade": if three successive pushings all result in
-   increases of the nominal rate, C4 will reenter the "startup" mode,
-   during which each RTT can result in a 100% increase of rate and CWND.
+   increases, maybe 6.25% after 6 RTT.  This means we would only double
+   the bandwidth after about 68 RTT, or increase from 10 to 65 Mbps
+   after 185 RTT -- by which time the LEO station might have connected
+   to a different orbiting satellite.  To go faster, we implement a
+   "cascade": if the previous pushing at 6.25% was successful, the next
+   pushing will use 25% (see Section 5.2).  If three successive pushings
+   all result in increases of the nominal rate, C4 will reenter the
+   "startup" mode, during which each RTT can result in a 100% increase
+   of rate and CWND.
 
-4.  Supporting Application Limited Connections
+5.  Supporting Application Limited Connections
 
    C4 is specially designed to support multimedia applications, which
    very often operate in application limited mode.  After testing and
@@ -764,40 +770,38 @@ Internet-Draft                  C4 Design                 September 2025
    number of features.
 
    The first feature is the design decision to only lower the nominal
-   rate and CWND if congestion is detected.  This is in contrast with
-   the BBR design, in which the estimate of bottleneck bandwidth is also
-   lowered if the bandwidth measured after a "probe bandwidth" attempt
-   is lower than the current estimate while the connection was not
-   "application limited".  We found that detection of the application
-   limited state was somewhat error prone.  Occasional errors end up
-   with a spurious reduction of the estimate of the bottleneck
-   bandwidth.  These errors can accumulate over time, causing the
-   bandwidth estimate to "drift down", and the multimedia experience to
-   suffer.  Our strategy of only reducing the nominal values in reaction
-   to congestion notifications much reduces that risk.
+   rate if congestion is detected.  This is in contrast with the BBR
+   design, in which the estimate of bottleneck bandwidth is also lowered
+   if the bandwidth measured after a "probe bandwidth" attempt is lower
+   than the current estimate while the connection was not "application
+   limited".  We found that detection of the application limited state
+   was somewhat error prone.  Occasional errors end up with a spurious
+   reduction of the estimate of the bottleneck bandwidth.  These errors
+   can accumulate over time, causing the bandwidth estimate to "drift
 
 
 
-
-
-
-Huitema, et al.           Expires 29 March 2026                [Page 14]
+Huitema, et al.           Expires 2 April 2026                 [Page 14]
 
 Internet-Draft                  C4 Design                 September 2025
 
 
-   The second feature is the "make before break" nature of the rate and
-   CWND updates discussed in Section 3.2.  This reduces the risk of
-   using rate and CWND that are too large and would cause queues or
-   losses, and thus make C4 a good choice for multimedia applications.
+   down", and the multimedia experience to suffer.  Our strategy of only
+   reducing the nominal values in reaction to congestion notifications
+   much reduces that risk.
+
+   The second feature is the "make before break" nature of the rate
+   updates discussed in Section 4.2.  This reduces the risk of using
+   rates that are too large and would cause queues or losses, and thus
+   makes C4 a good choice for multimedia applications.
 
    C4 adds two more features to handle multimedia applications well:
-   coordinated pushing (see Section 4.1), and variable pushing rate (see
-   Section 4.2).
+   coordinated pushing (see Section 5.1), and variable pushing rate (see
+   Section 5.2).
 
-4.1.  Coordinated Pushing
+5.1.  Coordinated Pushing
 
-   As stated in Section 3.3, the connection will remain in "cruising"
+   As stated in Section 4.3, the connection will remain in "cruising"
    state for a specified interval, and then move to "pushing".  This
    works well when the connection is almost saturating the network path,
    but not so well for a media application that uses little bandwidth
@@ -833,19 +837,15 @@ Internet-Draft                  C4 Design                 September 2025
 
 
 
-
-
-
-
-Huitema, et al.           Expires 29 March 2026                [Page 15]
+Huitema, et al.           Expires 2 April 2026                 [Page 15]
 
 Internet-Draft                  C4 Design                 September 2025
 
 
-4.2.  Variable Pushing Rate
+5.2.  Variable Pushing Rate
 
    C4 tests for available bandwidth at regular pushing intervals (see
-   Section 3.3), during which the rate and CWND is set at 25% more than
+   Section 4.3), during which the rate and CWND is set at 25% more than
    the nominal values.  This mimics what BBR is doing, but may be less
    than ideal for real time applications.  When in pushing state, the
    application is allowed to send more data than the nominal CWND, which
@@ -864,7 +864,7 @@ Internet-Draft                  C4 Design                 September 2025
       CWIN, the next pushing will happen at 25%, otherwise it will
       remain at 6.25%
 
-   As explained in Section 3.4, if three consecutive pushing attempts
+   As explained in Section 4.4, if three consecutive pushing attempts
    result in significant increases, C4 detects that the underlying
    network conditions have changed, and will reenter the startup state.
 
@@ -877,7 +877,7 @@ Internet-Draft                  C4 Design                 September 2025
    was too high and and caused lower performance.  We now set that
    threshold to 1/4 of the increase in he sending rate.
 
-4.3.  Pushing rate and Cascades
+5.3.  Pushing rate and Cascades
 
    The choice of a 25% push rate was motivated by discussions of BBR
    design.  Pushing has two parallel functions: discover the available
@@ -893,7 +893,7 @@ Internet-Draft                  C4 Design                 September 2025
 
 
 
-Huitema, et al.           Expires 29 March 2026                [Page 16]
+Huitema, et al.           Expires 2 April 2026                 [Page 16]
 
 Internet-Draft                  C4 Design                 September 2025
 
@@ -910,9 +910,10 @@ Internet-Draft                  C4 Design                 September 2025
    to startup mode if a lot of capacity is available.  This is something
    that we intend to test, but have not implemented yet.
 
-5.  State Machine
+6.  State Machine
 
-   TODO: we do not need the slowdown and checking states.
+   Note: we are working on protocol updates, and will remove the
+   slowdown and checking states.
 
    The state machine for C4 has the following states:
 
@@ -948,8 +949,7 @@ Internet-Draft                  C4 Design                 September 2025
 
 
 
-
-Huitema, et al.           Expires 29 March 2026                [Page 17]
+Huitema, et al.           Expires 2 April 2026                 [Page 17]
 
 Internet-Draft                  C4 Design                 September 2025
 
@@ -1005,7 +1005,7 @@ Internet-Draft                  C4 Design                 September 2025
 
 
 
-Huitema, et al.           Expires 29 March 2026                [Page 18]
+Huitema, et al.           Expires 2 April 2026                 [Page 18]
 
 Internet-Draft                  C4 Design                 September 2025
 
@@ -1049,7 +1049,7 @@ Internet-Draft                  C4 Design                 September 2025
                                                 | RTT Min Higher      |
                                                 +-------------------->+
 
-6.  Security Considerations
+7.  Security Considerations
 
    We do not believe that C4 introduce new security issues.  Or maybe
    there are, such as what happen if applications can be fooled in going
@@ -1061,16 +1061,16 @@ Internet-Draft                  C4 Design                 September 2025
 
 
 
-Huitema, et al.           Expires 29 March 2026                [Page 19]
+Huitema, et al.           Expires 2 April 2026                 [Page 19]
 
 Internet-Draft                  C4 Design                 September 2025
 
 
-7.  IANA Considerations
+8.  IANA Considerations
 
    This document has no IANA actions.
 
-8.  Informative References
+9.  Informative References
 
    [RFC9000]  Iyengar, J., Ed. and M. Thomson, Ed., "QUIC: A UDP-Based
               Multiplexed and Secure Transport", RFC 9000,
@@ -1106,21 +1106,28 @@ Internet-Draft                  C4 Design                 September 2025
               RFC 6582, DOI 10.17487/RFC6582, April 2012,
               <https://www.rfc-editor.org/info/rfc6582>.
 
+   [RFC3649]  Floyd, S., "HighSpeed TCP for Large Congestion Windows",
+              RFC 3649, DOI 10.17487/RFC3649, December 2003,
+              <https://www.rfc-editor.org/info/rfc3649>.
+
+
+
+
+
+
+
+
+Huitema, et al.           Expires 2 April 2026                 [Page 20]
+
+Internet-Draft                  C4 Design                 September 2025
+
+
    [TCP-Vegas]
               Brakmo, L. S. and L. L. Peterson, "TCP Vegas: end to end
               congestion avoidance on a global Internet", IEEE Journal
               on Selected Areas in Communications ( Volume: 13, Issue:
               8, October 1995) , October 1995,
               <https://ieeexplore.ieee.org/document/464716>.
-
-
-
-
-
-Huitema, et al.           Expires 29 March 2026                [Page 20]
-
-Internet-Draft                  C4 Design                 September 2025
-
 
    [HyStart]  Ha, S. and I. Rhee, "Taming the elephants: New TCP slow
               start", Computer Networks vol. 55, no. 9, pp. 2092-2110 ,
@@ -1163,20 +1170,18 @@ Internet-Draft                  C4 Design                 September 2025
               Lai, Z., Li, Z., Wu, Q., Li, H., and Q. Zhang, "Mind the
               Misleading Effects of LEO Mobility on End-to-End
               Congestion Control", Slides presented at ICCRG meeting
+
+
+
+Huitema, et al.           Expires 2 April 2026                 [Page 21]
+
+Internet-Draft                  C4 Design                 September 2025
+
+
               during IETF 122 , March 2025,
               <https://datatracker.ietf.org/meeting/122/materials/
               slides-122-iccrg-mind-the-misleading-effects-of-leo-
               mobility-on-end-to-end-congestion-control-00>.
-
-
-
-
-
-
-Huitema, et al.           Expires 29 March 2026                [Page 21]
-
-Internet-Draft                  C4 Design                 September 2025
-
 
 Acknowledgments
 
@@ -1224,9 +1229,4 @@ Authors' Addresses
 
 
 
-
-
-
-
-
-Huitema, et al.           Expires 29 March 2026                [Page 22]
+Huitema, et al.           Expires 2 April 2026                 [Page 22]

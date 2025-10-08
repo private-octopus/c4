@@ -352,7 +352,7 @@ events arriving during recovery are duplicate of the prior events
 and can be ignored.
 
 Rate increases are detected when acknowledgements received during recovery
-refect a successful "push" during the Pushing phase. The prior "Pushing"
+reflect a successful "push" during the Pushing phase. The prior "Pushing"
 is considered successful if it did not trigger any congestion event,
 and if the data rate increases sufficiently
 between the end of previous Recovery and the end of this one, with
@@ -361,7 +361,7 @@ sufficiently being defined as:
 * Any increase if the prior pushing rate (alpha_prior) was 17/16 or
 less,
 * An increase of at least 1/4th of the expected increase otherwise,
-for example an increase of 1/16th is `alpha_previous` was 5/4.
+for example an increase of 1/16th if `alpha_previous` was 5/4.
 
 C4 re-enters "Initial" at the end of the recovery period if the evaluation
 shows 3 successive rate increases without congestion. Otherwise,

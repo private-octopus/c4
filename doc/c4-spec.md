@@ -352,7 +352,7 @@ events arriving during recovery are duplicate of the prior events
 and can be ignored.
 
 Rate increases are detected when acknowledgements received during recovery
-refect a successful "push" during the Pushing phase. The prior "Pushing"
+reflect a successful "push" during the Pushing phase. The prior "Pushing"
 is considered successful if it did not trigger any congestion event,
 and if the data rate increases sufficiently
 between the end of previous Recovery and the end of this one, with

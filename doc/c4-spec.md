@@ -1,9 +1,9 @@
 ---
-title: "Design of Christian's Congestion Control Code (C4)"
-abbrev: "C4 Design"
-category: info
+title: "Specification of Christian's Congestion Control Code (C4)"
+abbrev: "C4 Specification"
+category: exp
 
-docname: draft-huitema-ccwg-c4-design-latest
+docname: draft-huitema-ccwg-c4-spec-latest
 submissiontype: IETF
 number:
 date:
@@ -34,75 +34,12 @@ author:
    email: fluffy@iii.ca
 
 normative:
+   RFC2119:
+   RFC8174:
 informative:
    RFC9000:
    I-D.ietf-moq-transport:
-   RFC9438:
-   I-D.ietf-ccwg-bbr:
-   RFC6817:
-   RFC6582:
-
-   TCP-Vegas:
-    target: https://ieeexplore.ieee.org/document/464716
-    title: "TCP Vegas: end to end congestion avoidance on a global Internet"
-    date: "31 October 1995"
-    seriesinfo: "IEEE Journal on Selected Areas in Communications ( Volume: 13, Issue: 8, October 1995)"
-    author:
-     -
-       ins: L.S. Brakmo
-     -
-       ins: L.L. Peterson
-
-   HyStart:
-     target: https://doi.org/10.1016/j.comnet.2011.01.014
-     title: "Taming the elephants: New TCP slow start"
-     date: "June 2011"
-     seriesinfo: Computer Networks vol. 55, no. 9, pp. 2092-2110
-     author:
-      - 
-        ins: S. Ha
-      -
-        ins: I. Rhee
-
-   Cubic-QUIC-Blog:
-    target: https://www.privateoctopus.com/2019/11/11/implementing-cubic-congestion-control-in-quic/
-    title: "Implementing Cubic congestion control in Quic"
-    date: "Nov 18, 2019"
-    seriesinfo: "Christian Huitema's blog"
-    author:
-    -
-      ins: C. Huitema
-
-   I-D.ietf-quic-ack-frequency:
-
-   Wi-Fi-Suspension-Blog:
-    target: https://www.privateoctopus.com/2023/05/18/the-weird-case-of-wifi-latency-spikes.html
-    title: "The weird case of the wifi latency spikes"
-    date: "May 18, 2023"
-    seriesinfo: "Christian Huitema's blog"
-    author:
-    -
-      ins: C. Huitema
-
-   I-D.irtf-iccrg-ledbat-plus-plus:
-
    RFC9331:
-   ICCRG-LEO:
-    target: https://datatracker.ietf.org/meeting/122/materials/slides-122-iccrg-mind-the-misleading-effects-of-leo-mobility-on-end-to-end-congestion-control-00
-    title: "Mind the Misleading Effects of LEO Mobility on End-to-End Congestion Control"
-    date: "March 17, 2025"
-    seriesinfo: "Slides presented at ICCRG meeting during IETF 122"
-    author:
-    -
-      ins: Z. Lai
-    -
-      ins: Z. Li
-    -
-      ins: Q. Wu
-    -
-      ins: H. Li
-    -
-      ins: Q. Zhang
 
 --- abstract
 
@@ -114,7 +51,7 @@ frequently found when using variable rate encoding, and
 with fast reaction to congestion to avoid the "priority
 inversion" happening when congestion control overestimates
 the available capacity. The design emphasizes simplicity and
-avoids making too many assumption about the "model" of
+avoids making too many assumptions about the "model" of
 the network.
 
 --- middle
@@ -126,44 +63,48 @@ algorithm designed to support Real-Time multimedia applications, specifically
 multimedia applications using QUIC {{RFC9000}} and the Media
 over QUIC transport {{I-D.ietf-moq-transport}}.
 
-C4 assumes that the transport stack is
-capable of signaling events such
-as acknowledgements, RTT measurements, ECN signals or the detection
-of packet losses. It also assumes that the congestion algorithm
-controls the transport stack by setting the congestion window
-(CWND) and the pacing rate.
-
-C4 maintains a set of variables:
-
-- nominal rate, an estimate of the data rate available to the flow,
-- nominal MAX RTT, an estimate of the maximum RTT
-  that can occur on the network in the absence of queues,
-- running min RTT, an approximation of the min RTT for the flow,
-- number of eras without increase (see {{c4-initial}}),
-- number of successful pushes,
-- current state of the algorithm, which can be initial, recovery,
-  cruising or pushing.
+The two main variables describing the state of a flow are the
+"nominal rate" (see {{nominal-rate}}) and the
+"nominal max RTT" (see {{nominal-max-rtt}}).
+C4 organizes the management of the flow through a series of
+states: Initial, during which the first assessment of nominal-rate
+and nominal max RTT are obtained, Recovery in which a flow is
+stabilized after the Initial or Pushing phase, Cruising during which
+a flow uses the nominal rate, and Pushing during which the flow
+tries to discover if more resource is available -- see {{c4-states}}.
 
 C4 divides the duration of the connection in a set of "eras",
 each corresponding to a packet round trip. Transitions between protocol
 states typically happen at the end of an era, except if the
 transition is forced by a congestion event.
 
+C4 assumes that the transport stack is
+capable of signaling events such
+as acknowledgements, RTT measurements, ECN signals or the detection
+of packet losses. It also assumes that the congestion algorithm
+controls the transport stack by setting the congestion window
+(CWND) and the pacing rate (see {{congestion-response}}).
+
+C4 introduces the concept of "sensitivity" (see {{sensitivity}})
+to ensure that flows using a large amount of bandwidth are more
+"sensitive" to congestion signals than flows using fewer bandwidth,
+and thus that multiple flows sharing a common bottleneck are driven
+to share the resource evenly.
+
+
+# Key Words
+
+The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL
+NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "NOT RECOMMENDED",
+"MAY", and "OPTIONAL" in this document are to be interpreted as
+described in BCP 14 {{RFC2119}} {{RFC8174}} when, and only when, they
+appear in all capitals, as shown here.
 
 # C4 variables
 
-## Per era variables
-
-C4 keeps variables per era:
-~~~
-era_sequence; /* sequence number of first packet sent in this era */
-alpha_current; /* coefficient alpha used in the current state */
-alpha_previous; /* coefficient alpha used in the previous era */
-era_max_rtt; /* max RTT observed during this era */
-era_min_rtt; /* min RTT observed during this era */
-~~~
-These variables are initialized at the beginning of the era.
-
+In addition to the nomnal rate and the nominal max RTT,
+C4 maintains a set a variables per flow (see {{global-variables}})
+and per era (see {{era-variables}}).
 
 ## Nominal rate {#nominal-rate}
 
@@ -181,18 +122,20 @@ computed from the current nominal rate and the coefficient
 "alpha" used in the previous era (`alpha_previous`). If the
 new measurement is larger than the current `nominal_rate`,
 we increase that rate:
+
 ~~~
 rate_estimate = min ( nominal_rate*alpha_previous,
     bytes_acknowledged /(current_time - time_sent)
 nominal_rate = max(rate_estimate, nominal_rate)
 ~~~
+
 Comparing to `nominal_rate*alpha_previous` protects against
 overestimating the data rate because of transmission jitter.
 
 The nominal rate is reduced following congestion events,
 as specified in {{congestion-response}}.
 
-## Nominal max RTT
+## Nominal max RTT {#nominal-max-rtt}
 
 The nominal max RTT is an estimate of the maximum RTT
 that can occur on the path in the absence of queues.
@@ -225,12 +168,38 @@ if alpha_previous < 1.0:
           (7*nominal_max_rtt + era_max_rtt)/8
 ~~~
 
-The ratio of decrease over time is tuned so that jitter
-events will be remembered for a several of the
+The decrease over time is tuned so that jitter
+events will be remembered for several of the
 cruising-pushing-recovery cycles, which is enough time for the
 next jitter event to happen, at least on Wi-Fi networks.
 
-# States and Transition
+## Global variables {#global-variables}
+
+In addition to the nominal rate and nominal MAX RTT,
+C4 maintains a set of variables tracking the evolution of the flow:
+
+- running min RTT, an approximation of the min RTT for the flow,
+- number of eras without increase (see {{c4-initial}}),
+- number of successful pushes,
+- current state of the algorithm, which can be Initial, Recovery,
+  Cruising or Pushing.
+
+## Per era variables {#era-variables}
+
+C4 keeps variables per era:
+
+~~~
+era_sequence; /* sequence number of first packet sent in this era */
+alpha_current; /* coefficient alpha used in the current state */
+alpha_previous; /* coefficient alpha used in the previous era */
+era_max_rtt; /* max RTT observed during this era */
+era_min_rtt; /* min RTT observed during this era */
+~~~
+
+These variables are initialized at the beginning of the era.
+
+
+# States and Transition {#c4-states}
 
 The state machine for C4 has the following states:
 
@@ -275,7 +244,7 @@ diagram.
                       |                        |
                       v                        |
                  +----------+                  |
-                 | Startup  |                  |
+                 | Initial  |                  |
                  +----|-----+                  |
                       |                        |
                       v                        |
@@ -334,24 +303,35 @@ Pushing | 5/4 or 17/16 | see {{c4-pushing}} for rules on choosing 5/4 or 17/16
 ## Initial state {#c4-initial}
 
 When the flow is initialized, it enters the Initial state,
-during which it does a first assessment of the 
+during which it does a first assessment of the
+"nominal rate" and "nominal max RTT".
 The coefficient `alpha_current` is set to 2. The
 "nominal rate" and "nominal max RTT" are initialized to zero,
-which will cause setting pacing rate and CWND to default
+which will cause pacing rate and CWND to be set default
 initial values. The nominal max RTT will be set to the
 first assessed RTT value, but is not otherwise changed
 during the initial phase. The nominal rate is updated
-after receiving acknowledgements, per {#nominal-rate}.
+after receiving acknowledgements, see {#nominal-rate}.
 
 C4 will exit the Initial state and enter Recovery if the 
 nominal rate does not increase for 3 consecutive eras,
 omitting the eras for which the transmission was
 "application limited".
 
-C4 will only react to congestion events during the
-Initial phase if the nominal rate did not increase
-during the previous era. In that case, C4 will
-exit the Initial state and enter Recovery.
+C4 exit the Initial if receiving a congestion signal and the
+following conditions are true:
+
+1- If the signal is due to "delay", C4 will only exit the
+   initial state if the `nominal_rate` did not increase
+   in the last 2 eras.
+
+2- If the signal is due to "loss", C4 will only exit the
+   initial state if more than 20 packets have been received.
+
+The restriction on delay signals is meant to prevent spurious exit
+due to delay jitter. The restriction on loss signals is meant
+to ensure that enough packets have been received to properly
+assess the loss rate.
 
 ## Recovery state {#c4-recovery}
 
@@ -387,7 +367,30 @@ C4 re-enters "Initial" at the end of the recovery period if the evaluation
 shows 3 successive rate increases without congestion. Otherwise,
 C4 enters cruising.
 
+Reception of a congestion signal during the Initial phase does not
+cause a change in the `nominal_rate` or `nominal_max_RTT`.
+
 ## Cruising state {#c4-cruising }
+
+The Cruising state is entered from the Recovery state. 
+The coefficient `alpha_current` is set to 1.
+
+C4 will normally transition from Cruising state to Pushing state
+after 4 eras. It will transition to Recovery before that if
+a congestion signal is received.
+
+## Pushing state {#c4-pushing}
+
+The Pushing state is entered from the Cruising state. 
+The coefficient `alpha_current` is set to 5/4 if the previous
+pushing attempt was successful (see {{c4-recovery}}),
+or 17/16 if it was not.
+
+C4 exits the pushing state after one era, or if a congestion
+signal is received before that. In an exception to
+standard congestion processing, the reduction in `nominal_rate` and
+`nominal_max_RTT` are not applied if the congestion signal
+is tied to a packet sent during the Pushing state.
 
 # Handling of congestion signals {#congestion-response}
 
@@ -395,29 +398,84 @@ C4 responds to congestion events by reducing the nominal rate, and
 in some condition also reducing the nominal max RTT. C4 monitors
 3 types of congestion events:
 
-1. Excessive increase of measured RTT (except in pig war mode),
+1. Excessive increase of measured RTT,
 2. Excessive rate of packet losses (but not mere Probe Time Out, see {{no-pto}}),
 3. Excessive rate of ECN/CE marks
 
-If any of these signals is detected, C4 enters a "recovery"
-state. 
+C4 monitors successive RTT measurements and compare them to
+a reference value, defined as the sum of the "nominal max rtt"
+and a "delay threshold". C4 monitors the arrival of packet losses
+computes a "smoothed error rate", and compares it to a
+"loss threshold". When the path supports ECN, C4 monitors the
+arrival of ECN marks and computes a "smoothed CE rate",
+and compares it to a "CE threshold". These coefficients
+depend on the sensitivity coefficient defined in {{sensitivity}}.
 
-## Rate Reduction on Congestion
+## Variable Sensitivity {#sensitivity}
 
-On entering recovery, C4 reduces the `nominal_rate` by a factor "beta":
+The three congestion detection thresholds are
+function of the "sensitivity" coefficient,
+which increases with the nominal rate of the flow. Flows
+operating at a low data rate have a low sensitivity coefficient
+and reacts slower to congestion signals than flows operating
+at a higher rate. If multiple flows share the same bottleneck,
+the flows with higher data rate will detect congestion signals
+and back off faster than flow operating at lower rate. This will
+drive these flows towards sharing the available resource evenly.
+
+The sensitivity coefficient varies from 0 to 1, according to
+a simple curve:
+
+* set sensitivity to 0 if data rate is lower than 50000B/s
+* linear interpolation between 0 and 0.92 for values
+  between 50,000 and 1,000,000B/s.
+* linear interpolation between 0.92 and 1 for values
+  between 1,000,000 and 10,000,000B/s.
+* set sensitivity to 1 if data rate is higher than
+  10,000,000B/s
+
+The sensitivity index is then used to set the value of delay and
+loss and CE thresholds.
+
+## Detecting Excessive Delays
+
+The delay threshold is function of the nominal max RTT and the
+sensitivity coefficient:
+
 ~~~
-    nominal_rate = (1-beta)*nominal_rate
+    delay_fraction = 1/16 + (1 - sensitivity)*3/16
+    delay_threshold = min(25ms, delay_fraction*nominal_max_rtt)
 ~~~
-The coefficient `beta` differs depending on the nature of the congestion
-signal. For packet losses, it is set to `1/4`, similar to the
-value used in Cubic. For delay based losses, it is proportional to the
-difference between the measured RTT and the target RTT divided by
-the acceptable margin, capped to `1/4`. If the signal
-is an ECN/CE rate, we may
-use a proportional reduction coefficient in line with
-{{RFC9331}}, again capped to `1/4`.
 
-## Do not react to Probe Time Out {#no-pto}
+A delay congestion signal is detected if:
+
+~~~
+    rtt_sample > nominal_max_rtt + delay_threshold
+~~~
+
+## Detecting Excessive Losses
+
+C4 maintains an average loss rate, updated for every packet
+as:
+
+~~~
+    if packet_is_lost:
+        loss = 1
+    else:
+        loss = 0
+    smoothed_loss_rate = (loss + 15*smoothed_loss_rate)/16
+~~~
+
+The loss threshold is computed as:
+
+~~~
+    loss_threshold = 0.02 + 0.50 * (1-sensitivity);
+~~~
+
+A loss is detected if the smoothed loss rate is larger than the threshold.
+In that case, the coefficient `beta` is set to 1/4.
+
+### Do not react to Probe Time Out {#no-pto}
 
 QUIC normally detect losses by observing gaps in the sequences of acknowledged
 packet. That's a robust signal. QUIC will also inject "Probe time out"
@@ -427,13 +485,43 @@ PTO timeouts. When testing in "high jitter" conditions, we realized that we shou
 not change the state of C4 for losses detected solely based on timer, and
 only react to those losses that are detected by gaps in acknowledgements.
 
-## Driving for fairness {#fairness}
+## Detecting Excessive CE Marks
+
+TBD. The plan is to mimic the L4S specification.
+
+## Rate Reduction on Congestion
+
+On entering recovery, C4 reduces the `nominal_rate` by the factor "beta"
+corresponding to the congestion signal:
+
+~~~
+    nominal_rate = (1-beta)*nominal_rate
+~~~
+
+The coefficient `beta` differs depending on the nature of the congestion
+signal. For packet losses, it is set to `1/4`, similar to the
+value used in Cubic. 
+
+For delay based losses, it is proportional to the
+difference between the measured RTT and the target RTT divided by
+the acceptable margin, capped to `1/4`:
+
+~~~
+    beta = min(1/4,
+              (rtt_sample - (nominal_max_rtt + delay_threshold)/
+               delay_threshod))
+~~~
+
+If the signal is an ECN/CE rate, this is still TBD. We could
+use a proportional reduction coefficient in line with
+{{RFC9331}}, but we should use the senitivity coefficient to
+modulate that signal.
 
 # Security Considerations
 
 We do not believe that C4 introduce new security issues. Or maybe there are,
 such as what happen if applications can be fooled in going to fast and
-overwhelming the network, or going to slow and underwhelming the application.
+overwhelming the network, or going too slow and underwhelming the application.
 Discuss!
 
 # IANA Considerations

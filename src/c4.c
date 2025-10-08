@@ -930,7 +930,7 @@ void c4_notify(
         case picoquic_congestion_notification_rtt_measurement:
             c4_update_rtt(c4_state, ack_state->rtt_measurement, current_time);
             if (c4_state->alg_state == c4_initial) {
-                c4_initial_handle_rtt(path_x, c4_state, notification, ack_state->rtt_measurement, current_time);
+                c4_initial_handle_rtt(path_x, c4_state, notification, ack_state->rtt_measurement, current_time);push
                 c4_apply_rate_and_cwin(path_x, c4_state);
             }
             else {

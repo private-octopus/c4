@@ -123,36 +123,27 @@ typedef struct st_c4_state_t {
     uint64_t nb_cruise_left_before_push; /* Number of cruise periods required before push */
     uint64_t seed_cwin; /* Value of CWIN remembered from previous trials */
     uint64_t seed_rate; /* data rate remembered from seed cwin. */
-    uint64_t max_rate; /* max nominal rate since initial */
-    uint64_t max_bytes_ack; /* maximum bytes acked since congestion */
 
     int nb_eras_no_increase;
     int nb_push_no_congestion; /* Number of successive pushes with no congestion */
     uint64_t push_rate_old;
     uint64_t push_alpha;
 
-    uint64_t rtt_min;
     uint64_t era_max_rtt;
     uint64_t era_min_rtt;
 
     uint64_t delay_threshold;
     uint64_t recent_delay_excess;
-    int nb_rtt_update_since_discovery;
 
     uint64_t last_lost_packet_number; /* Used for computation of loss rate. Init to 0 */
     double smoothed_drop_rate; /* Average packet loss rate */
 
-    unsigned int last_freeze_was_not_delay : 1;
-    unsigned int rtt_min_is_trusted : 1;
+    unsigned int recovery_event_not_delay : 1;
     unsigned int congestion_notified : 1;
-    unsigned int congestion_delay_notified : 1;
     unsigned int push_was_not_limited : 1;
     unsigned int use_seed_cwin : 1;
     unsigned int do_cascade : 1;
     unsigned int do_slow_push : 1;
-#if 0
-    picoquic_min_max_rtt_t rtt_filter;
-#endif
     /* Handling of options. */
     char const* option_string;
 } c4_state_t;
@@ -160,9 +151,9 @@ typedef struct st_c4_state_t {
 static void c4_enter_recovery(
     picoquic_path_t* path_x,
     c4_state_t* c4_state,
-    int is_congested,
     c4_congestion_t c_mode,
     uint64_t current_time);
+
 static void c4_enter_cruise(
     picoquic_path_t* path_x,
     c4_state_t* c4_state,
@@ -355,7 +346,6 @@ static void c4_growth_evaluate(c4_state_t* c4_state)
 static void c4_growth_reset(c4_state_t* c4_state)
 {
     c4_state->congestion_notified = 0;
-    c4_state->congestion_delay_notified = 0;
     c4_state->push_was_not_limited = 0;
     c4_state->push_rate_old = c4_state->nominal_rate;
     /* Push alpha will have to be reset to the correct value when entering push */
@@ -395,10 +385,8 @@ static void c4_enter_initial(picoquic_path_t* path_x, c4_state_t* c4_state, uint
     c4_state->nb_push_no_congestion = 0;
     c4_state->alpha_1024_current = C4_ALPHA_INITIAL;
     c4_state->nb_packets_in_startup = 0;
-    c4_state->nb_rtt_update_since_discovery = 0;
     c4_era_reset(path_x, c4_state);
     c4_state->nb_eras_no_increase = 0;
-    c4_state->max_rate = 0;
     c4_growth_reset(c4_state);
 }
 
@@ -436,7 +424,6 @@ void c4_reset(c4_state_t* c4_state, picoquic_path_t* path_x, char const* option_
 {
     memset(c4_state, 0, sizeof(c4_state_t));
     c4_state->option_string = option_string;
-    c4_state->rtt_min = UINT64_MAX;
     c4_state->running_min_rtt = UINT64_MAX;
     c4_state->alpha_1024_current = C4_ALPHA_INITIAL;
     c4_state->do_slow_push = 1;
@@ -456,11 +443,9 @@ void c4_seed_cwin(c4_state_t* c4_state, picoquic_path_t* path_x, uint64_t bytes_
 static void c4_exit_initial(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_congestion_notification_t notification, uint64_t current_time)
 {
     /* We assume that any required correction is done prior to calling this */
-    int is_congested = 0;
-
     c4_state->nb_eras_no_increase = 0;
     c4_state->nb_push_no_congestion = 0;
-    c4_enter_recovery(path_x, c4_state, is_congested, c4_congestion_none, current_time);
+    c4_enter_recovery(path_x, c4_state, c4_congestion_none, current_time);
 }
 
 static void c4_initial_handle_rtt(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_congestion_notification_t notification, uint64_t rtt_measurement, uint64_t current_time)
@@ -537,20 +522,6 @@ void c4_init(picoquic_cnx_t * cnx, picoquic_path_t* path_x, char const* option_s
 
     path_x->congestion_alg_state = (void*)c4_state;
 }
-#if 0
-/* Reset RTT filter.
-* We are reusing the hystart code for its low pass rtt filter, but in some
-* cases the filter keeps more memory than required, so it is better
-* to reset it.
- */
-static void c4_reset_rtt_filter(c4_state_t* c4_state)
-{
-    for (int i = 0; i < PICOQUIC_MIN_MAX_RTT_SCOPE; i++) {
-        picoquic_cc_filter_rtt_min_max(&c4_state->rtt_filter, c4_state->rtt_min);
-    }
-    c4_state->rtt_filter.rtt_filtered_min = c4_state->rtt_min;
-}
-#endif
 
 /*
 * Enter recovery.
@@ -561,24 +532,28 @@ static void c4_reset_rtt_filter(c4_state_t* c4_state)
 static void c4_enter_recovery(
     picoquic_path_t* path_x,
     c4_state_t* c4_state,
-    int is_congested,
     c4_congestion_t c_mode,
     uint64_t current_time)
 {
-    if (!is_congested) {
-        c4_state->last_freeze_was_not_delay = 0;
+    if (c_mode != c4_congestion_none) {
+        c4_state->recovery_event_not_delay = 0;
     }
     else {
         c4_state->nb_push_no_congestion = 0;
-        c4_state->last_freeze_was_not_delay = (c_mode != c4_congestion_delay);
+        c4_state->recovery_event_not_delay = (c_mode != c4_congestion_delay);
     }
     c4_state->alpha_1024_current = C4_ALPHA_RECOVER_1024;
 
     if (c4_state->alg_state == c4_initial) {
         c4_growth_reset(c4_state);
     }
-    c4_state->alg_state = c4_recovery;
-    c4_era_reset(path_x, c4_state);
+    /* There may be multiple congestion signals coming in, but we 
+    * will not reinitialize the state if C4 is already in recovery.
+     */
+    if (c4_state->alg_state != c4_recovery) {
+        c4_state->alg_state = c4_recovery;
+        c4_era_reset(path_x, c4_state);
+    }
 }
 
 /* Exit recovery. We will test whether the previous push was successful.
@@ -594,11 +569,15 @@ static void c4_exit_recovery(
     c4_growth_evaluate(c4_state);
     c4_growth_reset(c4_state);
 
-    if (c4_state->nominal_rate > c4_state->max_rate) {
-        c4_state->max_rate = c4_state->nominal_rate;
-    }
     c4_state->recent_delay_excess = 0;
-    c4_state->nb_rtt_update_since_discovery = 0;
+
+    /* Reset the smoothed drop rate at the end of recovery.
+    * so that the next measurements reflect the new parameters.
+    */
+    c4_state->smoothed_drop_rate = 0;
+    /* The same should be done for ECN */
+
+
     /* Trigger the cascade if we have many successful pushes */
     if (c4_state->nb_push_no_congestion >= C4_NB_PUSH_BEFORE_RESET) {
         c4_enter_initial(path_x, c4_state, current_time);
@@ -728,11 +707,6 @@ void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_a
         }
     }
 
-    if (rate_measurement >= previous_rate &&
-        ack_state->nb_bytes_delivered_since_packet_sent > c4_state->max_bytes_ack) {
-        c4_state->max_bytes_ack = ack_state->nb_bytes_delivered_since_packet_sent;
-    }
-
     if (c4_state->alg_state == c4_initial) {
         c4_initial_handle_ack(path_x, c4_state, ack_state, current_time);
     }
@@ -757,7 +731,7 @@ void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_a
                 }
                 break;
             case c4_pushing:
-                c4_enter_recovery(path_x, c4_state, 0, c4_congestion_none, current_time);
+                c4_enter_recovery(path_x, c4_state, c4_congestion_none, current_time);
                 break;
             default:
                 c4_era_reset(path_x, c4_state);
@@ -784,25 +758,31 @@ static void c4_notify_congestion(
 {
     uint64_t beta = C4_BETA_LOSS_1024;
     c4_state->congestion_notified = 1;
-    c4_state->congestion_delay_notified |= (c_mode == c4_congestion_delay);
 
     if (c4_state->alg_state == c4_recovery &&
-        (c_mode != c4_congestion_delay || !c4_state->last_freeze_was_not_delay)) {
+        (c_mode != c4_congestion_delay || !c4_state->recovery_event_not_delay)) {
         /* Do not treat additional events during same freeze interval */
         return;
     }
 
+    if (c_mode == c4_congestion_loss) {
+        /* Make amount of slow down function of sensitivity,
+        * for better fairness between C4 connections.
+        */
+        beta = (C4_BETA_LOSS_1024 + MULT1024(c4_sensitivity_1024(c4_state), C4_BETA_LOSS_1024))/2;
+    }
+    
     if (c_mode == c4_congestion_delay) {
         /* TODO: we should really use bytes in flight! */
         beta = c4_state->recent_delay_excess*1024/c4_state->delay_threshold;
 
         if (beta > C4_BETA_LOSS_1024) {
-            /* capping beta to the standard 1/8th. */
+            /* capping beta to the standard 1/4th. */
             beta = C4_BETA_LOSS_1024;
         }
     }
     else {
-        /* Clear the counter used to filter spurious delay measurements */
+        /* Clear the excess delay to avoid spurious delay measurements */
         c4_state->recent_delay_excess = 0;
     }
 
@@ -812,14 +792,12 @@ static void c4_notify_congestion(
     else {
         c4_state->nominal_rate -= MULT1024(beta, c4_state->nominal_rate);
         if (c_mode == c4_congestion_loss) {
-            c4_state->max_bytes_ack -= MULT1024(beta, c4_state->max_bytes_ack);
             c4_state->nominal_max_rtt -= MULT1024(beta, c4_state->nominal_max_rtt);
-
             c4_state->delay_threshold = c4_delay_threshold(c4_state);
         }
     }
 
-    c4_enter_recovery(path_x, c4_state, 1, c_mode, current_time);
+    c4_enter_recovery(path_x, c4_state, c_mode, current_time);
 
     c4_apply_rate_and_cwin(path_x, c4_state);
 

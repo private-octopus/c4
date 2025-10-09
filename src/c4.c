@@ -522,20 +522,6 @@ void c4_init(picoquic_cnx_t * cnx, picoquic_path_t* path_x, char const* option_s
 
     path_x->congestion_alg_state = (void*)c4_state;
 }
-#if 0
-/* Reset RTT filter.
-* We are reusing the hystart code for its low pass rtt filter, but in some
-* cases the filter keeps more memory than required, so it is better
-* to reset it.
- */
-static void c4_reset_rtt_filter(c4_state_t* c4_state)
-{
-    for (int i = 0; i < PICOQUIC_MIN_MAX_RTT_SCOPE; i++) {
-        picoquic_cc_filter_rtt_min_max(&c4_state->rtt_filter, c4_state->rtt_min);
-    }
-    c4_state->rtt_filter.rtt_filtered_min = c4_state->rtt_min;
-}
-#endif
 
 /*
 * Enter recovery.
@@ -561,12 +547,13 @@ static void c4_enter_recovery(
     if (c4_state->alg_state == c4_initial) {
         c4_growth_reset(c4_state);
     }
-    /* We may consider not reentering recovery again if 
-    * already in it, but we have to understand why doing that
-    * breaks the C4 vs C4 test.
+    /* There may be multiple congestion signals coming in, but we 
+    * will not reinitialize the state if C4 is already in recovery.
      */
-    c4_state->alg_state = c4_recovery;
-    c4_era_reset(path_x, c4_state);
+    if (c4_state->alg_state != c4_recovery) {
+        c4_state->alg_state = c4_recovery;
+        c4_era_reset(path_x, c4_state);
+    }
 }
 
 /* Exit recovery. We will test whether the previous push was successful.
@@ -583,6 +570,13 @@ static void c4_exit_recovery(
     c4_growth_reset(c4_state);
 
     c4_state->recent_delay_excess = 0;
+
+    /* Reset the smoothed drop rate at the end of recovery.
+    * so that the next measurements reflect the new parameters.
+    */
+    c4_state->smoothed_drop_rate = 0;
+    /* The same should be done for ECN */
+
 
     /* Trigger the cascade if we have many successful pushes */
     if (c4_state->nb_push_no_congestion >= C4_NB_PUSH_BEFORE_RESET) {
@@ -771,6 +765,13 @@ static void c4_notify_congestion(
         return;
     }
 
+    if (c_mode == c4_congestion_loss) {
+        /* Make amount of slow down function of sensitivity,
+        * for better fairness between C4 connections.
+        */
+        beta = (C4_BETA_LOSS_1024 + MULT1024(c4_sensitivity_1024(c4_state), C4_BETA_LOSS_1024))/2;
+    }
+    
     if (c_mode == c4_congestion_delay) {
         /* TODO: we should really use bytes in flight! */
         beta = c4_state->recent_delay_excess*1024/c4_state->delay_threshold;
@@ -781,7 +782,7 @@ static void c4_notify_congestion(
         }
     }
     else {
-        /* Clear the counter used to filter spurious delay measurements */
+        /* Clear the excess delay to avoid spurious delay measurements */
         c4_state->recent_delay_excess = 0;
     }
 

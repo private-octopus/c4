@@ -558,8 +558,8 @@ degrade over time, simulating a 100Mbps connection with a 30ms RTT,
 that changes to a 100ms RTT after 1 second.
 The test lasts for 10 video groups of frames, i.e. 10 seconds. 
 The measurements start 5 seconds after the
-start of the connection. The expected average delay is set to 200ms,
-and the maximum delay is set to 600ms. The test is successful if
+start of the connection. The expected average delay is set to 110ms,
+and the maximum delay is set to 120ms. The test is successful if
 100 trials are all successful.
 
 ### Media over varying Wi-Fi
@@ -574,8 +574,8 @@ with average 1ms. After 1 second, the data rate drops to 2Mbps
 and the jitter average increases to 12ms.
 The test lasts for 5 video groups of frames,
 i.e. 5 seconds. The measurements start 200ms after the
-start of the connection. The expected average delay is set to 173ms,
-and the maximum delay is set to 699ms. The test is successful if
+start of the connection. The expected average delay is set to 110ms,
+and the maximum delay is set to 350ms. The test is successful if
 100 trials are all successful.
 
 ### Media with Wi-Fi suspensions
@@ -591,6 +591,21 @@ The test lasts for 5 video groups of frames,
 i.e. 5 seconds. The measurements start 200ms after the
 start of the connection. The expected average delay is set to 23.6ms,
 and the maximum delay is set to 202ms. The test is successful if
+100 trials are all successful.
+
+### Media over bad Wi-Fi
+
+The "bad Wi-Fi" media test verifies that media performance does not
+degrade too much on a connection that has the kind of jitter
+discussed in {{c4-wifi}}. The connection has the characteristics
+similar to the "bad Wi-Fi" scenario described in {{bad-wifi}}.
+The average jitter is set to 7ms, which implies multiple spikes
+of 100 to 200ms every second. The data rate is set to 20Mbps, and the base
+RTT before jitter is set to 2ms, i.e., simulating a local server.
+The test lasts for 5 video groups of frames,
+i.e. 5 seconds. The measurements start 200ms after the
+start of the connection. The expected average delay is set to 75ms,
+and the maximum delay is set to 360ms. The test is successful if
 100 trials are all successful.
 
 # Tests

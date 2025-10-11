@@ -431,7 +431,10 @@ slower in our initial trials. We apply the following algorithm:
 
 * compute the `max_rtt_sample` as the maximum RTT observed for
 packets sent during the recovery period.
-* if `max_rtt_sample` is large than `nominal_max_rtt`, set
+* if the `max_rtt_sample` is more than `max_jitter` above
+`running_min_rtt`, reset it to `running_min_rtt + max_jitter`
+(by default, `max_jitter` is set to 250ms).
+* if `max_rtt_sample` is larger than `nominal_max_rtt`, set
 `nominal_max_rtt` to that value.
 * else, set `nominal_max_rtt` to:
 ~~~
@@ -439,6 +442,25 @@ packets sent during the recovery period.
                      (1-gamma)*nominal_max_rtt
 ~~~
 The `gamma` coefficient is set to `1/8` in our initial trials.
+
+### Preventing Runaway Max RTT
+
+Computing Max RTT the way we do bears the risk of "run away increase"
+of Max RTT:
+
+- C4 notices high jitter, increases Nominal Max RTT accordingly, set CWND to the
+  product of the increased Nominal Max RTT and Nominal Rate
+- If Nominal rate is above the actual link rate, C4 will fill the pipe, and create a queue.
+- On the next measurement, C4 finds that the max RTT has increased because of the queue,
+  interprets that as "more jitter", increases Max RTT and fills the queue some more.
+- Repeat until the queue become so large that packets are dropped and cause a
+  congestion event.
+
+Our proposed algorithm limits the Max RTT to at most `running_min_rtt + max_jitter`,
+but that is still risky. If congestion causes queues, the running measurements of `min RTT`
+will increase, causing the algorithm to allow for corresponding increases in `max RTT`.
+This would not happen as fast as without the capping to `running_min_rtt + max_jitter`,
+but it would still increase.
 
 ## Monitoring the nominal rate {#monitor-rate}
 

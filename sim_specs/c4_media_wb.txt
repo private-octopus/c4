@@ -12,6 +12,6 @@ icid: ed1ac4fb
 qlog_dir: cclog
 qperf_log: bbr_media_wf_qperflog.csv
 media_stats_start: 200000
-media_latency_average: 142000
-media_latency_max: 922000
+media_latency_average: 75000
+media_latency_max: 360000
 media_excluded: vhigh, vmid, vlast

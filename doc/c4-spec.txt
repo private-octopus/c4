@@ -5,9 +5,9 @@
 Network Working Group                                         C. Huitema
 Internet-Draft                                      Private Octopus Inc.
 Intended status: Experimental                              S. Nandakumar
-Expires: 11 April 2026                                       C. Jennings
+Expires: 13 April 2026                                       C. Jennings
                                                                    Cisco
-                                                          8 October 2025
+                                                         10 October 2025
 
 
        Specification of Christian's Congestion Control Code (C4)
@@ -40,7 +40,7 @@ Status of This Memo
    time.  It is inappropriate to use Internet-Drafts as reference
    material or to cite them other than as "work in progress."
 
-   This Internet-Draft will expire on 11 April 2026.
+   This Internet-Draft will expire on 13 April 2026.
 
 Copyright Notice
 
@@ -53,7 +53,7 @@ Copyright Notice
 
 
 
-Huitema, et al.           Expires 11 April 2026                 [Page 1]
+Huitema, et al.           Expires 13 April 2026                 [Page 1]
 
 Internet-Draft              C4 Specification                October 2025
 
@@ -73,24 +73,24 @@ Table of Contents
      3.2.  Nominal max RTT . . . . . . . . . . . . . . . . . . . . .   4
      3.3.  Global variables  . . . . . . . . . . . . . . . . . . . .   5
      3.4.  Per era variables . . . . . . . . . . . . . . . . . . . .   5
-   4.  States and Transition . . . . . . . . . . . . . . . . . . . .   5
+   4.  States and Transition . . . . . . . . . . . . . . . . . . . .   6
      4.1.  Setting pacing rate, congestion window and quantum  . . .   7
-     4.2.  Initial state . . . . . . . . . . . . . . . . . . . . . .   7
-     4.3.  Recovery state  . . . . . . . . . . . . . . . . . . . . .   8
+     4.2.  Initial state . . . . . . . . . . . . . . . . . . . . . .   8
+     4.3.  Recovery state  . . . . . . . . . . . . . . . . . . . . .   9
      4.4.  Cruising state {#c4-cruising }  . . . . . . . . . . . . .   9
-     4.5.  Pushing state . . . . . . . . . . . . . . . . . . . . . .   9
-   5.  Handling of congestion signals  . . . . . . . . . . . . . . .   9
+     4.5.  Pushing state . . . . . . . . . . . . . . . . . . . . . .  10
+   5.  Handling of congestion signals  . . . . . . . . . . . . . . .  10
      5.1.  Variable Sensitivity  . . . . . . . . . . . . . . . . . .  10
-     5.2.  Detecting Excessive Delays  . . . . . . . . . . . . . . .  10
+     5.2.  Detecting Excessive Delays  . . . . . . . . . . . . . . .  11
      5.3.  Detecting Excessive Losses  . . . . . . . . . . . . . . .  11
-       5.3.1.  Do not react to Probe Time Out  . . . . . . . . . . .  11
-     5.4.  Detecting Excessive CE Marks  . . . . . . . . . . . . . .  11
-     5.5.  Rate Reduction on Congestion  . . . . . . . . . . . . . .  11
+       5.3.1.  Do not react to Probe Time Out  . . . . . . . . . . .  12
+     5.4.  Detecting Excessive CE Marks  . . . . . . . . . . . . . .  12
+     5.5.  Rate Reduction on Congestion  . . . . . . . . . . . . . .  12
    6.  Security Considerations . . . . . . . . . . . . . . . . . . .  12
-   7.  IANA Considerations . . . . . . . . . . . . . . . . . . . . .  12
-   8.  References  . . . . . . . . . . . . . . . . . . . . . . . . .  12
-     8.1.  Normative References  . . . . . . . . . . . . . . . . . .  12
-     8.2.  Informative References  . . . . . . . . . . . . . . . . .  12
+   7.  IANA Considerations . . . . . . . . . . . . . . . . . . . . .  13
+   8.  References  . . . . . . . . . . . . . . . . . . . . . . . . .  13
+     8.1.  Normative References  . . . . . . . . . . . . . . . . . .  13
+     8.2.  Informative References  . . . . . . . . . . . . . . . . .  13
    Acknowledgments . . . . . . . . . . . . . . . . . . . . . . . . .  13
    Authors' Addresses  . . . . . . . . . . . . . . . . . . . . . . .  13
 
@@ -109,7 +109,7 @@ Table of Contents
 
 
 
-Huitema, et al.           Expires 11 April 2026                 [Page 2]
+Huitema, et al.           Expires 13 April 2026                 [Page 2]
 
 Internet-Draft              C4 Specification                October 2025
 
@@ -165,7 +165,7 @@ Internet-Draft              C4 Specification                October 2025
 
 
 
-Huitema, et al.           Expires 11 April 2026                 [Page 3]
+Huitema, et al.           Expires 13 April 2026                 [Page 3]
 
 Internet-Draft              C4 Specification                October 2025
 
@@ -209,22 +209,40 @@ Internet-Draft              C4 Specification                October 2025
    reduce the value of the nominal max RTT over time, to account for
    changes in network conditions.
 
-   /* on end of era */
+
+
+
+
+
+
+
+
+
+
+
+
+Huitema, et al.           Expires 13 April 2026                 [Page 4]
+
+Internet-Draft              C4 Specification                October 2025
+
+
+   # on end of era
+
    if alpha_previous < 1.0:
+       if era_min_rtt < running_min_rtt:
+           running_min_rtt = era_min_rtt
+       else:
+           running_min_rtt =
+              (7*running_min_rtt + era_min_rtt)/8
+
+       if era_max_rtt > running_min_rtt + MAX_JITTER:
+           # cap RTT increases to MAX_JITTER, i.e., 250ms
+           era_max_rtt = running_min_rtt + MAX_JITTER
        if era_max_rtt > nominal_max_rtt:
            nominal_max_rtt = era_max_rtt
        else:
            nominal_max_rtt =
              (7*nominal_max_rtt + era_max_rtt)/8
-
-
-
-
-
-Huitema, et al.           Expires 11 April 2026                 [Page 4]
-
-Internet-Draft              C4 Specification                October 2025
-
 
    The decrease over time is tuned so that jitter events will be
    remembered for several of the cruising-pushing-recovery cycles, which
@@ -257,6 +275,13 @@ Internet-Draft              C4 Specification                October 2025
 
    These variables are initialized at the beginning of the era.
 
+
+
+Huitema, et al.           Expires 13 April 2026                 [Page 5]
+
+Internet-Draft              C4 Specification                October 2025
+
+
 4.  States and Transition
 
    The state machine for C4 has the following states:
@@ -274,14 +299,6 @@ Internet-Draft              C4 Specification                October 2025
       have resulted in increases of "nominal rate", or enters "cruising"
       otherwise.
 
-
-
-
-Huitema, et al.           Expires 11 April 2026                 [Page 5]
-
-Internet-Draft              C4 Specification                October 2025
-
-
    *  "Cruising": the connection is sending using the "nominal_rate" and
       "nominal_max_rtt" value.  If congestion is detected, the
       connection exits cruising and enters "recovery" after lowering the
@@ -295,6 +312,31 @@ Internet-Draft              C4 Specification                October 2025
       is acknowledged.  At that point, it enters the "recovery" state.
 
    These transitions are summarized in the following state diagram.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Huitema, et al.           Expires 13 April 2026                 [Page 6]
+
+Internet-Draft              C4 Specification                October 2025
+
 
                        Start
                          |
@@ -327,17 +369,6 @@ Internet-Draft              C4 Specification                October 2025
      |                   |
      +<------------------+
 
-
-
-
-
-
-
-Huitema, et al.           Expires 11 April 2026                 [Page 6]
-
-Internet-Draft              C4 Specification                October 2025
-
-
 4.1.  Setting pacing rate, congestion window and quantum
 
    If the nominal rate or the nominal max RTT are not yet assessed, C4
@@ -353,6 +384,15 @@ Internet-Draft              C4 Specification                October 2025
    If the nominal rate or the nominal max RTT are both assessed, C4 sets
    pacing rate, and congestion window to values that depends on these
    variables and on a coefficient alpha_current:
+
+
+
+
+
+Huitema, et al.           Expires 13 April 2026                 [Page 7]
+
+Internet-Draft              C4 Specification                October 2025
+
 
    pacing_rate = alpha_current_ * nominal_rate
    cwnd = max (pacing_rate * nominal_max_rtt, 2*MTU)
@@ -386,14 +426,6 @@ Internet-Draft              C4 Specification                October 2025
    otherwise changed during the initial phase.  The nominal rate is
    updated after receiving acknowledgements, see {#nominal-rate}.
 
-
-
-
-Huitema, et al.           Expires 11 April 2026                 [Page 7]
-
-Internet-Draft              C4 Specification                October 2025
-
-
    C4 will exit the Initial state and enter Recovery if the nominal rate
    does not increase for 3 consecutive eras, omitting the eras for which
    the transmission was "application limited".
@@ -406,6 +438,17 @@ Internet-Draft              C4 Specification                October 2025
 
    2- If the signal is due to "loss", C4 will only exit the initial
    state if more than 20 packets have been received.
+
+
+
+
+
+
+
+Huitema, et al.           Expires 13 April 2026                 [Page 8]
+
+Internet-Draft              C4 Specification                October 2025
+
 
    The restriction on delay signals is meant to prevent spurious exit
    due to delay jitter.  The restriction on loss signals is meant to
@@ -443,13 +486,6 @@ Internet-Draft              C4 Specification                October 2025
    *  An increase of at least 1/4th of the expected increase otherwise,
       for example an increase of 1/16th if alpha_previous was 5/4.
 
-
-
-Huitema, et al.           Expires 11 April 2026                 [Page 8]
-
-Internet-Draft              C4 Specification                October 2025
-
-
    C4 re-enters "Initial" at the end of the recovery period if the
    evaluation shows 3 successive rate increases without congestion.
    Otherwise, C4 enters cruising.
@@ -461,6 +497,14 @@ Internet-Draft              C4 Specification                October 2025
 
    The Cruising state is entered from the Recovery state.  The
    coefficient alpha_current is set to 1.
+
+
+
+
+Huitema, et al.           Expires 13 April 2026                 [Page 9]
+
+Internet-Draft              C4 Specification                October 2025
+
 
    C4 will normally transition from Cruising state to Pushing state
    after 4 eras.  It will transition to Recovery before that if a
@@ -491,21 +535,6 @@ Internet-Draft              C4 Specification                October 2025
 
    3.  Excessive rate of ECN/CE marks
 
-
-
-
-
-
-
-
-
-
-
-Huitema, et al.           Expires 11 April 2026                 [Page 9]
-
-Internet-Draft              C4 Specification                October 2025
-
-
    C4 monitors successive RTT measurements and compare them to a
    reference value, defined as the sum of the "nominal max rtt" and a
    "delay threshold".  C4 monitors the arrival of packet losses computes
@@ -525,6 +554,13 @@ Internet-Draft              C4 Specification                October 2025
    bottleneck, the flows with higher data rate will detect congestion
    signals and back off faster than flow operating at lower rate.  This
    will drive these flows towards sharing the available resource evenly.
+
+
+
+Huitema, et al.           Expires 13 April 2026                [Page 10]
+
+Internet-Draft              C4 Specification                October 2025
+
 
    The sensitivity coefficient varies from 0 to 1, according to a simple
    curve:
@@ -554,14 +590,6 @@ Internet-Draft              C4 Specification                October 2025
 
        rtt_sample > nominal_max_rtt + delay_threshold
 
-
-
-
-Huitema, et al.           Expires 11 April 2026                [Page 10]
-
-Internet-Draft              C4 Specification                October 2025
-
-
 5.3.  Detecting Excessive Losses
 
    C4 maintains an average loss rate, updated for every packet as:
@@ -578,6 +606,17 @@ Internet-Draft              C4 Specification                October 2025
 
    A loss is detected if the smoothed loss rate is larger than the
    threshold.  In that case, the coefficient beta is set to 1/4.
+
+
+
+
+
+
+
+Huitema, et al.           Expires 13 April 2026                [Page 11]
+
+Internet-Draft              C4 Specification                October 2025
+
 
 5.3.1.  Do not react to Probe Time Out
 
@@ -610,14 +649,6 @@ Internet-Draft              C4 Specification                October 2025
    the measured RTT and the target RTT divided by the acceptable margin,
    capped to 1/4:
 
-
-
-
-Huitema, et al.           Expires 11 April 2026                [Page 11]
-
-Internet-Draft              C4 Specification                October 2025
-
-
        beta = min(1/4,
                  (rtt_sample - (nominal_max_rtt + delay_threshold)/
                   delay_threshod))
@@ -632,6 +663,16 @@ Internet-Draft              C4 Specification                October 2025
    there are, such as what happen if applications can be fooled in going
    to fast and overwhelming the network, or going too slow and
    underwhelming the application.  Discuss!
+
+
+
+
+
+
+Huitema, et al.           Expires 13 April 2026                [Page 12]
+
+Internet-Draft              C4 Specification                October 2025
+
 
 7.  IANA Considerations
 
@@ -664,16 +705,6 @@ Internet-Draft              C4 Specification                October 2025
               <https://datatracker.ietf.org/doc/html/draft-ietf-moq-
               transport-14>.
 
-
-
-
-
-
-Huitema, et al.           Expires 11 April 2026                [Page 12]
-
-Internet-Draft              C4 Specification                October 2025
-
-
    [RFC9331]  De Schepper, K. and B. Briscoe, Ed., "The Explicit
               Congestion Notification (ECN) Protocol for Low Latency,
               Low Loss, and Scalable Throughput (L4S)", RFC 9331,
@@ -689,6 +720,14 @@ Authors' Addresses
    Christian Huitema
    Private Octopus Inc.
    Email: huitema@huitema.net
+
+
+
+
+
+Huitema, et al.           Expires 13 April 2026                [Page 13]
+
+Internet-Draft              C4 Specification                October 2025
 
 
    Suhas Nandakumar
@@ -725,4 +764,21 @@ Authors' Addresses
 
 
 
-Huitema, et al.           Expires 11 April 2026                [Page 13]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Huitema, et al.           Expires 13 April 2026                [Page 14]

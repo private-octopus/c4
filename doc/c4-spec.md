@@ -159,8 +159,18 @@ nominal max RTT over time, to account for changes in network
 conditions.
 
 ~~~
-/* on end of era */
+# on end of era
+
 if alpha_previous < 1.0:
+    if era_min_rtt < running_min_rtt:
+        running_min_rtt = era_min_rtt
+    else:
+        running_min_rtt =
+           (7*running_min_rtt + era_min_rtt)/8
+
+    if era_max_rtt > running_min_rtt + MAX_JITTER:
+        # cap RTT increases to MAX_JITTER, i.e., 250ms
+        era_max_rtt = running_min_rtt + MAX_JITTER
     if era_max_rtt > nominal_max_rtt:
         nominal_max_rtt = era_max_rtt
     else:

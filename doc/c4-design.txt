@@ -539,7 +539,7 @@ Internet-Draft                  C4 Design                   October 2025
       enter the "initial" state.
 
    Empirically, we detect high jitter in that case if the "running min
-   RTT" is less that 2/5th of the "nomnal max RTT".
+   RTT" is less that 2/5th of the "nominal max RTT".
 
 3.3.  Monitoring the nominal rate
 
@@ -644,7 +644,7 @@ Internet-Draft                  C4 Design                   October 2025
 
    These computations depend from the coefficient kappa.  We empirically
    choose kappa = 1/4.  However, even using a relatively large
-   coefficient sill bears the risk of smoothing too much.
+   coefficient still bears the risk of smoothing too much.
 
 3.3.3.  Alternative to smoothing
 

@@ -462,6 +462,28 @@ will increase, causing the algorithm to allow for corresponding increases in `ma
 This would not happen as fast as without the capping to `running_min_rtt + max_jitter`,
 but it would still increase.
 
+### Initial Phase and Max RTT
+
+During the initial phase, the nominal max RTT and the running min RTT are
+set to the first RTT value that is measured. This is not great in presence
+of high jitter, which causes C4 to exit the Initial phase early, leaving
+the nominal rate way too low. If C4 is competing on the Wi-Fi link
+against another connection, it might remain stalled at this low data rate.
+
+We considered updating the Max RTT during the Initial phase, but that
+prevents any detection of delay based congestion. The Initial phase
+would continue until path buffers are full, a classic case of buffer
+bloat. Instead, we adopted a simple workaround:
+
+* Maintain a flag "initial_after_jitter", initialized to 0.
+* Get a measure of the max RTT after exit from initial.
+* If C4 detects a "high jitter" condition and the
+  "initial_after_jitter" flag is still 0, set the
+  flag to 1 and re-enter the "initial" state.
+
+Empirically, we detect high jitter in that case if the "running min RTT"
+is less that 2/5th of the "nomnal max RTT".
+
 ## Monitoring the nominal rate {#monitor-rate}
 
 The nominal rate is measured on each acknowledgement by dividing
@@ -469,10 +491,29 @@ the number of bytes acknowledged since the packet was sent
 by the RTT measured with the acknowledgement of the packet. However,
 that measurement is noisy, because delay jitter can cause the
 underestimation of the RTT, resulting in over estimation of the
-rate. We protect from these underestimates by observing that
+rate. We tested to ways of measuring the data rate: a simple
+way, similar to what is specified in BBR, and a more involved
+way, using an harmonic filter.
+
+We only use the measurements to increase the nominal rate,
+replacing the current value if we observe a greater filtered measurement.
+This is a deliberate choice, as decreases in measurement are ambiguous.
+They can result from the application being rate limited, or from
+measurement noises. Following those causes random decrease over time,
+which can be detrimental for rate limited applications.
+If the network conditions have changed, the rate will
+be reduced if congestion signals are received, as explained
+in {{congestion}}.
+
+### Simple rate measurement
+
+The simple algorithm protects from underestimation of the
+delay by observing that
 delivery rates cannot be larger than the rate at which the
 packets were sent, thus keeping the lower of the estimated
-receive rate and the send rate. The algorithm is thus:
+receive rate and the send rate.
+
+The simple version of the algorithm would be:
 
 ~~~
 measured_rate = bytes_acknowledged / rtt_sample
@@ -482,9 +523,107 @@ if measured_rate > nominal_rate:
     nominal_rate = measured_rate
 ~~~
 
-This algorithm only measures increases in the rate. The rate will
-be reduced if congestion signals are received, as explained
-in {{congestion}}.
+This algorithm works reasonably well if there is not too
+much delay jitter. However, 
+our first trials show that the rate estimate is often a little
+above the actual data rate. For example, if we take the
+simple case of a C4 connection simulated over a clean fixed
+20Mbps path, we see the data rate measurements after
+the initial phase vary between 15.9 and 22.1 Mbps, with
+a median of 20.5 Mbps. Since the nominal is taken as the
+maximum over an interval, we often see it well above the
+nominal 20 Mbps. This translates in the queues and delays.
+
+If we go from a nice fixed rate path to a simulated "bad Wi-Fi"
+path, the problem worsen. The data rate measurements after
+the initial phase vary between 200kbps and 27.7 Mbps, with
+a median of 11.9 Mbps -- with maximum and median well above
+the simulated data rate of 10 Mbps. The nominal rate
+can be more than double the actual rate, which creates huge
+queues and delays.
+
+### Harmonic filter
+
+We assumed initially that simple precautions like limiting to
+the send rate would be sufficient. They are not, in part
+because the effect of "send quantum" which allows for
+peaks of data rate above the nominal rate. 
+
+The data rate measurements are the quotient of the number of
+bytes received by the delay. The number of bytes received is
+easy to assert, but the measurement of the delays are very noisy.
+Instead of trying to average the data rates, we can average
+their inverse, i.e., the quotients of the delay by the
+bytes received, the times per byte. Then we can obtain
+smoothed data rates as the inverse of these times per byte,
+effectively computing an harmonic average of measurements
+over time.
+
+We compute an exponentially weighted moving average
+of the time per byte by computing the recursive function:
+
+~~~
+tpb = rtt_sample/nb_bytes_acknowledged
+smoothed_tpb = (1-kappa)*smoothed_tpb + kappa*tpb
+~~~
+
+We then derive the smoothed rate measurement:
+
+~~~
+smoothed_rate_measurement = 1/smoothed_tpb
+~~~
+
+And we update the nominal rate:
+
+~~~
+if smoothed_rate_measurement > nominal_rate:
+    nominal_rate = smoothed_rate_measurement
+~~~
+
+These computations depend from the coefficient `kappa`. We empirically
+choose `kappa = 1/4`. However, even using a relatively large coefficient
+sill bears the risk of smoothing too much.
+
+### Alternative to smoothing
+
+Smoothing a control input like the measured data rate is an inherent
+tradeoff. While we will reduce the noise, we will also delay
+any observation. That is very obvious during the initial phase. The
+data rate is expected to double or more every RTT, and we are also
+expected to receive a few ACKs per RTT. If we smooth with a
+coefficient 1/4 and we receive 4 acknowledgements per RTT, the
+smoothed value will end up being about 68% of the actual value.
+Instead of doubling every RTT, the growth rate will be much
+slower.
+
+In the short term, we solved the issue by using the "classic"
+computation during the Initial phase, and only using smoothing
+in the later phase if we detect high jitter, i.e., if
+the "running min RTT" is smaller than 3/4th of the "nominal max RTT".
+
+This is clearly not the final solution. C4 tests for available
+bandwidth by sending data a little bit faster during "pushing"
+periods. If we smooth the data during this period, we will not
+be able to reliably assess that it did grow. On the other
+hand, if we do not smooth, we could be making decisions based
+on spurious events.
+
+We have to find a way out of this dilemma. It probably requires
+detecting the "high jitter" conditions, and during these
+conditions try larger pushes, maybe 25% instead of 6.25%,
+because those larger pushes are more likely to get an unambiguous
+response, such as triggering a congestion event if the increase
+in sending rate was excessive. But congestion signals are
+themselves harder to detect in case of large jitter, for example
+because it is hard to distinguish delay increases due to
+queues from those due to jitter.
+
+Or, we may want to test another form of signal altogether. For example,
+if the pacing rate is set correctly, we should find very few cases
+when the CWND is all used before an ACK is received. We could monitor
+that event, and use it to either increase or decrease the pacing rate.
+
+This clearly requires further testing.
 
 # Competition with other algorithms
 

@@ -135,6 +135,31 @@ overestimating the data rate because of transmission jitter.
 The nominal rate is reduced following congestion events,
 as specified in {{congestion-response}}.
 
+### Smoothed estimate of the nominal rate {#smoothed-nominal-rate}
+
+In high jitter environments, the simple comparison against
+the predicted rate is not sufficient to protect against
+high jitter events. We can do that by maintaining an estimate
+of the time to transmit a byte of data, `smoothed_tpb`.
+Each time we get an ACK, we can update that an exponentially
+weighted moving average of that estimate, using a
+coefficient `kappa=1/4`:
+
+~~~
+tpb = rtt_sample/nb_bytes_acknowledged
+smoothed_tpb = (1-kappa)*smoothed_tpb + kappa*tpb
+~~~
+
+We then derive the smoothed rate measurement:
+
+~~~
+smoothed_rate_measurement = 1/smoothed_tpb
+~~~
+
+We can use that estimate in lieu of the direct
+measurement in high jitter environments. It is a tradeoff:
+the noise will be filtered, but the response will be delayed.
+
 ## Nominal max RTT {#nominal-max-rtt}
 
 The nominal max RTT is an estimate of the maximum RTT
@@ -150,8 +175,8 @@ components:
 
 C4's goal is to obtain a estimate of the combination of path latency
 and maximum jitter. This is done by only taking measurements
-when C4 is sending data at a rate below the nominal transmission rate,
-as happens for example in the recovery state. These measurements
+when C4 is sending data at a rate not higher than the nominal transmission rate,
+as happens for example in the recovery nad cruising states. These measurements
 will happen during the following era. C4 captures them
 by recording the max RTT for packets sent in that era.
 C4 will also progressively reduce the value of the
@@ -161,7 +186,7 @@ conditions.
 ~~~
 # on end of era
 
-if alpha_previous < 1.0:
+if alpha_previous <= 1.0:
     if era_min_rtt < running_min_rtt:
         running_min_rtt = era_min_rtt
     else:
@@ -188,6 +213,7 @@ next jitter event to happen, at least on Wi-Fi networks.
 In addition to the nominal rate and nominal MAX RTT,
 C4 maintains a set of variables tracking the evolution of the flow:
 
+- smoothed_tpb (see {{smoothed-nominal-rate}})
 - running min RTT, an approximation of the min RTT for the flow,
 - number of eras without increase (see {{c4-initial}}),
 - number of successful pushes,
@@ -208,7 +234,6 @@ era_min_rtt; /* min RTT observed during this era */
 
 These variables are initialized at the beginning of the era.
 
-
 # States and Transition {#c4-states}
 
 The state machine for C4 has the following states:
@@ -225,7 +250,9 @@ The state machine for C4 has the following states:
   in "recovery" is acknowledged. Once that happens,
   the connection goes back
   to "startup" if the last 3 pushing attemps have resulted
-  in increases of "nominal rate", or enters "cruising"
+  in increases of "nominal rate", or if it detects high
+  jitter and the previous initial was not run
+  in these conditions (see ). It enters "cruising"
   otherwise.
 * "Cruising": the connection is sending using the
   "nominal_rate" and "nominal_max_rtt" value. If congestion is detected,
@@ -261,7 +288,8 @@ diagram.
                  +------------+                |
   +--+---------->|  Recovery  |                |
   ^  ^           +----|---|---+                |
-  |  |                |   |     Rapid Increase |
+  |  |                |   |  First High Jitter |
+  |  |                |   |  or Rapid Increase |
   |  |                |   +------------------->+
   |  |                |
   |  |                v
@@ -374,11 +402,30 @@ less,
 for example an increase of 1/16th if `alpha_previous` was 5/4.
 
 C4 re-enters "Initial" at the end of the recovery period if the evaluation
-shows 3 successive rate increases without congestion. Otherwise,
-C4 enters cruising.
+shows 3 successive rate increases without congestion, or if
+high jitter requires restarting the Initial phase (see
+{{restart-high-jitter}}. Otherwise, C4 enters cruising.
 
 Reception of a congestion signal during the Initial phase does not
 cause a change in the `nominal_rate` or `nominal_max_RTT`.
+
+### Restarting Initial if High Jitter {#restart-high-jitter}
+
+The "nominal max RTT" is not updated during the Initial phase,
+because doing so would prevent exiting Initial on high delay
+detection. This can lead to underestimation of the "nominal
+rate" if the flow is operating on a path with high jitter.
+
+C4 will reenter the "initial" phase on the first time
+high jitter is detected for the flow. The high jitter
+is detected after updating the "nominal max RTT" at the
+end of the recovery era, if:
+
+~~~
+running_min_rtt < nominal_max_rtt*2/5
+~~~
+
+This will be done at most once per flow.
 
 ## Cruising state {#c4-cruising }
 
@@ -524,7 +571,7 @@ the acceptable margin, capped to `1/4`:
 
 If the signal is an ECN/CE rate, this is still TBD. We could
 use a proportional reduction coefficient in line with
-{{RFC9331}}, but we should use the senitivity coefficient to
+{{RFC9331}}, but we should use the sensitivity coefficient to
 modulate that signal.
 
 # Security Considerations

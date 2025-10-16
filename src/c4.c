@@ -96,6 +96,7 @@
 #define C4_MAX_DELAY_ERA_CONGESTIONS 4
 #define C4_RTT_MARGIN_5PERCENT 51
 #define C4_MAX_JITTER 250000
+#define C4_KAPPA ((double)(1.0/4.0))
 
 typedef enum {
     c4_initial = 0,
@@ -117,6 +118,7 @@ typedef struct st_c4_state_t {
     uint64_t nominal_rate; /* Control variable if not delay based. */
     uint64_t nominal_max_rtt; /* Estimate of queue-free max RTT */
     uint64_t running_min_rtt; /* Rough estimate of min RTT, for buffer estimation */
+    double smoothed_usec_per_byte; /* EWMA of microsec per bytes, for computing rate estimates */
     uint64_t alpha_1024_current;
     uint64_t alpha_1024_previous;
     uint64_t nb_packets_in_startup;
@@ -143,6 +145,7 @@ typedef struct st_c4_state_t {
     unsigned int congestion_notified : 1;
     unsigned int push_was_not_limited : 1;
     unsigned int use_seed_cwin : 1;
+    unsigned int initial_after_jitter : 1;
     unsigned int do_cascade : 1;
     unsigned int do_slow_push : 1;
     /* Handling of options. */
@@ -459,7 +462,8 @@ static void c4_initial_handle_rtt(picoquic_path_t* path_x, c4_state_t* c4_state,
     * "update_rtt" functions from the actual tests.
      */
     if (c4_state->recent_delay_excess > 0
-        && c4_state->nb_eras_no_increase > 1){
+        && c4_state->nb_eras_no_increase > 0
+        && c4_state->push_rate_old >= c4_state->nominal_rate){
 
         c4_exit_initial(path_x, c4_state, notification, current_time);
     }
@@ -567,11 +571,11 @@ static void c4_exit_recovery(
     picoquic_path_t* path_x,
     c4_state_t* c4_state, uint64_t current_time)
 {
+    /* Assess growth */
     c4_growth_evaluate(c4_state);
     c4_growth_reset(c4_state);
-
+    /* Reset the delay excess to avoid bounces of delay event */
     c4_state->recent_delay_excess = 0;
-
     /* Reset the smoothed drop rate at the end of recovery.
     * so that the next measurements reflect the new parameters.
     */
@@ -651,19 +655,23 @@ void c4_update_min_max_rtt(picoquic_path_t* path_x, c4_state_t* c4_state)
     if (c4_state->nominal_max_rtt == 0) {
         c4_state->nominal_max_rtt = c4_state->era_max_rtt;
     }
-    else if (c4_state->alpha_1024_previous <= C4_ALPHA_PREVIOUS_LOW) {
+    else if (c4_state->alpha_1024_previous <= 1024
+#if 0
+        || c4_state->alg_state == c4_initial
+#endif
+        ) {
+        /* We want to increase the max RTT, but we want to limit the jitter
+         * measurement to avoid aberrant behavior.
+         */
         uint64_t corrected_max = (c4_state->era_max_rtt < c4_state->running_min_rtt + C4_MAX_JITTER) ?
             c4_state->era_max_rtt : c4_state->running_min_rtt + C4_MAX_JITTER;
 
-        if (corrected_max < c4_state->nominal_max_rtt) {
+        if (corrected_max > c4_state->nominal_max_rtt) {
+            c4_state->nominal_max_rtt = corrected_max;
+        }
+        else if (c4_state->alpha_1024_previous <= C4_ALPHA_PREVIOUS_LOW) {
             /* If not growing, slowly diminish the max rtt */
             c4_state->nominal_max_rtt = (7 * c4_state->nominal_max_rtt + corrected_max) / 8;
-        }
-        else {
-            /* We want to increase the max RTT, but we want to limit the jitter
-             * measurement to avoid aberrant behavior.
-             */
-            c4_state->nominal_max_rtt = corrected_max;
         }
     }
     /* Recompute the delay threshold if the max RTT was updated. */
@@ -677,26 +685,34 @@ void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_a
     uint64_t previous_rate = c4_state->nominal_rate;
     uint64_t rate_measurement = 0;
 
-    if (ack_state->rtt_measurement > 0) {
-        uint64_t corrected_rtt = ack_state->rtt_measurement;
-        if (corrected_rtt < c4_state->running_min_rtt && c4_state->running_min_rtt != UINT64_MAX) {
-            corrected_rtt = c4_state->running_min_rtt;
+    if (ack_state->rtt_measurement > 0 && ack_state->nb_bytes_delivered_since_packet_sent > 0) {
+        double usec_per_byte = ((double)ack_state->rtt_measurement) /
+            ((double)ack_state->nb_bytes_delivered_since_packet_sent);
+        if (c4_state->smoothed_usec_per_byte == 0) {
+            c4_state->smoothed_usec_per_byte = usec_per_byte;
         }
-        if (c4_state->nominal_max_rtt == 0) {
-            c4_state->nominal_max_rtt = ack_state->rtt_measurement;
+        else {
+            c4_state->smoothed_usec_per_byte += C4_KAPPA * (usec_per_byte - c4_state->smoothed_usec_per_byte);
         }
-        rate_measurement = (ack_state->nb_bytes_delivered_since_packet_sent * 1000000) / corrected_rtt;
 
-        if (c4_state->alg_state != c4_initial) {
-            /* We find some cases where ACK compression causes the rate measurement
-             * to return some really weird values. Outside of the initial phase,
-             * we know that the sender will never send faster than the push rate.
-             * We limit the possible rate increase to that value */
-            uint64_t max_rate = MULT1024(C4_ALPHA_PUSH_1024, c4_state->nominal_rate);
-            if (rate_measurement > max_rate) {
-                rate_measurement = max_rate;
-            }
+        if (c4_state->running_min_rtt != UINT64_MAX &&
+            ack_state->rtt_measurement >= c4_state->running_min_rtt &&
+            (c4_state->alg_state == c4_initial ||
+                4 * c4_state->running_min_rtt > 3 * c4_state->nominal_max_rtt)) {
+            rate_measurement = (ack_state->nb_bytes_delivered_since_packet_sent * 1000000) /
+                ack_state->rtt_measurement;
         }
+        else {
+            rate_measurement = (uint64_t)(1000000.0 / c4_state->smoothed_usec_per_byte);
+        }
+#if 1
+        /* Collect raw measurements for analysis */
+        picoquic_log_app_message(path_x->cnx, "C4_rate, %" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%d",
+            rate_measurement, c4_state->nominal_rate, 
+            ack_state->nb_bytes_delivered_since_packet_sent, ack_state->rtt_measurement,
+            c4_state->nominal_max_rtt, (int)c4_state->alg_state);
+#endif
+
         /* Assessment of rate limited status */
         if (rate_measurement > c4_state->nominal_rate) {
             c4_state->push_was_not_limited = 1;
@@ -705,10 +721,10 @@ void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_a
         }
         else {
             /* The ACK rate did not grow, but that's not a proof.
-             * If the number of bytes sent are larger than the corrected bytes,
-             * we know the delivery was slowed by the network, not the app.
-             */
-            uint64_t target_cwin = (previous_rate * c4_state->running_min_rtt)/1000000;
+                * If the number of bytes sent are larger than the corrected bytes,
+                * we know the delivery was slowed by the network, not the app.
+                */
+            uint64_t target_cwin = (previous_rate * c4_state->running_min_rtt) / 1000000;
             if (ack_state->nb_bytes_delivered_since_packet_sent > target_cwin) {
                 c4_state->push_was_not_limited = 1;
             }
@@ -722,28 +738,37 @@ void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_a
         if (c4_era_check(path_x, c4_state)) {
             /* Update max rtt and running min rtt */
             c4_update_min_max_rtt(path_x, c4_state);
-
-            /* Manage the transition to the next state */
-            switch (c4_state->alg_state) {
-            case c4_recovery:
-                c4_exit_recovery(path_x, c4_state, current_time);
-                break;
-            case c4_cruising:
-                if (c4_state->nb_cruise_left_before_push > 0) {
-                    c4_state->nb_cruise_left_before_push--;
+            /* test need to reenter initial if conditions did change */
+            if (!c4_state->initial_after_jitter &&
+                c4_state->nominal_max_rtt > 50000 &&
+                5 * c4_state->running_min_rtt < 2 * c4_state->nominal_max_rtt) {
+                c4_state->initial_after_jitter = 1;
+                c4_enter_initial(path_x, c4_state, current_time);
+            }
+            else
+            {
+                /* Manage the transition to the next state */
+                switch (c4_state->alg_state) {
+                case c4_recovery:
+                    c4_exit_recovery(path_x, c4_state, current_time);
+                    break;
+                case c4_cruising:
+                    if (c4_state->nb_cruise_left_before_push > 0) {
+                        c4_state->nb_cruise_left_before_push--;
+                    }
+                    c4_era_reset(path_x, c4_state);
+                    if (c4_state->nb_cruise_left_before_push <= 0 &&
+                        path_x->last_time_acked_data_frame_sent > path_x->last_sender_limited_time) {
+                        c4_enter_push(path_x, c4_state, current_time);
+                    }
+                    break;
+                case c4_pushing:
+                    c4_enter_recovery(path_x, c4_state, c4_congestion_none, current_time);
+                    break;
+                default:
+                    c4_era_reset(path_x, c4_state);
+                    break;
                 }
-                c4_era_reset(path_x, c4_state);
-                if (c4_state->nb_cruise_left_before_push <= 0 &&
-                    path_x->last_time_acked_data_frame_sent > path_x->last_sender_limited_time) {
-                    c4_enter_push(path_x, c4_state, current_time);
-                }
-                break;
-            case c4_pushing:
-                c4_enter_recovery(path_x, c4_state, c4_congestion_none, current_time);
-                break;
-            default:
-                c4_era_reset(path_x, c4_state);
-                break;
             }
         }
     }
@@ -855,7 +880,8 @@ static void c4_handle_rtt(
     uint64_t rtt_measurement,
     uint64_t current_time)
 {
-    if (c4_state->recent_delay_excess > 0 /* PICOQUIC_MIN_MAX_RTT_SCOPE */) {
+    if (c4_state->recent_delay_excess > 0 &&
+        c4_state->alpha_1024_previous > 1024) {
         /* May well be congested */
         c4_notify_congestion(path_x, c4_state, rtt_measurement, c4_congestion_delay, current_time);
     }

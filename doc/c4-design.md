@@ -482,7 +482,7 @@ bloat. Instead, we adopted a simple workaround:
   flag to 1 and re-enter the "initial" state.
 
 Empirically, we detect high jitter in that case if the "running min RTT"
-is less that 2/5th of the "nomnal max RTT".
+is less that 2/5th of the "nominal max RTT".
 
 ## Monitoring the nominal rate {#monitor-rate}
 
@@ -582,7 +582,7 @@ if smoothed_rate_measurement > nominal_rate:
 
 These computations depend from the coefficient `kappa`. We empirically
 choose `kappa = 1/4`. However, even using a relatively large coefficient
-sill bears the risk of smoothing too much.
+still bears the risk of smoothing too much.
 
 ### Alternative to smoothing
 

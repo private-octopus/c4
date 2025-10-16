@@ -176,7 +176,7 @@ components:
 C4's goal is to obtain a estimate of the combination of path latency
 and maximum jitter. This is done by only taking measurements
 when C4 is sending data at a rate not higher than the nominal transmission rate,
-as happens for example in the recovery nad cruising states. These measurements
+as happens for example in the recovery and cruising states. These measurements
 will happen during the following era. C4 captures them
 by recording the max RTT for packets sent in that era.
 C4 will also progressively reduce the value of the

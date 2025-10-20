@@ -184,7 +184,7 @@ capacity of the path. At the beginning of the simulation,
 the simulated bandwidth is set at 5 Mbps. It increases to
 10 Mbps after 2.5 seconds. The RTT remains constant at
 100ms. The test verifies that 100 simulations of a
-7MB download all complete in less than 7.6 seconds.
+7MB download all complete in less than 7.9 seconds.
 
 The goal of the test is to verify that C4 promptly
 discovers the increase in bandwidth, and
@@ -199,7 +199,7 @@ the simulated bandwidth is set at 10 Mbps. It decreases
 to 5 Mbps after 1.5 second, then returns to 10 Mbps
 after 2 seconds. The RTT remains constant at
 100ms. The test verifies that 100 simulations of a
-7MB download all complete in less than 8 seconds.
+7MB download all complete in less than 8.15 seconds.
 
 The goal of the test is to verify that C4 adapts
 promptly to changes in the available bandwidth on a
@@ -325,7 +325,7 @@ same time and using the same path. The path has a 20Mbps data rate
 and 80ms RTT. The background connection
 tries to download 10MB, the main connection downloads 5MB.
 The test pass if in 100 trials the main connection completes
-in less than 5.75 seconds.
+in less than 6.7 seconds.
 
 ### Short background C4 connection first
 
@@ -335,7 +335,7 @@ with the background connection starting
 and 80ms RTT. The background connection
 tries to download 10MB, the main connection downloads 5MB.
 The test pass if in 100 trials the main connection completes
-in less than 6.65 seconds after the beginning of the trial.
+in less than 8.15 seconds after the beginning of the trial.
 
 ### Short background C4 connection last
 
@@ -354,7 +354,7 @@ same time and using the same path. The path has a 20Mbps data rate
 and 80ms RTT. The background connection
 tries to download 30MB, the main connection downloads 20MB.
 The test pass if in 100 trials the main connection completes
-in less than 22.4 seconds.
+in less than 22.8 seconds.
 
 ### Long background C4 connection last
 

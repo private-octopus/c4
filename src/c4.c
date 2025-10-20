@@ -462,7 +462,7 @@ static void c4_initial_handle_rtt(picoquic_path_t* path_x, c4_state_t* c4_state,
     * "update_rtt" functions from the actual tests.
      */
     if (c4_state->recent_delay_excess > 0
-        && c4_state->nb_eras_no_increase > 0
+        && c4_state->nb_eras_no_increase > 1
         && c4_state->push_rate_old >= c4_state->nominal_rate){
 
         c4_exit_initial(path_x, c4_state, notification, current_time);
@@ -686,7 +686,9 @@ void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_a
     uint64_t rate_measurement = 0;
 
     if (ack_state->rtt_measurement > 0 && ack_state->nb_bytes_delivered_since_packet_sent > 0) {
-        double usec_per_byte = ((double)ack_state->rtt_measurement) /
+        uint64_t verified_rtt = (ack_state->rtt_measurement > ack_state->send_delay) ?
+            ack_state->rtt_measurement : ack_state->send_delay;
+        double usec_per_byte = ((double)verified_rtt) /
             ((double)ack_state->nb_bytes_delivered_since_packet_sent);
         if (c4_state->smoothed_usec_per_byte == 0) {
             c4_state->smoothed_usec_per_byte = usec_per_byte;
@@ -694,27 +696,33 @@ void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_a
         else {
             c4_state->smoothed_usec_per_byte += C4_KAPPA * (usec_per_byte - c4_state->smoothed_usec_per_byte);
         }
-
+#if 1
+        rate_measurement = (ack_state->nb_bytes_delivered_since_packet_sent * 1000000) /
+            verified_rtt;
+#else
         if (c4_state->running_min_rtt != UINT64_MAX &&
             ack_state->rtt_measurement >= c4_state->running_min_rtt &&
             (c4_state->alg_state == c4_initial ||
                 4 * c4_state->running_min_rtt > 3 * c4_state->nominal_max_rtt)) {
             rate_measurement = (ack_state->nb_bytes_delivered_since_packet_sent * 1000000) /
-                ack_state->rtt_measurement;
+                verified_rtt;
         }
         else {
             rate_measurement = (uint64_t)(1000000.0 / c4_state->smoothed_usec_per_byte);
         }
+#endif
 #if 1
         /* Collect raw measurements for analysis */
-        picoquic_log_app_message(path_x->cnx, "C4_rate, %" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%d",
+        picoquic_log_app_message(path_x->cnx,
+            "C4_rate, %" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%d ,%" PRIu64 ", %d",
             rate_measurement, c4_state->nominal_rate, 
-            ack_state->nb_bytes_delivered_since_packet_sent, ack_state->rtt_measurement,
-            c4_state->nominal_max_rtt, (int)c4_state->alg_state);
+            ack_state->nb_bytes_delivered_since_packet_sent, ack_state->rtt_measurement, ack_state->send_delay,
+            c4_state->nominal_max_rtt, (int)c4_state->alg_state, path_x->bandwidth_estimate, c4_state->congestion_notified);
 #endif
 
         /* Assessment of rate limited status */
-        if (rate_measurement > c4_state->nominal_rate) {
+        if (rate_measurement > c4_state->nominal_rate  && 
+            !(c4_state->alg_state == c4_recovery && c4_state->congestion_notified != 0)) {
             c4_state->push_was_not_limited = 1;
             c4_state->nominal_rate = rate_measurement;
             c4_state->delay_threshold = c4_delay_threshold(c4_state);

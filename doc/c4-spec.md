@@ -109,56 +109,51 @@ and per era (see {{era-variables}}).
 ## Nominal rate {#nominal-rate}
 
 The nominal rate is an estimate of the bandwidth available to the flow.
-
 On initialization, the nominal rate is set to zero, and default values
 are used when setting the pacing rate and CWND for the flow.
 
 C4 evaluates the nominal rate after acknowledgements are received
 using the number of bytes acknowledged since the packet was sent
-(`bytes_acknowledged`) and 
-the time at which the acknowledged packet was sent (`time_sent`),
-and the current time (`current_time`), as well as maximum transmission rate
-computed from the current nominal rate and the coefficient
-"alpha" used in the previous era (`alpha_previous`). If the
-new measurement is larger than the current `nominal_rate`,
-we increase that rate:
+(`bytes_acknowledged`) and the time delay it took to process these packets.
+
+That delay is normally set to the difference between the time
+at which the acknowledged packet was sent (`time_sent`),
+and the current time (`current_time`). However, that difference
+may sometimes be severely underestimated because of delay jitter
+and ACK compression. We also compute a "send delay" as the difference
+between the send time of the acknowledged packet and the send time
+the oldest "delivered" packet. 
 
 ~~~
-rate_estimate = min ( nominal_rate*alpha_previous,
-    bytes_acknowledged /(current_time - time_sent)
-nominal_rate = max(rate_estimate, nominal_rate)
+delay_estimate = max (current_time - time_sent, send_delay)
+rate_estimate = bytes_acknowledged /delay_estimate
 ~~~
 
-Comparing to `nominal_rate*alpha_previous` protects against
-overestimating the data rate because of transmission jitter.
-
-The nominal rate is reduced following congestion events,
-as specified in {{congestion-response}}.
-
-### Smoothed estimate of the nominal rate {#smoothed-nominal-rate}
-
-In high jitter environments, the simple comparison against
-the predicted rate is not sufficient to protect against
-high jitter events. We can do that by maintaining an estimate
-of the time to transmit a byte of data, `smoothed_tpb`.
-Each time we get an ACK, we can update that an exponentially
-weighted moving average of that estimate, using a
-coefficient `kappa=1/4`:
+If we are not in a congestion situation, we update the
+nominal rate:
 
 ~~~
-tpb = rtt_sample/nb_bytes_acknowledged
-smoothed_tpb = (1-kappa)*smoothed_tpb + kappa*tpb
+if not congested and nominal_rate > rate_estimate:
+    nominal_rate = rate_estimate
 ~~~
 
-We then derive the smoothed rate measurement:
+The data rate measurements can only cause increases in
+the nominal rate. The nominal rate is reduced following
+congestion events, as specified in {{congestion-response}}.
 
-~~~
-smoothed_rate_measurement = 1/smoothed_tpb
-~~~
+The "congested" condition is defined as being in the
+recovery state and having either entered that state due
+to a congestion event, or having received a congestion
+event after entering recovery. 
 
-We can use that estimate in lieu of the direct
-measurement in high jitter environments. It is a tradeoff:
-the noise will be filtered, but the response will be delayed.
+Updating the nominal rate
+in these conditions would cause a congestion bounce: the
+nominal rate is reduced because of a congestion event,
+C4 enters recovery, but then packets sent at the previous
+rate are received during recovery, generating a new estimate
+and resetting the nominal rate to a value close to the one
+that caused congestion.
+
 
 ## Nominal max RTT {#nominal-max-rtt}
 

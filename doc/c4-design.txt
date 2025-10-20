@@ -5,9 +5,9 @@
 Network Working Group                                         C. Huitema
 Internet-Draft                                      Private Octopus Inc.
 Intended status: Informational                             S. Nandakumar
-Expires: 19 April 2026                                       C. Jennings
+Expires: 22 April 2026                                       C. Jennings
                                                                    Cisco
-                                                         16 October 2025
+                                                         19 October 2025
 
 
            Design of Christian's Congestion Control Code (C4)
@@ -43,7 +43,7 @@ Status of This Memo
    time.  It is inappropriate to use Internet-Drafts as reference
    material or to cite them other than as "work in progress."
 
-   This Internet-Draft will expire on 19 April 2026.
+   This Internet-Draft will expire on 22 April 2026.
 
 Copyright Notice
 
@@ -53,7 +53,7 @@ Copyright Notice
 
 
 
-Huitema, et al.           Expires 19 April 2026                 [Page 1]
+Huitema, et al.           Expires 22 April 2026                 [Page 1]
 
 Internet-Draft                  C4 Design                   October 2025
 
@@ -80,28 +80,28 @@ Table of Contents
        3.2.1.  Preventing Runaway Max RTT  . . . . . . . . . . . . .   9
        3.2.2.  Initial Phase and Max RTT . . . . . . . . . . . . . .  10
      3.3.  Monitoring the nominal rate . . . . . . . . . . . . . . .  10
-       3.3.1.  Simple rate measurement . . . . . . . . . . . . . . .  11
-       3.3.2.  Harmonic filter . . . . . . . . . . . . . . . . . . .  11
-       3.3.3.  Alternative to smoothing  . . . . . . . . . . . . . .  12
+       3.3.1.  Rate measurement  . . . . . . . . . . . . . . . . . .  11
+       3.3.2.  Avoiding Congestion Bounce  . . . . . . . . . . . . .  11
+       3.3.3.  Not filtering the measurements  . . . . . . . . . . .  12
    4.  Competition with other algorithms . . . . . . . . . . . . . .  13
      4.1.  No need for slowdowns . . . . . . . . . . . . . . . . . .  13
-   5.  React quickly to changing network conditions  . . . . . . . .  14
-     5.1.  Do not react to Probe Time Out  . . . . . . . . . . . . .  15
+   5.  React quickly to changing network conditions  . . . . . . . .  13
+     5.1.  Do not react to Probe Time Out  . . . . . . . . . . . . .  14
      5.2.  Update the Nominal Rate after Pushing . . . . . . . . . .  15
-   6.  Driving for fairness  . . . . . . . . . . . . . . . . . . . .  16
-     6.1.  Absence of constraints is unfair  . . . . . . . . . . . .  17
+   6.  Driving for fairness  . . . . . . . . . . . . . . . . . . . .  15
+     6.1.  Absence of constraints is unfair  . . . . . . . . . . . .  16
      6.2.  Introducing a sensitivity curve . . . . . . . . . . . . .  17
      6.3.  Cascade of Increases  . . . . . . . . . . . . . . . . . .  18
-   7.  Supporting Application Limited Connections  . . . . . . . . .  19
+   7.  Supporting Application Limited Connections  . . . . . . . . .  18
      7.1.  Coordinated Pushing . . . . . . . . . . . . . . . . . . .  19
-     7.2.  Variable Pushing Rate . . . . . . . . . . . . . . . . . .  20
-     7.3.  Pushing rate and Cascades . . . . . . . . . . . . . . . .  21
+     7.2.  Variable Pushing Rate . . . . . . . . . . . . . . . . . .  19
+     7.3.  Pushing rate and Cascades . . . . . . . . . . . . . . . .  20
    8.  State Machine . . . . . . . . . . . . . . . . . . . . . . . .  21
-   9.  Security Considerations . . . . . . . . . . . . . . . . . . .  23
-   10. IANA Considerations . . . . . . . . . . . . . . . . . . . . .  23
-   11. Informative References  . . . . . . . . . . . . . . . . . . .  23
-   Acknowledgments . . . . . . . . . . . . . . . . . . . . . . . . .  25
-   Authors' Addresses  . . . . . . . . . . . . . . . . . . . . . . .  25
+   9.  Security Considerations . . . . . . . . . . . . . . . . . . .  22
+   10. IANA Considerations . . . . . . . . . . . . . . . . . . . . .  22
+   11. Informative References  . . . . . . . . . . . . . . . . . . .  22
+   Acknowledgments . . . . . . . . . . . . . . . . . . . . . . . . .  24
+   Authors' Addresses  . . . . . . . . . . . . . . . . . . . . . . .  24
 
 
 
@@ -109,7 +109,7 @@ Table of Contents
 
 
 
-Huitema, et al.           Expires 19 April 2026                 [Page 2]
+Huitema, et al.           Expires 22 April 2026                 [Page 2]
 
 Internet-Draft                  C4 Design                   October 2025
 
@@ -165,7 +165,7 @@ Internet-Draft                  C4 Design                   October 2025
 
 
 
-Huitema, et al.           Expires 19 April 2026                 [Page 3]
+Huitema, et al.           Expires 22 April 2026                 [Page 3]
 
 Internet-Draft                  C4 Design                   October 2025
 
@@ -221,7 +221,7 @@ Internet-Draft                  C4 Design                   October 2025
 
 
 
-Huitema, et al.           Expires 19 April 2026                 [Page 4]
+Huitema, et al.           Expires 22 April 2026                 [Page 4]
 
 Internet-Draft                  C4 Design                   October 2025
 
@@ -277,7 +277,7 @@ Internet-Draft                  C4 Design                   October 2025
 
 
 
-Huitema, et al.           Expires 19 April 2026                 [Page 5]
+Huitema, et al.           Expires 22 April 2026                 [Page 5]
 
 Internet-Draft                  C4 Design                   October 2025
 
@@ -333,7 +333,7 @@ Internet-Draft                  C4 Design                   October 2025
 
 
 
-Huitema, et al.           Expires 19 April 2026                 [Page 6]
+Huitema, et al.           Expires 22 April 2026                 [Page 6]
 
 Internet-Draft                  C4 Design                   October 2025
 
@@ -389,7 +389,7 @@ Internet-Draft                  C4 Design                   October 2025
 
 
 
-Huitema, et al.           Expires 19 April 2026                 [Page 7]
+Huitema, et al.           Expires 22 April 2026                 [Page 7]
 
 Internet-Draft                  C4 Design                   October 2025
 
@@ -445,7 +445,7 @@ Internet-Draft                  C4 Design                   October 2025
 
 
 
-Huitema, et al.           Expires 19 April 2026                 [Page 8]
+Huitema, et al.           Expires 22 April 2026                 [Page 8]
 
 Internet-Draft                  C4 Design                   October 2025
 
@@ -501,7 +501,7 @@ Internet-Draft                  C4 Design                   October 2025
 
 
 
-Huitema, et al.           Expires 19 April 2026                 [Page 9]
+Huitema, et al.           Expires 22 April 2026                 [Page 9]
 
 Internet-Draft                  C4 Design                   October 2025
 
@@ -545,157 +545,134 @@ Internet-Draft                  C4 Design                   October 2025
 
    The nominal rate is measured on each acknowledgement by dividing the
    number of bytes acknowledged since the packet was sent by the RTT
-   measured with the acknowledgement of the packet.  However, that
-   measurement is noisy, because delay jitter can cause the
-   underestimation of the RTT, resulting in over estimation of the rate.
-   We tested to ways of measuring the data rate: a simple way, similar
-   to what is specified in BBR, and a more involved way, using an
-   harmonic filter.
-
-
-
-
-
-
-Huitema, et al.           Expires 19 April 2026                [Page 10]
-
-Internet-Draft                  C4 Design                   October 2025
-
+   measured with the acknowledgement of the packet, protecting against
+   delay jitter as explained in Section 3.3.1, without additional
+   filtering as discussed in Section 3.3.3.
 
    We only use the measurements to increase the nominal rate, replacing
    the current value if we observe a greater filtered measurement.  This
    is a deliberate choice, as decreases in measurement are ambiguous.
    They can result from the application being rate limited, or from
    measurement noises.  Following those causes random decrease over
+
+
+
+Huitema, et al.           Expires 22 April 2026                [Page 10]
+
+Internet-Draft                  C4 Design                   October 2025
+
+
    time, which can be detrimental for rate limited applications.  If the
    network conditions have changed, the rate will be reduced if
    congestion signals are received, as explained in Section 5.
 
-3.3.1.  Simple rate measurement
+3.3.1.  Rate measurement
 
    The simple algorithm protects from underestimation of the delay by
    observing that delivery rates cannot be larger than the rate at which
    the packets were sent, thus keeping the lower of the estimated
    receive rate and the send rate.
 
-   The simple version of the algorithm would be:
+   The algorithm uses four input variables:
 
-   measured_rate = bytes_acknowledged / rtt_sample
-   if measured_rate > send_rate:
-       measured_rate = send_rate
-   if measured_rate > nominal_rate:
+   *  current_time: the time when the acknowledment is received.
+
+   *  send_time: the time at which the highest acknowledged packet was
+      sent.
+
+   *  bytes_acknowledged: the number of bytes acknowledged by the
+      receiver between send_time and current_time
+
+   *  first_sent: the time at which the packet containing the first
+      acknowledged bytes was sent.
+
+   The computation goes as follow:
+
+   ack_delay = current_time - send_time
+   send_delay = send_time - first_sent
+   measured_rate = bytes_acknowledged /
+                   max(ack_delay, send_delay)
+
+   This is in line with the specification of rate measurement in
+   [I-D.ietf-ccwg-bbr].
+
+   We use the data rate measurement to update the nominal rate, but only
+   if not congested (see Section 3.3.2)
+
+   if measured_rate > nominal_rate and not congested:
        nominal_rate = measured_rate
 
-   This algorithm works reasonably well if there is not too much delay
-   jitter.  However, our first trials show that the rate estimate is
-   often a little above the actual data rate.  For example, if we take
-   the simple case of a C4 connection simulated over a clean fixed
-   20Mbps path, we see the data rate measurements after the initial
-   phase vary between 15.9 and 22.1 Mbps, with a median of 20.5 Mbps.
-   Since the nominal is taken as the maximum over an interval, we often
-   see it well above the nominal 20 Mbps.  This translates in the queues
-   and delays.
+3.3.2.  Avoiding Congestion Bounce
 
-   If we go from a nice fixed rate path to a simulated "bad Wi-Fi" path,
-   the problem worsen.  The data rate measurements after the initial
-   phase vary between 200kbps and 27.7 Mbps, with a median of 11.9 Mbps
-   -- with maximum and median well above the simulated data rate of 10
-   Mbps.  The nominal rate can be more than double the actual rate,
-   which creates huge queues and delays.
+   In our early experiments, we observed a "congestion bounce" that
+   happened as follow:
 
-3.3.2.  Harmonic filter
-
-   We assumed initially that simple precautions like limiting to the
-   send rate would be sufficient.  They are not, in part because the
-   effect of "send quantum" which allows for peaks of data rate above
-   the nominal rate.
+   *  congestion is detected, the nomnal rate is reduced, and C4 enters
+      recovery.
 
 
 
 
-Huitema, et al.           Expires 19 April 2026                [Page 11]
+Huitema, et al.           Expires 22 April 2026                [Page 11]
 
 Internet-Draft                  C4 Design                   October 2025
 
 
-   The data rate measurements are the quotient of the number of bytes
-   received by the delay.  The number of bytes received is easy to
-   assert, but the measurement of the delays are very noisy.  Instead of
-   trying to average the data rates, we can average their inverse, i.e.,
-   the quotients of the delay by the bytes received, the times per byte.
-   Then we can obtain smoothed data rates as the inverse of these times
-   per byte, effectively computing an harmonic average of measurements
-   over time.
+   *  packets sent at the data rate that caused the congestion continue
+      to be acknowledged during recovery.
 
-   We compute an exponentially weighted moving average of the time per
-   byte by computing the recursive function:
+   *  if enough packets are acknowledged, they will cause a rate
+      measurement close to the previous nominal rate.
 
-   tpb = rtt_sample/nb_bytes_acknowledged
-   smoothed_tpb = (1-kappa)*smoothed_tpb + kappa*tpb
+   *  if C4 accepts this new nomnal rate, the flow will bounce back to
+      the previous transmission rate, erasing the effects of the
+      congestion signal.
 
-   We then derive the smoothed rate measurement:
+   Since we do not want that to happen, we specify that the nominal rate
+   cannot be updated during congested periods, defined as:
 
-   smoothed_rate_measurement = 1/smoothed_tpb
+   *  C4 is in "recovery" state,
 
-   And we update the nominal rate:
+   *  The recovery state was entered following a congestion signal, or a
+      congestion signal was received since the beginning of the recovery
+      era.
 
-   if smoothed_rate_measurement > nominal_rate:
-       nominal_rate = smoothed_rate_measurement
+3.3.3.  Not filtering the measurements
 
-   These computations depend from the coefficient kappa.  We empirically
-   choose kappa = 1/4.  However, even using a relatively large
-   coefficient still bears the risk of smoothing too much.
+   There is some noise in the measurements of the data rate, and we
+   protect against that noise by retaining the maximum of the ack__delay
+   and the send_delay.  During early experiments, we considered
+   smoothing the measurements for eliminating that noise.
 
-3.3.3.  Alternative to smoothing
+   The best filter that we could defined operated by smoothing the
+   inverse of the data rate, the "time per byte sent".  This works
+   better because the data rate measurements are the quotient of the
+   number of bytes received by the delay.  The number of bytes received
+   is easy to assert, but the measurement of the delays are very noisy.
+   Instead of trying to average the data rates, we can average their
+   inverse, i.e., the quotients of the delay by the bytes received, the
+   times per byte.  Then we can obtain smoothed data rates as the
+   inverse of these times per byte, effectively computing an harmonic
+   average of measurements over time.  We could for example compute an
+   exponentially weighted moving average of the time per byte, and use
+   the inverse of that as a filtered measurement of the data rate.
 
-   Smoothing a control input like the measured data rate is an inherent
-   tradeoff.  While we will reduce the noise, we will also delay any
-   observation.  That is very obvious during the initial phase.  The
-   data rate is expected to double or more every RTT, and we are also
-   expected to receive a few ACKs per RTT.  If we smooth with a
-   coefficient 1/4 and we receive 4 acknowledgements per RTT, the
-   smoothed value will end up being about 68% of the actual value.
-   Instead of doubling every RTT, the growth rate will be much slower.
-
-   In the short term, we solved the issue by using the "classic"
-   computation during the Initial phase, and only using smoothing in the
-   later phase if we detect high jitter, i.e., if the "running min RTT"
-   is smaller than 3/4th of the "nominal max RTT".
-
-
-
-
-
+   We do not specify any such filter in C4, because while filtering will
+   reduce the noise, we will also delay any observation, resulting into
+   a somewhat sluggish response to change in network conditions.
+   Experience shows that the precaution of using the max of the ack
+   delay and the send delay as a divider is sufficient for stable
+   operation, and does not cause the response delays that filtering
+   would.
 
 
 
-Huitema, et al.           Expires 19 April 2026                [Page 12]
+
+
+Huitema, et al.           Expires 22 April 2026                [Page 12]
 
 Internet-Draft                  C4 Design                   October 2025
 
-
-   This is clearly not the final solution.  C4 tests for available
-   bandwidth by sending data a little bit faster during "pushing"
-   periods.  If we smooth the data during this period, we will not be
-   able to reliably assess that it did grow.  On the other hand, if we
-   do not smooth, we could be making decisions based on spurious events.
-
-   We have to find a way out of this dilemma.  It probably requires
-   detecting the "high jitter" conditions, and during these conditions
-   try larger pushes, maybe 25% instead of 6.25%, because those larger
-   pushes are more likely to get an unambiguous response, such as
-   triggering a congestion event if the increase in sending rate was
-   excessive.  But congestion signals are themselves harder to detect in
-   case of large jitter, for example because it is hard to distinguish
-   delay increases due to queues from those due to jitter.
-
-   Or, we may want to test another form of signal altogether.  For
-   example, if the pacing rate is set correctly, we should find very few
-   cases when the CWND is all used before an ACK is received.  We could
-   monitor that event, and use it to either increase or decrease the
-   pacing rate.
-
-   This clearly requires further testing.
 
 4.  Competition with other algorithms
 
@@ -721,15 +698,6 @@ Internet-Draft                  C4 Design                   October 2025
    advantage issue, requiring a periodic slowdown mechanism to ensure
    that all competing flow have chance to update the RTT value.
 
-
-
-
-
-Huitema, et al.           Expires 19 April 2026                [Page 13]
-
-Internet-Draft                  C4 Design                   October 2025
-
-
    This problem is caused by the default algorithm of setting min RTT to
    the minimum of all RTT sample values since the beginning of the
    connection.  Flows that started more recently compute that minimum
@@ -753,6 +721,14 @@ Internet-Draft                  C4 Design                   October 2025
    more precisely than the monitoring of end-to-end delays.  C4 will
    thus detect changing network conditions by monitoring 3 congestion
    control signals:
+
+
+
+
+Huitema, et al.           Expires 22 April 2026                [Page 13]
+
+Internet-Draft                  C4 Design                   October 2025
+
 
    1.  Excessive increase of measured RTT (above the nominal Max RTT),
 
@@ -778,14 +754,6 @@ Internet-Draft                  C4 Design                   October 2025
    During the recovery period, target CWND and pacing rate are set to a
    fraction of the "nominal rate" multiplied by the "nominal max RTT".
    The recovery period ends when the first packet sent after entering
-
-
-
-Huitema, et al.           Expires 19 April 2026                [Page 14]
-
-Internet-Draft                  C4 Design                   October 2025
-
-
    recovery is acknowledged.  Congestion signals are processed when
    entering recovery; further signals are ignored until the end of
    recovery.
@@ -810,6 +778,14 @@ Internet-Draft                  C4 Design                   October 2025
    congestion signal, because delay jitter may also cause PTO timeouts.
    When testing in "high jitter" conditions, we realized that we should
    not change the state of C4 for losses detected solely based on timer,
+
+
+
+Huitema, et al.           Expires 22 April 2026                [Page 14]
+
+Internet-Draft                  C4 Design                   October 2025
+
+
    and only react to those losses that are detected by gaps in
    acknowledgements.
 
@@ -832,15 +808,6 @@ Internet-Draft                  C4 Design                   October 2025
    connections have caused large queues.  If there was no extra capacity
    available, C4 does not increase the nominal CWND and the connection
    continues with the previous value.
-
-
-
-
-
-Huitema, et al.           Expires 19 April 2026                [Page 15]
-
-Internet-Draft                  C4 Design                   October 2025
-
 
 6.  Driving for fairness
 
@@ -867,6 +834,14 @@ Internet-Draft                  C4 Design                   October 2025
    much resource the flow is using.  There are know limits to these
    strategies.  For example, consider TCP Reno, in which the growth rate
    of CWND during the "congestion avoidance" phase" is inversely
+
+
+
+Huitema, et al.           Expires 22 April 2026                [Page 15]
+
+Internet-Draft                  C4 Design                   October 2025
+
+
    proportional to its size.  This drives very good long term fairness,
    but in practice it prevents TCP Reno from operating well on high
    speed or high delay connections, as discussed in the "problem
@@ -887,16 +862,6 @@ Internet-Draft                  C4 Design                   October 2025
    which means that the default cycle is more on less on par with the
    aggressiveness of RENO when operating at low bandwidth (lower than 34
    Mbps).
-
-
-
-
-
-
-Huitema, et al.           Expires 19 April 2026                [Page 16]
-
-Internet-Draft                  C4 Design                   October 2025
-
 
 6.1.  Absence of constraints is unfair
 
@@ -925,6 +890,14 @@ Internet-Draft                  C4 Design                   October 2025
    high jitter links.  The established connections had tuned their
    timers or congestion window to account for the high jitter.  The
    second connection was basing their timers on their first
+
+
+
+Huitema, et al.           Expires 22 April 2026                [Page 16]
+
+Internet-Draft                  C4 Design                   October 2025
+
+
    measurements, before any of the big jitter events had occured.  This
    caused an imbalance between the first connection, which expected
    large RTT variations, and the second, which did not expect them yet.
@@ -945,14 +918,6 @@ Internet-Draft                  C4 Design                   October 2025
 
    *  linear interpolation between 0 and 0.92 for values between 50,000
       and 1,000,000B/s.
-
-
-
-
-Huitema, et al.           Expires 19 April 2026                [Page 17]
-
-Internet-Draft                  C4 Design                   October 2025
-
 
    *  linear interpolation between 0.92 and 1 for values between
       1,000,000 and 10,000,000B/s.
@@ -980,6 +945,15 @@ Internet-Draft                  C4 Design                   October 2025
    conditions remain.  We will revisit the definition of the curve,
    probably to have the sensitivity follow the logarithm of data rate.
 
+
+
+
+
+Huitema, et al.           Expires 22 April 2026                [Page 17]
+
+Internet-Draft                  C4 Design                   October 2025
+
+
 6.3.  Cascade of Increases
 
    We sometimes encounter networks in which the available bandwidth
@@ -1001,14 +975,6 @@ Internet-Draft                  C4 Design                   October 2025
    all result in increases of the nominal rate, C4 will reenter the
    "startup" mode, during which each RTT can result in a 100% increase
    of rate and CWND.
-
-
-
-
-Huitema, et al.           Expires 19 April 2026                [Page 18]
-
-Internet-Draft                  C4 Design                   October 2025
-
 
 7.  Supporting Application Limited Connections
 
@@ -1035,6 +1001,15 @@ Internet-Draft                  C4 Design                   October 2025
    rates that are too large and would cause queues or losses, and thus
    makes C4 a good choice for multimedia applications.
 
+
+
+
+
+Huitema, et al.           Expires 22 April 2026                [Page 18]
+
+Internet-Draft                  C4 Design                   October 2025
+
+
    C4 adds two more features to handle multimedia applications well:
    coordinated pushing (see Section 7.1), and variable pushing rate (see
    Section 7.2).
@@ -1058,14 +1033,6 @@ Internet-Draft                  C4 Design                   October 2025
    during the pushing periods.  We tried that in simulations, and the
    drawback became obvious.  The filler traffic would sometimes cause
    queues and packet losses, which degrade the quality of the multimedia
-
-
-
-Huitema, et al.           Expires 19 April 2026                [Page 19]
-
-Internet-Draft                  C4 Design                   October 2025
-
-
    experience.  We could reduce this risk of packet losses by sending
    redundant traffic, for example creating the additional traffic using
    a forward error correction (FEC) algorithm, so that individual packet
@@ -1091,6 +1058,14 @@ Internet-Draft                  C4 Design                   October 2025
    other hand, not pushing at all would not be a good option, because
    the connection could end up stuck using only a fraction of the
    available capacity.  We thus have to find a compromise between
+
+
+
+Huitema, et al.           Expires 22 April 2026                [Page 19]
+
+Internet-Draft                  C4 Design                   October 2025
+
+
    operating at low capacity and risking building queues.
 
    We manage that compromise by adopting a variable pushing rate:
@@ -1115,13 +1090,6 @@ Internet-Draft                  C4 Design                   October 2025
    was too high and and caused lower performance.  We now set that
    threshold to 1/4 of the increase in he sending rate.
 
-
-
-Huitema, et al.           Expires 19 April 2026                [Page 20]
-
-Internet-Draft                  C4 Design                   October 2025
-
-
 7.3.  Pushing rate and Cascades
 
    The choice of a 25% push rate was motivated by discussions of BBR
@@ -1135,6 +1103,24 @@ Internet-Draft                  C4 Design                   October 2025
    Pushing at a lower rate like 6.25% would not have that effect, and C4
    would keep using a lower share of the network.  This is why we will
    always push at 25% in the "pig war" mode.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Huitema, et al.           Expires 22 April 2026                [Page 20]
+
+Internet-Draft                  C4 Design                   October 2025
+
 
    The computation of the interval between pushes is tied to the need to
    compete nicely, and follows the general idea that the average growth
@@ -1165,19 +1151,6 @@ Internet-Draft                  C4 Design                   October 2025
       have resulted in increases of "nominal rate", or enters "cruising"
       otherwise.
 
-
-
-
-
-
-
-
-
-Huitema, et al.           Expires 19 April 2026                [Page 21]
-
-Internet-Draft                  C4 Design                   October 2025
-
-
    *  "cruising": the connection is sending using the "nominal_rate" and
       "nominal_max_rtt" value.  If congestion is detected, the
       connection exits cruising and enters "recovery" after lowering the
@@ -1191,6 +1164,19 @@ Internet-Draft                  C4 Design                   October 2025
       is acknowledged.  At that point, it enters the "recovery" state.
 
    These transitions are summarized in the following state diagram.
+
+
+
+
+
+
+
+
+
+Huitema, et al.           Expires 22 April 2026                [Page 21]
+
+Internet-Draft                  C4 Design                   October 2025
+
 
                        Start
                          |
@@ -1223,17 +1209,6 @@ Internet-Draft                  C4 Design                   October 2025
      |                   |
      +<------------------+
 
-
-
-
-
-
-
-Huitema, et al.           Expires 19 April 2026                [Page 22]
-
-Internet-Draft                  C4 Design                   October 2025
-
-
 9.  Security Considerations
 
    We do not believe that C4 introduce new security issues.  Or maybe
@@ -1251,6 +1226,13 @@ Internet-Draft                  C4 Design                   October 2025
               Multiplexed and Secure Transport", RFC 9000,
               DOI 10.17487/RFC9000, May 2021,
               <https://www.rfc-editor.org/info/rfc9000>.
+
+
+
+Huitema, et al.           Expires 22 April 2026                [Page 22]
+
+Internet-Draft                  C4 Design                   October 2025
+
 
    [I-D.ietf-moq-transport]
               Nandakumar, S., Vasiliev, V., Swett, I., and A. Frindell,
@@ -1281,15 +1263,6 @@ Internet-Draft                  C4 Design                   October 2025
               RFC 6582, DOI 10.17487/RFC6582, April 2012,
               <https://www.rfc-editor.org/info/rfc6582>.
 
-
-
-
-
-Huitema, et al.           Expires 19 April 2026                [Page 23]
-
-Internet-Draft                  C4 Design                   October 2025
-
-
    [RFC3649]  Floyd, S., "HighSpeed TCP for Large Congestion Windows",
               RFC 3649, DOI 10.17487/RFC3649, December 2003,
               <https://www.rfc-editor.org/info/rfc3649>.
@@ -1305,18 +1278,23 @@ Internet-Draft                  C4 Design                   October 2025
               start", Computer Networks vol. 55, no. 9, pp. 2092-2110 ,
               June 2011, <https://doi.org/10.1016/j.comnet.2011.01.014>.
 
+
+
+
+
+
+
+
+Huitema, et al.           Expires 22 April 2026                [Page 23]
+
+Internet-Draft                  C4 Design                   October 2025
+
+
    [Cubic-QUIC-Blog]
               Huitema, C., "Implementing Cubic congestion control in
               Quic", Christian Huitema's blog , November 2019,
               <https://www.privateoctopus.com/2019/11/11/implementing-
               cubic-congestion-control-in-quic/>.
-
-   [I-D.ietf-quic-ack-frequency]
-              Iyengar, J., Swett, I., and M. Kühlewind, "QUIC
-              Acknowledgment Frequency", Work in Progress, Internet-
-              Draft, draft-ietf-quic-ack-frequency-11, 28 February 2025,
-              <https://datatracker.ietf.org/doc/html/draft-ietf-quic-
-              ack-frequency-11>.
 
    [Wi-Fi-Suspension-Blog]
               Huitema, C., "The weird case of the wifi latency spikes",
@@ -1337,14 +1315,6 @@ Internet-Draft                  C4 Design                   October 2025
               Low Loss, and Scalable Throughput (L4S)", RFC 9331,
               DOI 10.17487/RFC9331, January 2023,
               <https://www.rfc-editor.org/info/rfc9331>.
-
-
-
-
-Huitema, et al.           Expires 19 April 2026                [Page 24]
-
-Internet-Draft                  C4 Design                   October 2025
-
 
    [ICCRG-LEO]
               Lai, Z., Li, Z., Wu, Q., Li, H., and Q. Zhang, "Mind the
@@ -1368,6 +1338,14 @@ Authors' Addresses
 
    Suhas Nandakumar
    Cisco
+
+
+
+Huitema, et al.           Expires 22 April 2026                [Page 24]
+
+Internet-Draft                  C4 Design                   October 2025
+
+
    Email: snandaku@cisco.com
 
 
@@ -1397,4 +1375,26 @@ Authors' Addresses
 
 
 
-Huitema, et al.           Expires 19 April 2026                [Page 25]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Huitema, et al.           Expires 22 April 2026                [Page 25]

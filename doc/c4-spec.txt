@@ -5,9 +5,9 @@
 Network Working Group                                         C. Huitema
 Internet-Draft                                      Private Octopus Inc.
 Intended status: Experimental                              S. Nandakumar
-Expires: 19 April 2026                                       C. Jennings
+Expires: 22 April 2026                                       C. Jennings
                                                                    Cisco
-                                                         16 October 2025
+                                                         19 October 2025
 
 
        Specification of Christian's Congestion Control Code (C4)
@@ -40,7 +40,7 @@ Status of This Memo
    time.  It is inappropriate to use Internet-Drafts as reference
    material or to cite them other than as "work in progress."
 
-   This Internet-Draft will expire on 19 April 2026.
+   This Internet-Draft will expire on 22 April 2026.
 
 Copyright Notice
 
@@ -53,7 +53,7 @@ Copyright Notice
 
 
 
-Huitema, et al.           Expires 19 April 2026                 [Page 1]
+Huitema, et al.           Expires 22 April 2026                 [Page 1]
 
 Internet-Draft              C4 Specification                October 2025
 
@@ -70,7 +70,6 @@ Table of Contents
    2.  Key Words . . . . . . . . . . . . . . . . . . . . . . . . . .   3
    3.  C4 variables  . . . . . . . . . . . . . . . . . . . . . . . .   3
      3.1.  Nominal rate  . . . . . . . . . . . . . . . . . . . . . .   3
-       3.1.1.  Smoothed estimate of the nominal rate . . . . . . . .   4
      3.2.  Nominal max RTT . . . . . . . . . . . . . . . . . . . . .   4
      3.3.  Global variables  . . . . . . . . . . . . . . . . . . . .   5
      3.4.  Per era variables . . . . . . . . . . . . . . . . . . . .   6
@@ -106,15 +105,15 @@ Table of Contents
    The two main variables describing the state of a flow are the
    "nominal rate" (see Section 3.1) and the "nominal max RTT" (see
    Section 3.2).  C4 organizes the management of the flow through a
+   series of states: Initial, during which the first assessment of
 
 
 
-Huitema, et al.           Expires 19 April 2026                 [Page 2]
+Huitema, et al.           Expires 22 April 2026                 [Page 2]
 
 Internet-Draft              C4 Specification                October 2025
 
 
-   series of states: Initial, during which the first assessment of
    nominal-rate and nominal max RTT are obtained, Recovery in which a
    flow is stabilized after the Initial or Pushing phase, Cruising
    during which a flow uses the nominal rate, and Pushing during which
@@ -155,59 +154,52 @@ Internet-Draft              C4 Specification                October 2025
 3.1.  Nominal rate
 
    The nominal rate is an estimate of the bandwidth available to the
+   flow.  On initialization, the nominal rate is set to zero, and
+   default values are used when setting the pacing rate and CWND for the
    flow.
 
-   On initialization, the nominal rate is set to zero, and default
-   values are used when setting the pacing rate and CWND for the flow.
+   C4 evaluates the nominal rate after acknowledgements are received
+   using the number of bytes acknowledged since the packet was sent
+   (bytes_acknowledged) and the time delay it took to process these
+   packets.
 
 
 
-
-
-
-Huitema, et al.           Expires 19 April 2026                 [Page 3]
+Huitema, et al.           Expires 22 April 2026                 [Page 3]
 
 Internet-Draft              C4 Specification                October 2025
 
 
-   C4 evaluates the nominal rate after acknowledgements are received
-   using the number of bytes acknowledged since the packet was sent
-   (bytes_acknowledged) and the time at which the acknowledged packet
-   was sent (time_sent), and the current time (current_time), as well as
-   maximum transmission rate computed from the current nominal rate and
-   the coefficient "alpha" used in the previous era (alpha_previous).
-   If the new measurement is larger than the current nominal_rate, we
-   increase that rate:
+   That delay is normally set to the difference between the time at
+   which the acknowledged packet was sent (time_sent), and the current
+   time (current_time).  However, that difference may sometimes be
+   severely underestimated because of delay jitter and ACK compression.
+   We also compute a "send delay" as the difference between the send
+   time of the acknowledged packet and the send time the oldest
+   "delivered" packet.
 
-   rate_estimate = min ( nominal_rate*alpha_previous,
-       bytes_acknowledged /(current_time - time_sent)
-   nominal_rate = max(rate_estimate, nominal_rate)
+   delay_estimate = max (current_time - time_sent, send_delay)
+   rate_estimate = bytes_acknowledged /delay_estimate
 
-   Comparing to nominal_rate*alpha_previous protects against
-   overestimating the data rate because of transmission jitter.
+   If we are not in a congestion situation, we update the nominal rate:
 
-   The nominal rate is reduced following congestion events, as specified
-   in Section 5.
+   if not congested and nominal_rate > rate_estimate:
+       nominal_rate = rate_estimate
 
-3.1.1.  Smoothed estimate of the nominal rate
+   The data rate measurements can only cause increases in the nominal
+   rate.  The nominal rate is reduced following congestion events, as
+   specified in Section 5.
 
-   In high jitter environments, the simple comparison against the
-   predicted rate is not sufficient to protect against high jitter
-   events.  We can do that by maintaining an estimate of the time to
-   transmit a byte of data, smoothed_tpb.  Each time we get an ACK, we
-   can update that an exponentially weighted moving average of that
-   estimate, using a coefficient kappa=1/4:
+   The "congested" condition is defined as being in the recovery state
+   and having either entered that state due to a congestion event, or
+   having received a congestion event after entering recovery.
 
-   tpb = rtt_sample/nb_bytes_acknowledged
-   smoothed_tpb = (1-kappa)*smoothed_tpb + kappa*tpb
-
-   We then derive the smoothed rate measurement:
-
-   smoothed_rate_measurement = 1/smoothed_tpb
-
-   We can use that estimate in lieu of the direct measurement in high
-   jitter environments.  It is a tradeoff: the noise will be filtered,
-   but the response will be delayed.
+   Updating the nominal rate in these conditions would cause a
+   congestion bounce: the nominal rate is reduced because of a
+   congestion event, C4 enters recovery, but then packets sent at the
+   previous rate are received during recovery, generating a new estimate
+   and resetting the nominal rate to a value close to the one that
+   caused congestion.
 
 3.2.  Nominal max RTT
 
@@ -217,21 +209,22 @@ Internet-Draft              C4 Specification                October 2025
 
    *  the latency of the path
 
-
-
-
-
-Huitema, et al.           Expires 19 April 2026                 [Page 4]
-
-Internet-Draft              C4 Specification                October 2025
-
-
    *  the jitter introduced by processes like link layer contention or
       link layer retransmission
 
    *  queuing delays caused by competing applications
 
    *  queuing delays introduced by C4 itself.
+
+
+
+
+
+
+Huitema, et al.           Expires 22 April 2026                 [Page 4]
+
+Internet-Draft              C4 Specification                October 2025
+
 
    C4's goal is to obtain a estimate of the combination of path latency
    and maximum jitter.  This is done by only taking measurements when C4
@@ -270,17 +263,7 @@ Internet-Draft              C4 Specification                October 2025
    In addition to the nominal rate and nominal MAX RTT, C4 maintains a
    set of variables tracking the evolution of the flow:
 
-   *  smoothed_tpb (see Section 3.1.1)
-
    *  running min RTT, an approximation of the min RTT for the flow,
-
-
-
-
-Huitema, et al.           Expires 19 April 2026                 [Page 5]
-
-Internet-Draft              C4 Specification                October 2025
-
 
    *  number of eras without increase (see Section 4.2),
 
@@ -288,6 +271,16 @@ Internet-Draft              C4 Specification                October 2025
 
    *  current state of the algorithm, which can be Initial, Recovery,
       Cruising or Pushing.
+
+
+
+
+
+
+Huitema, et al.           Expires 22 April 2026                 [Page 5]
+
+Internet-Draft              C4 Specification                October 2025
+
 
 3.4.  Per era variables
 
@@ -331,14 +324,19 @@ Internet-Draft              C4 Specification                October 2025
       one round trip, i.e., until the first packet send while "pushing"
       is acknowledged.  At that point, it enters the "recovery" state.
 
+   These transitions are summarized in the following state diagram.
 
 
-Huitema, et al.           Expires 19 April 2026                 [Page 6]
+
+
+
+
+
+
+Huitema, et al.           Expires 22 April 2026                 [Page 6]
 
 Internet-Draft              C4 Specification                October 2025
 
-
-   These transitions are summarized in the following state diagram.
 
                        Start
                          |
@@ -384,19 +382,17 @@ Internet-Draft              C4 Specification                October 2025
 
    *  congestion quantum: set to zero.
 
-
-
-
-
-
-Huitema, et al.           Expires 19 April 2026                 [Page 7]
-
-Internet-Draft              C4 Specification                October 2025
-
-
    If the nominal rate or the nominal max RTT are both assessed, C4 sets
    pacing rate, and congestion window to values that depends on these
    variables and on a coefficient alpha_current:
+
+
+
+
+Huitema, et al.           Expires 22 April 2026                 [Page 7]
+
+Internet-Draft              C4 Specification                October 2025
+
 
    pacing_rate = alpha_current_ * nominal_rate
    cwnd = max (pacing_rate * nominal_max_rtt, 2*MTU)
@@ -445,7 +441,11 @@ Internet-Draft              C4 Specification                October 2025
 
 
 
-Huitema, et al.           Expires 19 April 2026                 [Page 8]
+
+
+
+
+Huitema, et al.           Expires 22 April 2026                 [Page 8]
 
 Internet-Draft              C4 Specification                October 2025
 
@@ -501,7 +501,7 @@ Internet-Draft              C4 Specification                October 2025
 
 
 
-Huitema, et al.           Expires 19 April 2026                 [Page 9]
+Huitema, et al.           Expires 22 April 2026                 [Page 9]
 
 Internet-Draft              C4 Specification                October 2025
 
@@ -557,7 +557,7 @@ Internet-Draft              C4 Specification                October 2025
 
 
 
-Huitema, et al.           Expires 19 April 2026                [Page 10]
+Huitema, et al.           Expires 22 April 2026                [Page 10]
 
 Internet-Draft              C4 Specification                October 2025
 
@@ -613,7 +613,7 @@ Internet-Draft              C4 Specification                October 2025
 
 
 
-Huitema, et al.           Expires 19 April 2026                [Page 11]
+Huitema, et al.           Expires 22 April 2026                [Page 11]
 
 Internet-Draft              C4 Specification                October 2025
 
@@ -669,7 +669,7 @@ Internet-Draft              C4 Specification                October 2025
 
 
 
-Huitema, et al.           Expires 19 April 2026                [Page 12]
+Huitema, et al.           Expires 22 April 2026                [Page 12]
 
 Internet-Draft              C4 Specification                October 2025
 
@@ -725,7 +725,7 @@ Internet-Draft              C4 Specification                October 2025
 
 
 
-Huitema, et al.           Expires 19 April 2026                [Page 13]
+Huitema, et al.           Expires 22 April 2026                [Page 13]
 
 Internet-Draft              C4 Specification                October 2025
 
@@ -781,4 +781,4 @@ Authors' Addresses
 
 
 
-Huitema, et al.           Expires 19 April 2026                [Page 14]
+Huitema, et al.           Expires 22 April 2026                [Page 14]

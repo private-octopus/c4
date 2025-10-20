@@ -208,7 +208,6 @@ next jitter event to happen, at least on Wi-Fi networks.
 In addition to the nominal rate and nominal MAX RTT,
 C4 maintains a set of variables tracking the evolution of the flow:
 
-- smoothed_tpb (see {{smoothed-nominal-rate}})
 - running min RTT, an approximation of the min RTT for the flow,
 - number of eras without increase (see {{c4-initial}}),
 - number of successful pushes,

@@ -122,7 +122,7 @@ and the current time (`current_time`). However, that difference
 may sometimes be severely underestimated because of delay jitter
 and ACK compression. We also compute a "send delay" as the difference
 between the send time of the acknowledged packet and the send time
-the oldest "delivered" packet. 
+of the oldest "delivered" packet. 
 
 ~~~
 delay_estimate = max (current_time - time_sent, send_delay)

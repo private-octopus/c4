@@ -567,7 +567,7 @@ defined as:
 
 There is some noise in the measurements of the data rate, and we
 protect against that noise by retaining the maximum of the
-`ack__delay` and the `send_delay`. During early experiments,
+`ack_delay` and the `send_delay`. During early experiments,
 we considered smoothing the measurements for eliminating that
 noise.
 

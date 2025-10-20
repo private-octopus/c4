@@ -11,7 +11,7 @@ Expires: 22 April 2026                                       C. Jennings
 
 
            Design of Christian's Congestion Control Code (C4)
-                  draft-huitema-ccwg-c4-design-latest
+                    draft-huitema-ccwg-c4-design-01
 
 Abstract
 
@@ -640,11 +640,11 @@ Internet-Draft                  C4 Design                   October 2025
 3.3.3.  Not filtering the measurements
 
    There is some noise in the measurements of the data rate, and we
-   protect against that noise by retaining the maximum of the ack__delay
+   protect against that noise by retaining the maximum of the ack_delay
    and the send_delay.  During early experiments, we considered
    smoothing the measurements for eliminating that noise.
 
-   The best filter that we could defined operated by smoothing the
+   The best filter that we could define operated by smoothing the
    inverse of the data rate, the "time per byte sent".  This works
    better because the data rate measurements are the quotient of the
    number of bytes received by the delay.  The number of bytes received

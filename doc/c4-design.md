@@ -3,7 +3,7 @@ title: "Design of Christian's Congestion Control Code (C4)"
 abbrev: "C4 Design"
 category: info
 
-docname: draft-huitema-ccwg-c4-design-00
+docname: draft-huitema-ccwg-c4-design-01
 submissiontype: IETF
 number:
 date:

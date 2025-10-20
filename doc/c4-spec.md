@@ -3,7 +3,7 @@ title: "Specification of Christian's Congestion Control Code (C4)"
 abbrev: "C4 Specification"
 category: exp
 
-docname: draft-huitema-ccwg-c4-spec-latest
+docname: draft-huitema-ccwg-c4-spec-00
 submissiontype: IETF
 number:
 date:

@@ -5,13 +5,13 @@
 Network Working Group                                         C. Huitema
 Internet-Draft                                      Private Octopus Inc.
 Intended status: Informational                             S. Nandakumar
-Expires: 13 April 2026                                       C. Jennings
+Expires: 22 April 2026                                       C. Jennings
                                                                    Cisco
-                                                         10 October 2025
+                                                         19 October 2025
 
 
           Testing of Christian's Congestion Control Code (C4)
-                   draft-huitema-ccwg-c4-test-latest
+                     draft-huitema-ccwg-c4-test-00
 
 Abstract
 
@@ -40,7 +40,7 @@ Status of This Memo
    time.  It is inappropriate to use Internet-Drafts as reference
    material or to cite them other than as "work in progress."
 
-   This Internet-Draft will expire on 13 April 2026.
+   This Internet-Draft will expire on 22 April 2026.
 
 Copyright Notice
 
@@ -53,7 +53,7 @@ Copyright Notice
 
 
 
-Huitema, et al.           Expires 13 April 2026                 [Page 1]
+Huitema, et al.           Expires 22 April 2026                 [Page 1]
 
 Internet-Draft                  C4 Tests                    October 2025
 
@@ -109,7 +109,7 @@ Table of Contents
 
 
 
-Huitema, et al.           Expires 13 April 2026                 [Page 2]
+Huitema, et al.           Expires 22 April 2026                 [Page 2]
 
 Internet-Draft                  C4 Tests                    October 2025
 
@@ -165,7 +165,7 @@ Internet-Draft                  C4 Tests                    October 2025
 
 
 
-Huitema, et al.           Expires 13 April 2026                 [Page 3]
+Huitema, et al.           Expires 22 April 2026                 [Page 3]
 
 Internet-Draft                  C4 Tests                    October 2025
 
@@ -221,7 +221,7 @@ Internet-Draft                  C4 Tests                    October 2025
 
 
 
-Huitema, et al.           Expires 13 April 2026                 [Page 4]
+Huitema, et al.           Expires 22 April 2026                 [Page 4]
 
 Internet-Draft                  C4 Tests                    October 2025
 
@@ -259,7 +259,7 @@ Internet-Draft                  C4 Tests                    October 2025
    of the path.  At the beginning of the simulation, the simulated
    bandwidth is set at 5 Mbps.  It increases to 10 Mbps after 2.5
    seconds.  The RTT remains constant at 100ms.  The test verifies that
-   100 simulations of a 7MB download all complete in less than 7.6
+   100 simulations of a 7MB download all complete in less than 7.9
    seconds.
 
    The goal of the test is to verify that C4 promptly discovers the
@@ -272,12 +272,12 @@ Internet-Draft                  C4 Tests                    October 2025
    simulation, the simulated bandwidth is set at 10 Mbps.  It decreases
    to 5 Mbps after 1.5 second, then returns to 10 Mbps after 2 seconds.
    The RTT remains constant at 100ms.  The test verifies that 100
-   simulations of a 7MB download all complete in less than 8 seconds.
+   simulations of a 7MB download all complete in less than 8.15 seconds.
 
 
 
 
-Huitema, et al.           Expires 13 April 2026                 [Page 5]
+Huitema, et al.           Expires 22 April 2026                 [Page 5]
 
 Internet-Draft                  C4 Tests                    October 2025
 
@@ -333,7 +333,7 @@ Internet-Draft                  C4 Tests                    October 2025
 
 
 
-Huitema, et al.           Expires 13 April 2026                 [Page 6]
+Huitema, et al.           Expires 22 April 2026                 [Page 6]
 
 Internet-Draft                  C4 Tests                    October 2025
 
@@ -389,7 +389,7 @@ Internet-Draft                  C4 Tests                    October 2025
 
 
 
-Huitema, et al.           Expires 13 April 2026                 [Page 7]
+Huitema, et al.           Expires 22 April 2026                 [Page 7]
 
 Internet-Draft                  C4 Tests                    October 2025
 
@@ -413,7 +413,7 @@ Internet-Draft                  C4 Tests                    October 2025
    and using the same path.  The path has a 20Mbps data rate and 80ms
    RTT.  The background connection tries to download 10MB, the main
    connection downloads 5MB.  The test pass if in 100 trials the main
-   connection completes in less than 5.75 seconds.
+   connection completes in less than 6.7 seconds.
 
 2.4.2.  Short background C4 connection first
 
@@ -422,7 +422,7 @@ Internet-Draft                  C4 Tests                    October 2025
    the main connection.  The path has a 20Mbps data rate and 80ms RTT.
    The background connection tries to download 10MB, the main connection
    downloads 5MB.  The test pass if in 100 trials the main connection
-   completes in less than 6.65 seconds after the beginning of the trial.
+   completes in less than 8.15 seconds after the beginning of the trial.
 
 2.4.3.  Short background C4 connection last
 
@@ -439,13 +439,13 @@ Internet-Draft                  C4 Tests                    October 2025
    same time and using the same path.  The path has a 20Mbps data rate
    and 80ms RTT.  The background connection tries to download 30MB, the
    main connection downloads 20MB.  The test pass if in 100 trials the
-   main connection completes in less than 22.4 seconds.
+   main connection completes in less than 22.8 seconds.
 
 
 
 
 
-Huitema, et al.           Expires 13 April 2026                 [Page 8]
+Huitema, et al.           Expires 22 April 2026                 [Page 8]
 
 Internet-Draft                  C4 Tests                    October 2025
 
@@ -501,7 +501,7 @@ Internet-Draft                  C4 Tests                    October 2025
 
 
 
-Huitema, et al.           Expires 13 April 2026                 [Page 9]
+Huitema, et al.           Expires 22 April 2026                 [Page 9]
 
 Internet-Draft                  C4 Tests                    October 2025
 
@@ -557,7 +557,7 @@ Internet-Draft                  C4 Tests                    October 2025
 
 
 
-Huitema, et al.           Expires 13 April 2026                [Page 10]
+Huitema, et al.           Expires 22 April 2026                [Page 10]
 
 Internet-Draft                  C4 Tests                    October 2025
 
@@ -613,7 +613,7 @@ Internet-Draft                  C4 Tests                    October 2025
 
 
 
-Huitema, et al.           Expires 13 April 2026                [Page 11]
+Huitema, et al.           Expires 22 April 2026                [Page 11]
 
 Internet-Draft                  C4 Tests                    October 2025
 
@@ -669,7 +669,7 @@ Internet-Draft                  C4 Tests                    October 2025
 
 
 
-Huitema, et al.           Expires 13 April 2026                [Page 12]
+Huitema, et al.           Expires 22 April 2026                [Page 12]
 
 Internet-Draft                  C4 Tests                    October 2025
 
@@ -725,7 +725,7 @@ Internet-Draft                  C4 Tests                    October 2025
 
 
 
-Huitema, et al.           Expires 13 April 2026                [Page 13]
+Huitema, et al.           Expires 22 April 2026                [Page 13]
 
 Internet-Draft                  C4 Tests                    October 2025
 
@@ -781,7 +781,7 @@ Internet-Draft                  C4 Tests                    October 2025
 
 
 
-Huitema, et al.           Expires 13 April 2026                [Page 14]
+Huitema, et al.           Expires 22 April 2026                [Page 14]
 
 Internet-Draft                  C4 Tests                    October 2025
 
@@ -837,4 +837,4 @@ Authors' Addresses
 
 
 
-Huitema, et al.           Expires 13 April 2026                [Page 15]
+Huitema, et al.           Expires 22 April 2026                [Page 15]

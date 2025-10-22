@@ -345,7 +345,7 @@ with the background connection starting at the
 and 30ms RTT. The background connection
 tries to download 20MB, the main connection downloads 10MB.
 The test pass if in 100 trials the main connection completes
-in less than 3.6 seconds after the beginning of the trial.
+in less than 4.1 seconds after the beginning of the trial.
 
 ### Two long C4 connections
 
@@ -364,7 +364,7 @@ with the background connection starting
 and 70ms RTT. The background connection
 tries to download 15MB, the main connection downloads 10MB.
 The test pass if in 100 trials the main connection completes
-in less than 22 seconds after the beginning of the trial.
+in less than 22.2 seconds after the beginning of the trial.
 
 ### Compete with C4 over bad Wi-Fi
 
@@ -604,8 +604,8 @@ of 100 to 200ms every second. The data rate is set to 20Mbps, and the base
 RTT before jitter is set to 2ms, i.e., simulating a local server.
 The test lasts for 5 video groups of frames,
 i.e. 5 seconds. The measurements start 200ms after the
-start of the connection. The expected average delay is set to 75ms,
-and the maximum delay is set to 360ms. The test is successful if
+start of the connection. The expected average delay is set to 105ms,
+and the maximum delay is set to 410ms. The test is successful if
 100 trials are all successful.
 
 # Tests

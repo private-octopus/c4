@@ -76,6 +76,7 @@
 * - RTT min
  */
 
+#define C4_WITH_LOGGING 
 
 #define PICOQUIC_CC_ALGO_NUMBER_C4 8
 #define C4_DELAY_THRESHOLD_MAX 25000
@@ -118,7 +119,6 @@ typedef struct st_c4_state_t {
     uint64_t nominal_rate; /* Control variable if not delay based. */
     uint64_t nominal_max_rtt; /* Estimate of queue-free max RTT */
     uint64_t running_min_rtt; /* Rough estimate of min RTT, for buffer estimation */
-    double smoothed_usec_per_byte; /* EWMA of microsec per bytes, for computing rate estimates */
     uint64_t alpha_1024_current;
     uint64_t alpha_1024_previous;
     uint64_t nb_packets_in_startup;
@@ -655,11 +655,7 @@ void c4_update_min_max_rtt(picoquic_path_t* path_x, c4_state_t* c4_state)
     if (c4_state->nominal_max_rtt == 0) {
         c4_state->nominal_max_rtt = c4_state->era_max_rtt;
     }
-    else if (c4_state->alpha_1024_previous <= 1024
-#if 0
-        || c4_state->alg_state == c4_initial
-#endif
-        ) {
+    else if (c4_state->alpha_1024_previous <= 1024) {
         /* We want to increase the max RTT, but we want to limit the jitter
          * measurement to avoid aberrant behavior.
          */
@@ -688,30 +684,10 @@ void c4_handle_ack(picoquic_path_t* path_x, c4_state_t* c4_state, picoquic_per_a
     if (ack_state->rtt_measurement > 0 && ack_state->nb_bytes_delivered_since_packet_sent > 0) {
         uint64_t verified_rtt = (ack_state->rtt_measurement > ack_state->send_delay) ?
             ack_state->rtt_measurement : ack_state->send_delay;
-        double usec_per_byte = ((double)verified_rtt) /
-            ((double)ack_state->nb_bytes_delivered_since_packet_sent);
-        if (c4_state->smoothed_usec_per_byte == 0) {
-            c4_state->smoothed_usec_per_byte = usec_per_byte;
-        }
-        else {
-            c4_state->smoothed_usec_per_byte += C4_KAPPA * (usec_per_byte - c4_state->smoothed_usec_per_byte);
-        }
-#if 1
         rate_measurement = (ack_state->nb_bytes_delivered_since_packet_sent * 1000000) /
             verified_rtt;
-#else
-        if (c4_state->running_min_rtt != UINT64_MAX &&
-            ack_state->rtt_measurement >= c4_state->running_min_rtt &&
-            (c4_state->alg_state == c4_initial ||
-                4 * c4_state->running_min_rtt > 3 * c4_state->nominal_max_rtt)) {
-            rate_measurement = (ack_state->nb_bytes_delivered_since_packet_sent * 1000000) /
-                verified_rtt;
-        }
-        else {
-            rate_measurement = (uint64_t)(1000000.0 / c4_state->smoothed_usec_per_byte);
-        }
-#endif
-#if 1
+
+#ifdef C4_WITH_LOGGING
         /* Collect raw measurements for analysis */
         picoquic_log_app_message(path_x->cnx,
             "C4_rate, %" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%d ,%" PRIu64 ", %d",
@@ -844,7 +820,6 @@ static void c4_notify_congestion(
 
     path_x->is_ssthresh_initialized = 1;
 }
-
 
 /* Update RTT:
 * Maintain rtt_min, rtt_max, and rtt_min_stamp,

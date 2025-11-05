@@ -19,10 +19,15 @@ jobs:
           submodules: 'recursive'
 
       # Build picotls and picoquic.
-      - run: |
+      - name: Install picotls
+        run: |
           sudo apt-get install -y libssl-dev
           ls -l ./ci
           ./ci/build_picotls.sh
+      - name: Install picoquic
+        run: |
           ./ci/build_picoquic.sh
+      - name: Install picoquic_ns
+        run: |
           ./ci/build_picoquic_ns.sh
      

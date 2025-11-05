@@ -1,11 +1,56 @@
 # Christian's Congestion Control Code - C4
 
-The C4 project look at options for Internet Congestion Control. When running Real-Time applications,
-we want to use a congestion control code that lets applications use the full capacity of the network,
-avoids building queues in the network, and promptly detects changes in network conditions so
-applications can adapt their behavior.
+The C4 project look at defining a new Congestion Control algorithm suitable for
+use in QUIC, with the following priorities:
 
-The first stage of the project is to prepare a series of papers discussing congestion
+- Works well with video and other real time applications, which implies
+  good support for “application limited” flows,
+  keeping the throughput stable, avoid buffer-bloat, and generally
+  driving for low delays.
+- Work well with common access networks, including questionable Wi-Fi networks.
+- Keep it simple
+
+Out of those three priorities, the support for "questionable" Wi-Fi had a major
+influence on the design. We got reports of video not working well in some Wi-Fi
+networks, notably networks in office buildings shared by multiple tenants and
+appartment buildings. Analyzing traces showed that these networks could exhibit
+very large delay jitter, as seen in the following graph:
+
+![graph showing RTT observed over a 75 second Wi-Fi connection](./papers/wifi-trace-near-far.png "Sample Wi-Fi Trace")
+
+In presence of such jitter, we see transmission sometimes stalling if the
+congestion window is too small. To avoid that, we have to set the congestion
+window to be at least as large as the product of the target data rate by
+the maximum RTT. This leads to our design decision of tracking two main
+state variables in C4: the "nominal data rate", which is very similar to
+the "bottleneck bandwidth" of BBR (see
+[BBR-draft](https://datatracker.ietf.org/doc/draft-ietf-ccwg-bbr/));
+and the "nominal max RTT" which is set to the largest recently
+experienced RTT as measured in the absence of congestion.
+
+The support for application limited flows is achieved by keeping
+the nominal data rate stable in periods of low application traffic, and
+only reducing it when congestion is actually experienced. C4 keeps the
+bandwidth stable by adopting a cautious bandwidth probing strategy,
+so that in most cases probing does not cause applications to send
+excess data and cause priority inversions.
+
+C4 uses a "sensitivity" curve to obtain fairness between multiple
+connections. The sensitivity curve computes sensitivity as function
+of the nominal data rate, ensuring that flows sending at a high
+data rate are more sensitive than flows using a lower
+data rate, and thus reduce their data rate faster
+in response to congestion signals. Our simulations shows that this
+drives to fair sharing of a bottleneck between C4 flows, and
+also ensure reasonable sharing when sharing the bottleneck
+with Cubic or BBR flows.
+
+We have published three IETF drafts to describe the
+[C4 design](https://datatracker.ietf.org/doc/draft-huitema-ccwg-c4-design), 
+[C4 algorithm specifications](https://datatracker.ietf.org/doc/draft-huitema-ccwg-c4-spec),
+and the [testing of C4](https://datatracker.ietf.org/doc/draft-huitema-ccwg-c4-test). 
+
+The first stage of the project was to prepare a series of papers discussing congestion
 control design issues such as:
 
 * how to quickly drive connection from a cold start to sending at network speed? Is
@@ -82,6 +127,3 @@ Our first goal is to collect a robust set of simulation scenarios to investigate
 our list of issues, and refine our series of documents. This may require some
 updates to the simulation tool, for example to simulate various AQM policies,
 or to incorporate the simulations of Wi-Fi links. 
-
-Once we have these documents and simulations, we can start developping
-"Christian's Congestion Control Code".

@@ -56,19 +56,6 @@ target_link_libraries(pico_sim
     ${CMAKE_THREAD_LIBS_INIT}
 )
 
-add_executable(c4_demo
-    src/c4_demo.c
-)
-
-target_link_libraries(c4_demo
-    c4_lib
-    ${Picoquic_LIBRARIES}
-    ${PTLS_LIBRARIES}
-    ${OPENSSL_LIBRARIES}
-    ${CMAKE_DL_LIBS}
-    ${CMAKE_THREAD_LIBS_INIT}
-)
-
 # get all project files for formatting
 file(GLOB_RECURSE CLANG_FORMAT_SOURCE_FILES *.c *.h)
 

@@ -24,4 +24,5 @@ jobs:
           ls -l ./ci
           ./ci/build_picotls.sh
           ./ci/build_picoquic.sh
+          ./ci/build_picoquic_ns.sh
      

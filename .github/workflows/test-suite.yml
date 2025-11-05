@@ -32,6 +32,11 @@ jobs:
           ./ci/build_picoquic_ns.sh
       - name: Do simple tests
         run: |
+          pwd
+          echo "local"
+          ls .
+          echo "one up"
+          ls ..
           ulimit -c unlimited -S
           # Iterate through all the scenarios
           ./picoquic_ns/pico_sim -S ../../picoquic ../sim_specs/c4_alone.txt && QDRESULT=$? 

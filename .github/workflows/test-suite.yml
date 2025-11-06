@@ -33,6 +33,7 @@ jobs:
       - name: Do simple tests
         run: |
           pwd
+          ls ../picquic_ns
           ulimit -c unlimited -S
           # Iterate through all the scenarios
           ../picoquic_ns/pico_sim -S ../../picoquic ../sim_specs/c4_alone.txt && QDRESULT=$? 

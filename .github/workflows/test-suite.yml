@@ -19,47 +19,46 @@ jobs:
           submodules: 'recursive'
 
       # Build picotls and picoquic.
-      - run: |
+      - name: Install picotls
+        run: |
           sudo apt-get install -y libssl-dev
           ls -l ./ci
           ./ci/build_picotls.sh
+      - name: Install picoquic
+        run: |
           ./ci/build_picoquic.sh
-     
-      # Build pico_sim and run tests
-      - run: |
-          mkdir build
-          cd build
-          cmake ..
-          cmake --build .
-          make
+      - name: Install picoquic_ns
+        run: |
+          ./ci/build_picoquic_ns.sh
+      - name: Do simple tests
+        run: |
           ulimit -c unlimited -S
           # Iterate through all the scenarios
-          ./pico_sim -S ../../picoquic ../sim_specs/c4_alone.txt && QDRESULT=$? 
+          ../picoquic_ns/pico_sim -S ../../picoquic ./sim_specs/c4_alone.txt && QDRESULT=$? 
           if [ ${QDRESULT} != 0 ]; then exit 1; fi;
-          ./pico_sim -S ../../picoquic ../sim_specs/c4_alone_200.txt && QDRESULT=$? 
+          ../picoquic_ns/pico_sim -S ../../picoquic ./sim_specs/c4_alone_200.txt && QDRESULT=$? 
           if [ ${QDRESULT} != 0 ]; then exit 1; fi;
-          ./pico_sim -S ../../picoquic ../sim_specs/c4_vs_c4.txt && QDRESULT=$? 
+          ../picoquic_ns/pico_sim -S ../../picoquic ./sim_specs/c4_vs_c4.txt && QDRESULT=$? 
           if [ ${QDRESULT} != 0 ]; then exit 1; fi;
-          ./pico_sim -S ../../picoquic ../sim_specs/c4_after_c4.txt && QDRESULT=$? 
+          ../picoquic_ns/pico_sim -S ../../picoquic ./sim_specs/c4_after_c4.txt && QDRESULT=$? 
           if [ ${QDRESULT} != 0 ]; then exit 1; fi;
-          ./pico_sim -S ../../picoquic ../sim_specs/c4_before_c4.txt && QDRESULT=$? 
+          ../picoquic_ns/pico_sim -S ../../picoquic ./sim_specs/c4_before_c4.txt && QDRESULT=$? 
           if [ ${QDRESULT} != 0 ]; then exit 1; fi;
-          ./pico_sim -S ../../picoquic ../sim_specs/c4_vs_cubic.txt && QDRESULT=$? 
+          ../picoquic_ns/pico_sim -S ../../picoquic ./sim_specs/c4_vs_cubic.txt && QDRESULT=$? 
           if [ ${QDRESULT} != 0 ]; then exit 1; fi;
-          ./pico_sim -S ../../picoquic ../sim_specs/c4_wifi_fade.txt && QDRESULT=$? 
+          ../picoquic_ns/pico_sim -S ../../picoquic ./sim_specs/c4_wifi_fade.txt && QDRESULT=$? 
           if [ ${QDRESULT} != 0 ]; then exit 1; fi;
-          ./pico_sim -S ../../picoquic ../sim_specs/c4_wifi_suspension.txt && QDRESULT=$? 
+          ../picoquic_ns/pico_sim -S ../../picoquic ./sim_specs/c4_wifi_suspension.txt && QDRESULT=$? 
           if [ ${QDRESULT} != 0 ]; then exit 1; fi;
-          ./pico_sim -S ../../picoquic ../sim_specs/c4_media.txt && QDRESULT=$? 
+          ../picoquic_ns/pico_sim -S ../../picoquic ./sim_specs/c4_media.txt && QDRESULT=$? 
           if [ ${QDRESULT} != 0 ]; then exit 1; fi;
-          ./pico_sim -S ../../picoquic ../sim_specs/c4_media10.txt && QDRESULT=$? 
+          ../picoquic_ns/pico_sim -S ../../picoquic ./sim_specs/c4_media10.txt && QDRESULT=$? 
           if [ ${QDRESULT} != 0 ]; then exit 1; fi;
-          ./pico_sim -S ../../picoquic ../sim_specs/c4_media_wf.txt && QDRESULT=$? 
+          ../picoquic_ns/pico_sim -S ../../picoquic ./sim_specs/c4_media_wf.txt && QDRESULT=$? 
           if [ ${QDRESULT} != 0 ]; then exit 1; fi;
-          ./pico_sim -S ../../picoquic ../sim_specs/c4_media_ws.txt && QDRESULT=$? 
+          ../picoquic_ns/pico_sim -S ../../picoquic ./sim_specs/c4_media_ws.txt && QDRESULT=$? 
           if [ ${QDRESULT} != 0 ]; then exit 1; fi;
-          ./pico_sim -S ../../picoquic ../sim_specs/c4_short_long.txt && QDRESULT=$? 
+          ../picoquic_ns/pico_sim -S ../../picoquic ./sim_specs/c4_short_long.txt && QDRESULT=$? 
           if [ ${QDRESULT} != 0 ]; then exit 1; fi;
           exit 0
-          
-
+     

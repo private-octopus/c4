@@ -302,7 +302,7 @@ diagram.
 
 ~~~
 
-## Setting pacing rate, congestion window and quantum
+## Setting pacing rate, congestion window and quantum {#set_pace}
 
 If the nominal rate or the nominal max RTT are not yet
 assessed, C4 sets pacing rate, congestion window and
@@ -320,7 +320,7 @@ and on a coefficient `alpha_current`:
 ~~~
 pacing_rate = alpha_current_ * nominal_rate
 cwnd = max (pacing_rate * nominal_max_rtt, 2*MTU)
-quantum = max ( min (cwnd / 4, 64KB), 2*MTU)
+quantum = max ( min (pacing_rate*4_milliseconds, 64KB), 2*MTU)
 ~~~
 
 The coefficient `alpha` for the different states is:
@@ -432,10 +432,21 @@ a congestion signal is received.
 
 ## Pushing state {#c4-pushing}
 
-The Pushing state is entered from the Cruising state. 
-The coefficient `alpha_current` is set to 5/4 if the previous
+The Pushing state is entered from the Cruising state.
+
+The coefficient `alpha_current` depend on whether the
+previous previous
 pushing attempt was successful (see {{c4-recovery}}),
-or 17/16 if it was not.
+and also of the current value of `ecn_alpha`
+(see {{process-ecn}}):
+
+~~~
+   if not previous_attempt_successful:
+       alpha_current = 17/16
+   else:
+       alpha_current = 17/16 +
+          17/16 * (1 - ecn_alpha / ecn_threshold)
+~~~
 
 C4 exits the pushing state after one era, or if a congestion
 signal is received before that. In an exception to
@@ -536,13 +547,53 @@ PTO timeouts. When testing in "high jitter" conditions, we realized that we shou
 not change the state of C4 for losses detected solely based on timer, and
 only react to those losses that are detected by gaps in acknowledgements.
 
-## Detecting Excessive CE Marks
+## Detecting Excessive CE Marks {#process-ecn}
 
-TBD. The plan is to mimic the L4S specification.
+When the path supports ECN marking, C4 monitors the arrival of ECN/CE and
+ECN/ECT(1) marks by computing the ratio `ecn_alpha`. Congestion is detected
+when that ratio exceeds `ecn_threshold`, which varies depending on the
+sensitivity coefficient:
 
-## Rate Reduction on Congestion
+~~~
+ecn_threshold = (2-sensitivity)*3/32
+~~~
 
-On entering recovery, C4 reduces the `nominal_rate` by the factor "beta"
+The ratio `ecn_alpha` is
+updated each time an acknowledgement is received, as follow:
+
+~~~
+delta_ce = increase in the reported CE marks
+delta_ect1 = increase in the reported ECT(1) marks
+frac = delta_ce / (delta_ce + delta_ect1)
+
+if frac >= 0.5:
+    ecn_alpha = frac
+else:
+    ecn_alpha += (frac - ecn_alpha)/16
+
+if ecn_alpha > ecn_threshold:
+    report congestion
+~~~
+
+Congestion detection causes C4 to enter recovery. The
+ration `ecn_alpha` is set to zero on exit of recovery.
+
+## Applying congestion signals
+
+On congestion signal, if C4 was not in recovery state, it
+will enter recovery.
+
+As stated in {{c4-initial}} and {{c4-pushing}}, detecting
+a congestion in the Initial or Pushing state does not cause
+a change in the `nominal_rate` or `nominal_max_RTT`, because
+the pacing rate in these states is larger than the
+`nominal_rate`. Rate reduction only happens if recovery
+was entered from the Cruising state.
+
+### Rate Reduction on Congestion {#rate-reduction}
+
+On entering recovery from the cruising state, C4 reduces the
+`nominal_rate` by the factor "beta"
 corresponding to the congestion signal:
 
 ~~~
@@ -560,13 +611,16 @@ the acceptable margin, capped to `1/4`:
 ~~~
     beta = min(1/4,
               (rtt_sample - (nominal_max_rtt + delay_threshold)/
-               delay_threshod))
+               delay_threshold))
 ~~~
 
-If the signal is an ECN/CE rate, this is still TBD. We could
-use a proportional reduction coefficient in line with
-{{RFC9331}}, but we should use the sensitivity coefficient to
-modulate that signal.
+If the signal is an ECN/CE rate, the coefficient is proportional
+to the difference between `ecn_alpha` and `ecn_threshold`, capped to '1/4':
+
+~~~
+    beta = min(1/4, (ecn_alpha - ecn_threshold)/ ecn_threshold))
+~~~
+
 
 # Security Considerations
 
@@ -586,6 +640,32 @@ This document has no IANA actions.
 
 TODO acknowledge.
 
+# Changes since previous versions
+
+This section should be deleted before publication as an RFC
+
+## Changes since draft-huitema-ccwg-c4-spec-00
+
+Added the specification of reaction to ECN in {{process-ecn}}
+and in {{rate-reduction}}. Update section {{c4-pushing}} to
+modulate pushing rate based on observed rate of ECN/CE marks.
+
+In {{set_pace}}, the computation of the "quantum" changed
+from:
+
+~~~
+quantum = max ( min (cwnd / 4, 64KB), 2*MTU)
+~~~
+
+to:
+
+~~~
+quantum = max ( min (pacing_rate*4_milliseconds, 64KB), 2*MTU)
+~~~
+
+The old formula caused long bursts of packets that would
+trigger packet drops or ECN/CE marking by active queue management
+algorithms.
 
 
 

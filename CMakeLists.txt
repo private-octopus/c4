@@ -32,12 +32,10 @@ include_directories(include lib tests
     ${Picoquic_INCLUDE_DIRS} ${PTLS_INCLUDE_DIRS} ${OPENSSL_INCLUDE_DIR})
 
 set (C4_LIBRARY_FILES
-    src/c4.c
     src/register_cc_algo.c
 )
 
 set (C4_LIBRARY_HEADERS
-    src/c4.h
     src/picoquic_register_cc_algo.h
 )
 

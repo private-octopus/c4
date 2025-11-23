@@ -85,7 +85,9 @@ informative:
 
    I-D.irtf-iccrg-ledbat-plus-plus:
 
+   RFC9330:
    RFC9331:
+   I-D.briscoe-iccrg-prague-congestion-control:
    ICCRG-LEO:
     target: https://datatracker.ietf.org/meeting/122/materials/slides-122-iccrg-mind-the-misleading-effects-of-leo-mobility-on-end-to-end-congestion-control-00
     title: "Mind the Misleading Effects of LEO Mobility on End-to-End Congestion Control"
@@ -544,7 +546,7 @@ if measured_rate > nominal_rate and not congested:
 In our early experiments, we observed a "congestion bounce"
 that happened as follow:
 
-* congestion is detected, the nomnal rate is reduced, and
+* congestion is detected, the nominal rate is reduced, and
   C4 enters recovery.
 * packets sent at the data rate that caused the congestion
   continue to be acknowledged during recovery.
@@ -595,6 +597,43 @@ shows that the precaution of using the max of the
 ack delay and the send delay as a divider is sufficient
 for stable operation, and does not cause the response
 delays that filtering would.
+
+## Early Congestion Modification
+
+We want C4 to handle Early Congestion Notification in a manner
+compatible with the L4S design. For that, we monitor
+the evolving ratio of CE marks that the L4S specification
+designates as `alpha`
+(we use `ecn_alpha` here to avoid confusion),
+and we detect congestion if the ratio grows over a threshold.
+
+We did not find a recommended algorithm for computing `ecn_alpha`
+in either {{RFC9330}} or {{RFC9331}}, but we could get some
+concrete suggestions in {{I-D.briscoe-iccrg-prague-congestion-control}}.
+That draft, now obsolete, suggests updating the ratio once per
+RTT, as the exponential weighted average of the fraction of
+CE marks per packet:
+
+~~~
+frac = nb_CE / (nb_CE + nb_ECT1)
+ecn_alpha += (frac - ecn_alpha)/16
+~~~
+
+This kind of averaging introduces a reaction delay. The draft suggests mitigating that
+delay by preempting the averaging if the fraction is large:
+
+~~~
+if frac > 0.5:
+    ecn_alpha = frac
+~~~
+
+We followed that design, but decided to update the coefficient after
+each acknowledgement, instead of after each RTT. This is in line with
+our implementation of "delayed acknowledgements" in QUIC, which
+results in a small number of acknowledgements per RTT.
+
+The reaction of C4 to an excess of CE marks is similar to the
+reaction to excess delays or to packet losses, see {{congestion}}.
 
 # Competition with other algorithms
 
@@ -802,7 +841,7 @@ connection using either Cubic, BBR or C4. We had to design a response,
 and we first turned to making the response to excess delay or
 packet loss a function of the data rate of the flow.
 
-## Introducing a sensitivity curve
+## Introducing a sensitivity curve {#sensitivity-curve}
 
 In our second design, we attempted to fix the unfairness and
 shutdowns effect by introducing a sensitivity curve,
@@ -831,6 +870,13 @@ For the loss threshold, the rule is:
 loss_threshold = 0.02 + 0.50 * (1-sensitivity);
 ~~~
 
+For the CE mark threshold, the rule is:
+
+~~~
+loss_threshold = 1/32 + 1/32 * (1-sensitivity);
+~~~
+
+
 This very simple change allowed us to stabilize the results. In our
 competition tests we see sharing of resource almost equitably between
 C4 connections, and reasonably between C4 and Cubic or C4 and BBR.
@@ -858,7 +904,8 @@ This means we would only double the bandwidth after about 68 RTT, or increase
 from 10 to 65 Mbps after 185 RTT -- by which time the LEO station might
 have connected to a different orbiting satellite. To go faster, we implement
 a "cascade": if the previous pushing at 6.25% was successful, the next
-pushing will use 25% (see {{variable-pushing}}). If three successive pushings
+pushing will use 25% (see {{variable-pushing}}), or an intermediate
+value if the observed ratio of ECN marks is greater than 0. If three successive pushings
 all result in increases of the
 nominal rate, C4 will reenter the "startup" mode, during which each RTT
 can result in a 100% increase of rate and CWND.
@@ -946,6 +993,12 @@ We manage that compromise by adopting a variable pushing rate:
 - If pushing at 6.25% did result in some increase of the nominal CWIN,
   the next pushing will happen at 25%, otherwise it will
   remain at 6.25%
+
+If the observed ratio of ECN-CE marks is greater than zero, we will
+use it to modulate the amount of pushing. We leave the pushing rate
+at 6.25% if the previous pushing attempt was not successful, but
+otherwise we pick a value intermediate between 25% (if 0 ECN marks)
+and 6.25% (if the ratio of ECN marks approaches the threshold).
 
 As explained in {{cascade}}, if three consecutive pushing attempts
 result in significant increases, C4 detects that the underlying network

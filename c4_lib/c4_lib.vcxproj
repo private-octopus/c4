@@ -144,14 +144,12 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="..\pico_sim_vs\pico_sim_vs\getopt.h" />
-    <ClInclude Include="..\src\c4.h" />
     <ClInclude Include="..\src\picoquic_register_cc_algo.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="pch.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\pico_sim_vs\pico_sim_vs\getopt.c" />
-    <ClCompile Include="..\src\c4.c" />
     <ClCompile Include="..\src\register_cc_algo.c" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

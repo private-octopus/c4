@@ -320,7 +320,6 @@ and on a coefficient `alpha_current`:
 ~~~
 pacing_rate = alpha_current_ * nominal_rate
 cwnd = max (pacing_rate * nominal_max_rtt, 2*MTU)
-quantum = max ( min (pacing_rate*4_milliseconds, 64KB), 2*MTU)
 ~~~
 
 The coefficient `alpha` for the different states is:
@@ -331,6 +330,18 @@ Initial | 2 |
 Recovery | 15/16 |
 Cruising | 1 |
 Pushing | 5/4 or 17/16 | see {{c4-pushing}} for rules on choosing 5/4 or 17/16
+
+Setting the pacing quantum is a tradeoff between two requirements.
+Using a large quantum enables applications to send large batches of
+packets in a single transaction, which improves performance. But
+sending large batches of packets creates "instant queues" and
+causes some Active Queue Management mechanisms to mark packets as
+ECN/CE, or drop them. As a compromise, we set the quantum to
+4 millisecond worth of transmission.
+
+~~~
+quantum = max ( min (pacing_rate*4_milliseconds, 64KB), 2*MTU)
+~~~
 
 ## Initial state {#c4-initial}
 

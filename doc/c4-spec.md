@@ -446,7 +446,7 @@ a congestion signal is received.
 The Pushing state is entered from the Cruising state.
 
 The coefficient `alpha_current` depend on whether the
-previous previous
+previous
 pushing attempt was successful (see {{c4-recovery}}),
 and also of the current value of `ecn_alpha`
 (see {{process-ecn}}):

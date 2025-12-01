@@ -337,7 +337,7 @@ packets in a single transaction, which improves performance. But
 sending large batches of packets creates "instant queues" and
 causes some Active Queue Management mechanisms to mark packets as
 ECN/CE, or drop them. As a compromise, we set the quantum to
-4 millisecond worth of transmission.
+4 milliseconds worth of transmission.
 
 ~~~
 quantum = max ( min (pacing_rate*4_milliseconds, 64KB), 2*MTU)

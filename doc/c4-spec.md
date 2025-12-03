@@ -318,9 +318,19 @@ to values that depends on these variables
 and on a coefficient `alpha_current`:
 
 ~~~
-pacing_rate = alpha_current_ * nominal_rate
-cwnd = max (pacing_rate * nominal_max_rtt, 2*MTU)
+if (c4_state == initial):
+    margin = 0
+else:
+    margin = min(nominal_max_rtt/4, 15_milliseconds)
+
+pacing_rate = alpha_current * nominal_rate
+cwnd = max ((pacing_rate+margin) * nominal_max_rtt, 2*MTU)
 ~~~
+
+The "margin" coefficient accounts for errors on the
+estimate of the nominal max rtt, which could cause C4
+to be stuck operating at a too low data rate. It is only
+applied outside of the initial phase.
 
 The coefficient `alpha` for the different states is:
 
@@ -560,6 +570,7 @@ only react to those losses that are detected by gaps in acknowledgements.
 
 ## Detecting Excessive CE Marks {#process-ecn}
 
+The way we handle ECN signals is designed to be compatible with L4S {{RFC9331}}.
 When the path supports ECN marking, C4 monitors the arrival of ECN/CE and
 ECN/ECT(1) marks by computing the ratio `ecn_alpha`. Congestion is detected
 when that ratio exceeds `ecn_threshold`, which varies depending on the
@@ -652,17 +663,19 @@ This document has no IANA actions.
 TODO acknowledge.
 
 # Changes since previous versions
+{:numbered="false"}
 
 This section should be deleted before publication as an RFC
 
 ## Changes since draft-huitema-ccwg-c4-spec-00
+{:numbered="false"}
 
 Added the specification of reaction to ECN in {{process-ecn}}
 and in {{rate-reduction}}. Update section {{c4-pushing}} to
 modulate pushing rate based on observed rate of ECN/CE marks.
 
-In {{set_pace}}, the computation of the "quantum" changed
-from:
+Added the RTT margin consideration in {{set_pace}}, and 
+changed the computation of the "quantum" from:
 
 ~~~
 quantum = max ( min (cwnd / 4, 64KB), 2*MTU)

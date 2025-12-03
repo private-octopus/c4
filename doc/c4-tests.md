@@ -184,7 +184,7 @@ capacity of the path. At the beginning of the simulation,
 the simulated bandwidth is set at 5 Mbps. It increases to
 10 Mbps after 2.5 seconds. The RTT remains constant at
 100ms. The test verifies that 100 simulations of a
-7MB download all complete in less than 7.9 seconds.
+7MB download all complete in less than 8.6 seconds.
 
 The goal of the test is to verify that C4 promptly
 discovers the increase in bandwidth, and
@@ -192,14 +192,14 @@ increases the transmission rate.
 
 ### Drop and back
 
-The "low and up" scenario simulates a sudden decrease in the
+The "drop and back" scenario simulates a sudden decrease in the
 capacity of the path, followed by return to normal.
 At the beginning of the simulation,
 the simulated bandwidth is set at 10 Mbps. It decreases
 to 5 Mbps after 1.5 second, then returns to 10 Mbps
 after 2 seconds. The RTT remains constant at
 100ms. The test verifies that 100 simulations of a
-7MB download all complete in less than 8.15 seconds.
+7MB download all complete in less than 8.25 seconds.
 
 The goal of the test is to verify that C4 adapts
 promptly to changes in the available bandwidth on a
@@ -221,7 +221,7 @@ promptly after a short suspension of the path.
 
 ### Short to long
 
-The "black hole" scenario simulates a sudden increase in the
+The "short and long" scenario simulates a sudden increase in the
 latency of the path.
 At the beginning of the simulation,
 the simulated RTT is set at 30ms. After 1 second, the
@@ -566,7 +566,7 @@ that changes to a 100ms RTT after 1 second.
 The test lasts for 10 video groups of frames, i.e. 10 seconds. 
 The measurements start 5 seconds after the
 start of the connection. The expected average delay is set to 110ms,
-and the maximum delay is set to 126ms. The test is successful if
+and the maximum delay is set to 127ms. The test is successful if
 100 trials are all successful.
 
 ### Media over varying Wi-Fi
@@ -611,8 +611,8 @@ of 100 to 200ms every second. The data rate is set to 20Mbps, and the base
 RTT before jitter is set to 2ms, i.e., simulating a local server.
 The test lasts for 5 video groups of frames,
 i.e. 5 seconds. The measurements start 200ms after the
-start of the connection. The expected average delay is set to 105ms,
-and the maximum delay is set to 410ms. The test is successful if
+start of the connection. The expected average delay is set to 120ms,
+and the maximum delay is set to 675ms. The test is successful if
 100 trials are all successful.
 
 # Tests

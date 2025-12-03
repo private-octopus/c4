@@ -5,9 +5,9 @@
 Network Working Group                                         C. Huitema
 Internet-Draft                                      Private Octopus Inc.
 Intended status: Informational                             S. Nandakumar
-Expires: 5 June 2026                                         C. Jennings
+Expires: 6 June 2026                                         C. Jennings
                                                                    Cisco
-                                                         2 December 2025
+                                                         3 December 2025
 
 
           Testing of Christian's Congestion Control Code (C4)
@@ -40,7 +40,7 @@ Status of This Memo
    time.  It is inappropriate to use Internet-Drafts as reference
    material or to cite them other than as "work in progress."
 
-   This Internet-Draft will expire on 5 June 2026.
+   This Internet-Draft will expire on 6 June 2026.
 
 Copyright Notice
 
@@ -53,7 +53,7 @@ Copyright Notice
 
 
 
-Huitema, et al.            Expires 5 June 2026                  [Page 1]
+Huitema, et al.            Expires 6 June 2026                  [Page 1]
 
 Internet-Draft                  C4 Tests                   December 2025
 
@@ -109,7 +109,7 @@ Table of Contents
 
 
 
-Huitema, et al.            Expires 5 June 2026                  [Page 2]
+Huitema, et al.            Expires 6 June 2026                  [Page 2]
 
 Internet-Draft                  C4 Tests                   December 2025
 
@@ -165,7 +165,7 @@ Internet-Draft                  C4 Tests                   December 2025
 
 
 
-Huitema, et al.            Expires 5 June 2026                  [Page 3]
+Huitema, et al.            Expires 6 June 2026                  [Page 3]
 
 Internet-Draft                  C4 Tests                   December 2025
 
@@ -221,7 +221,7 @@ Internet-Draft                  C4 Tests                   December 2025
 
 
 
-Huitema, et al.            Expires 5 June 2026                  [Page 4]
+Huitema, et al.            Expires 6 June 2026                  [Page 4]
 
 Internet-Draft                  C4 Tests                   December 2025
 
@@ -266,7 +266,7 @@ Internet-Draft                  C4 Tests                   December 2025
    of the path.  At the beginning of the simulation, the simulated
    bandwidth is set at 5 Mbps.  It increases to 10 Mbps after 2.5
    seconds.  The RTT remains constant at 100ms.  The test verifies that
-   100 simulations of a 7MB download all complete in less than 7.9
+   100 simulations of a 7MB download all complete in less than 8.6
    seconds.
 
    The goal of the test is to verify that C4 promptly discovers the
@@ -277,19 +277,20 @@ Internet-Draft                  C4 Tests                   December 2025
 
 
 
-Huitema, et al.            Expires 5 June 2026                  [Page 5]
+Huitema, et al.            Expires 6 June 2026                  [Page 5]
 
 Internet-Draft                  C4 Tests                   December 2025
 
 
 2.2.5.  Drop and back
 
-   The "low and up" scenario simulates a sudden decrease in the capacity
-   of the path, followed by return to normal.  At the beginning of the
-   simulation, the simulated bandwidth is set at 10 Mbps.  It decreases
-   to 5 Mbps after 1.5 second, then returns to 10 Mbps after 2 seconds.
-   The RTT remains constant at 100ms.  The test verifies that 100
-   simulations of a 7MB download all complete in less than 8.15 seconds.
+   The "drop and back" scenario simulates a sudden decrease in the
+   capacity of the path, followed by return to normal.  At the beginning
+   of the simulation, the simulated bandwidth is set at 10 Mbps.  It
+   decreases to 5 Mbps after 1.5 second, then returns to 10 Mbps after 2
+   seconds.  The RTT remains constant at 100ms.  The test verifies that
+   100 simulations of a 7MB download all complete in less than 8.25
+   seconds.
 
    The goal of the test is to verify that C4 adapts promptly to changes
    in the available bandwidth on a path.
@@ -308,11 +309,12 @@ Internet-Draft                  C4 Tests                   December 2025
 
 2.2.7.  Short to long
 
-   The "black hole" scenario simulates a sudden increase in the latency
-   of the path.  At the beginning of the simulation, the simulated RTT
-   is set at 30ms.  After 1 second, the latency increases to 100ms.  The
-   data rate remains constant at 100ms.  The test verifies that 100
-   simulations of a 20MB download all complete in less than 22 seconds.
+   The "short and long" scenario simulates a sudden increase in the
+   latency of the path.  At the beginning of the simulation, the
+   simulated RTT is set at 30ms.  After 1 second, the latency increases
+   to 100ms.  The data rate remains constant at 100ms.  The test
+   verifies that 100 simulations of a 20MB download all complete in less
+   than 22 seconds.
 
    The goal of the test is to verify that C4 react properly exercises
    the "slow down" mechanism to discover the new RTT.
@@ -331,9 +333,7 @@ Internet-Draft                  C4 Tests                   December 2025
 
 
 
-
-
-Huitema, et al.            Expires 5 June 2026                  [Page 6]
+Huitema, et al.            Expires 6 June 2026                  [Page 6]
 
 Internet-Draft                  C4 Tests                   December 2025
 
@@ -389,7 +389,7 @@ Internet-Draft                  C4 Tests                   December 2025
 
 
 
-Huitema, et al.            Expires 5 June 2026                  [Page 7]
+Huitema, et al.            Expires 6 June 2026                  [Page 7]
 
 Internet-Draft                  C4 Tests                   December 2025
 
@@ -445,7 +445,7 @@ Internet-Draft                  C4 Tests                   December 2025
 
 
 
-Huitema, et al.            Expires 5 June 2026                  [Page 8]
+Huitema, et al.            Expires 6 June 2026                  [Page 8]
 
 Internet-Draft                  C4 Tests                   December 2025
 
@@ -501,7 +501,7 @@ Internet-Draft                  C4 Tests                   December 2025
 
 
 
-Huitema, et al.            Expires 5 June 2026                  [Page 9]
+Huitema, et al.            Expires 6 June 2026                  [Page 9]
 
 Internet-Draft                  C4 Tests                   December 2025
 
@@ -557,7 +557,7 @@ Internet-Draft                  C4 Tests                   December 2025
 
 
 
-Huitema, et al.            Expires 5 June 2026                 [Page 10]
+Huitema, et al.            Expires 6 June 2026                 [Page 10]
 
 Internet-Draft                  C4 Tests                   December 2025
 
@@ -613,7 +613,7 @@ Internet-Draft                  C4 Tests                   December 2025
 
 
 
-Huitema, et al.            Expires 5 June 2026                 [Page 11]
+Huitema, et al.            Expires 6 June 2026                 [Page 11]
 
 Internet-Draft                  C4 Tests                   December 2025
 
@@ -669,7 +669,7 @@ Internet-Draft                  C4 Tests                   December 2025
 
 
 
-Huitema, et al.            Expires 5 June 2026                 [Page 12]
+Huitema, et al.            Expires 6 June 2026                 [Page 12]
 
 Internet-Draft                  C4 Tests                   December 2025
 
@@ -708,7 +708,7 @@ Internet-Draft                  C4 Tests                   December 2025
    that changes to a 100ms RTT after 1 second.  The test lasts for 10
    video groups of frames, i.e. 10 seconds.  The measurements start 5
    seconds after the start of the connection.  The expected average
-   delay is set to 110ms, and the maximum delay is set to 126ms.  The
+   delay is set to 110ms, and the maximum delay is set to 127ms.  The
    test is successful if 100 trials are all successful.
 
 2.8.5.  Media over varying Wi-Fi
@@ -725,7 +725,7 @@ Internet-Draft                  C4 Tests                   December 2025
 
 
 
-Huitema, et al.            Expires 5 June 2026                 [Page 13]
+Huitema, et al.            Expires 6 June 2026                 [Page 13]
 
 Internet-Draft                  C4 Tests                   December 2025
 
@@ -757,8 +757,8 @@ Internet-Draft                  C4 Tests                   December 2025
    before jitter is set to 2ms, i.e., simulating a local server.  The
    test lasts for 5 video groups of frames, i.e. 5 seconds.  The
    measurements start 200ms after the start of the connection.  The
-   expected average delay is set to 105ms, and the maximum delay is set
-   to 410ms.  The test is successful if 100 trials are all successful.
+   expected average delay is set to 120ms, and the maximum delay is set
+   to 675ms.  The test is successful if 100 trials are all successful.
 
 3.  Tests
 
@@ -781,7 +781,7 @@ Internet-Draft                  C4 Tests                   December 2025
 
 
 
-Huitema, et al.            Expires 5 June 2026                 [Page 14]
+Huitema, et al.            Expires 6 June 2026                 [Page 14]
 
 Internet-Draft                  C4 Tests                   December 2025
 
@@ -837,7 +837,7 @@ Authors' Addresses
 
 
 
-Huitema, et al.            Expires 5 June 2026                 [Page 15]
+Huitema, et al.            Expires 6 June 2026                 [Page 15]
 
 Internet-Draft                  C4 Tests                   December 2025
 
@@ -893,4 +893,4 @@ Internet-Draft                  C4 Tests                   December 2025
 
 
 
-Huitema, et al.            Expires 5 June 2026                 [Page 16]
+Huitema, et al.            Expires 6 June 2026                 [Page 16]

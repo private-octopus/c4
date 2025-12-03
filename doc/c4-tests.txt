@@ -5,9 +5,9 @@
 Network Working Group                                         C. Huitema
 Internet-Draft                                      Private Octopus Inc.
 Intended status: Informational                             S. Nandakumar
-Expires: 13 April 2026                                       C. Jennings
+Expires: 5 June 2026                                         C. Jennings
                                                                    Cisco
-                                                         10 October 2025
+                                                         2 December 2025
 
 
           Testing of Christian's Congestion Control Code (C4)
@@ -40,7 +40,7 @@ Status of This Memo
    time.  It is inappropriate to use Internet-Drafts as reference
    material or to cite them other than as "work in progress."
 
-   This Internet-Draft will expire on 13 April 2026.
+   This Internet-Draft will expire on 5 June 2026.
 
 Copyright Notice
 
@@ -53,9 +53,9 @@ Copyright Notice
 
 
 
-Huitema, et al.           Expires 13 April 2026                 [Page 1]
+Huitema, et al.            Expires 5 June 2026                  [Page 1]
 
-Internet-Draft                  C4 Tests                    October 2025
+Internet-Draft                  C4 Tests                   December 2025
 
 
    Please review these documents carefully, as they describe your rights
@@ -70,56 +70,57 @@ Table of Contents
    2.  Simulations . . . . . . . . . . . . . . . . . . . . . . . . .   3
      2.1.  Testing strategy  . . . . . . . . . . . . . . . . . . . .   3
      2.2.  Reaction to network events  . . . . . . . . . . . . . . .   4
-       2.2.1.  Simulation of a simple 20Mbps connection  . . . . . .   4
+       2.2.1.  Simulation of a simple 20Mbps connection  . . . . . .   5
        2.2.2.  Simulation of a simple 200Mbps connection . . . . . .   5
        2.2.3.  Simulation of a geostationary satellite connection  .   5
        2.2.4.  Low and up  . . . . . . . . . . . . . . . . . . . . .   5
-       2.2.5.  Drop and back . . . . . . . . . . . . . . . . . . . .   5
+       2.2.5.  Drop and back . . . . . . . . . . . . . . . . . . . .   6
        2.2.6.  Black Hole  . . . . . . . . . . . . . . . . . . . . .   6
        2.2.7.  Short to long . . . . . . . . . . . . . . . . . . . .   6
-     2.3.  Handling of High Jitter Environments  . . . . . . . . . .   6
-       2.3.1.  Bad Wi-Fi test  . . . . . . . . . . . . . . . . . . .   7
-       2.3.2.  Wifi fade trial . . . . . . . . . . . . . . . . . . .   7
-       2.3.3.  Wifi suspension trial . . . . . . . . . . . . . . . .   7
-     2.4.  Competition with itself . . . . . . . . . . . . . . . . .   8
-       2.4.1.  Two short C4 simultaneous connections . . . . . . . .   8
-       2.4.2.  Short background C4 connection first  . . . . . . . .   8
-       2.4.3.  Short background C4 connection last . . . . . . . . .   8
-       2.4.4.  Two long C4 connections . . . . . . . . . . . . . . .   8
-       2.4.5.  Long background C4 connection last  . . . . . . . . .   9
-       2.4.6.  Compete with C4 over bad Wi-Fi  . . . . . . . . . . .   9
-     2.5.  Competition with Cubic  . . . . . . . . . . . . . . . . .   9
-       2.5.1.  Two short C4 and Cubic connections  . . . . . . . . .   9
-       2.5.2.  Two long C4 and Cubic connections . . . . . . . . . .  10
-       2.5.3.  Long Cubic background connection last . . . . . . . .  10
-       2.5.4.  Compete with Cubic over bad Wi-Fi . . . . . . . . . .  10
-     2.6.  Competition with BBR  . . . . . . . . . . . . . . . . . .  10
-       2.6.1.  Two short C4 and BBR connections  . . . . . . . . . .  11
-       2.6.2.  Two long C4 and BBR connections . . . . . . . . . . .  11
-       2.6.3.  Long BBR background connection last . . . . . . . . .  11
-       2.6.4.  Compete with BBR over bad Wi-Fi . . . . . . . . . . .  11
-     2.7.  Handling of Multimedia Applications . . . . . . . . . . .  11
-       2.7.1.  Media on High Speed Connection  . . . . . . . . . . .  12
-       2.7.2.  Media on 10 Mbps Connection . . . . . . . . . . . . .  12
-       2.7.3.  Media for 20 seconds  . . . . . . . . . . . . . . . .  13
-       2.7.4.  Media over varying RTT  . . . . . . . . . . . . . . .  13
-       2.7.5.  Media over varying Wi-Fi  . . . . . . . . . . . . . .  13
-       2.7.6.  Media with Wi-Fi suspensions  . . . . . . . . . . . .  13
-       2.7.7.  Media over bad Wi-Fi  . . . . . . . . . . . . . . . .  14
+     2.3.  L4S and ECN . . . . . . . . . . . . . . . . . . . . . . .   6
+     2.4.  Handling of High Jitter Environments  . . . . . . . . . .   7
+       2.4.1.  Bad Wi-Fi test  . . . . . . . . . . . . . . . . . . .   7
+       2.4.2.  Wifi fade trial . . . . . . . . . . . . . . . . . . .   8
+       2.4.3.  Wifi suspension trial . . . . . . . . . . . . . . . .   8
+     2.5.  Competition with itself . . . . . . . . . . . . . . . . .   8
+       2.5.1.  Two short C4 simultaneous connections . . . . . . . .   8
+       2.5.2.  Short background C4 connection first  . . . . . . . .   9
+       2.5.3.  Short background C4 connection last . . . . . . . . .   9
+       2.5.4.  Two long C4 connections . . . . . . . . . . . . . . .   9
+       2.5.5.  Long background C4 connection last  . . . . . . . . .   9
+       2.5.6.  Compete with C4 over bad Wi-Fi  . . . . . . . . . . .   9
+     2.6.  Competition with Cubic  . . . . . . . . . . . . . . . . .  10
+       2.6.1.  Two short C4 and Cubic connections  . . . . . . . . .  10
+       2.6.2.  Two long C4 and Cubic connections . . . . . . . . . .  10
+       2.6.3.  Long Cubic background connection last . . . . . . . .  10
+       2.6.4.  Compete with Cubic over bad Wi-Fi . . . . . . . . . .  10
+     2.7.  Competition with BBR  . . . . . . . . . . . . . . . . . .  11
+       2.7.1.  Two short C4 and BBR connections  . . . . . . . . . .  11
+       2.7.2.  Two long C4 and BBR connections . . . . . . . . . . .  11
+       2.7.3.  Long BBR background connection last . . . . . . . . .  11
+       2.7.4.  Compete with BBR over bad Wi-Fi . . . . . . . . . . .  12
+     2.8.  Handling of Multimedia Applications . . . . . . . . . . .  12
+       2.8.1.  Media on High Speed Connection  . . . . . . . . . . .  13
+       2.8.2.  Media on 10 Mbps Connection . . . . . . . . . . . . .  13
+       2.8.3.  Media for 20 seconds  . . . . . . . . . . . . . . . .  13
+       2.8.4.  Media over varying RTT  . . . . . . . . . . . . . . .  13
+       2.8.5.  Media over varying Wi-Fi  . . . . . . . . . . . . . .  13
+       2.8.6.  Media with Wi-Fi suspensions  . . . . . . . . . . . .  14
 
 
 
-Huitema, et al.           Expires 13 April 2026                 [Page 2]
+Huitema, et al.            Expires 5 June 2026                  [Page 2]
 
-Internet-Draft                  C4 Tests                    October 2025
+Internet-Draft                  C4 Tests                   December 2025
 
 
+       2.8.7.  Media over bad Wi-Fi  . . . . . . . . . . . . . . . .  14
    3.  Tests . . . . . . . . . . . . . . . . . . . . . . . . . . . .  14
      3.1.  Loopback tests  . . . . . . . . . . . . . . . . . . . . .  14
      3.2.  Webex prototype deployments . . . . . . . . . . . . . . .  14
    4.  Security Considerations . . . . . . . . . . . . . . . . . . .  14
-   5.  IANA Considerations . . . . . . . . . . . . . . . . . . . . .  14
-   6.  Informative References  . . . . . . . . . . . . . . . . . . .  14
+   5.  IANA Considerations . . . . . . . . . . . . . . . . . . . . .  15
+   6.  Informative References  . . . . . . . . . . . . . . . . . . .  15
    Acknowledgments . . . . . . . . . . . . . . . . . . . . . . . . .  15
    Authors' Addresses  . . . . . . . . . . . . . . . . . . . . . . .  15
 
@@ -154,6 +155,21 @@ Internet-Draft                  C4 Tests                    October 2025
    congestion control protocols, including Cubic and BBR.  We added an
    implementation of C4.
 
+
+
+
+
+
+
+
+
+
+
+Huitema, et al.            Expires 5 June 2026                  [Page 3]
+
+Internet-Draft                  C4 Tests                   December 2025
+
+
    That implementation is designed so that the same code can be used in
    execution over the network and in simulations, the main difference
    being a replacement of the socket API by a simulation API.  When
@@ -162,13 +178,6 @@ Internet-Draft                  C4 Tests                    October 2025
    departure of packets from simulated queues.  With the virtual clock
    mechanism, we can simulate in a fraction of a second a connection
    that would last 10 seconds in "real time".
-
-
-
-Huitema, et al.           Expires 13 April 2026                 [Page 3]
-
-Internet-Draft                  C4 Tests                    October 2025
-
 
    Our basic test is to run a simulation, measure the simulated duration
    of a connection, and compare that to the expected nominal value.
@@ -208,23 +217,21 @@ Internet-Draft                  C4 Tests                    October 2025
 
    *  a sudden increase in path latency, from "short" to "long"
 
+
+
+
+
+Huitema, et al.            Expires 5 June 2026                  [Page 4]
+
+Internet-Draft                  C4 Tests                   December 2025
+
+
 2.2.1.  Simulation of a simple 20Mbps connection
 
    This scenario simulates a 10MB download over a 20 Mbps link, with an
    80ms RTT, and a bottlneck buffer capacity corresponding to 1 BDP.
    The test verifies that 100 simulations all complete in less than 5
    seconds.
-
-
-
-
-
-
-
-Huitema, et al.           Expires 13 April 2026                 [Page 4]
-
-Internet-Draft                  C4 Tests                    October 2025
-
 
    In a typical simulation, we see a initial phase complete in less than
    800ms, followed by a recovery phase in which the transmission rate
@@ -259,11 +266,21 @@ Internet-Draft                  C4 Tests                    October 2025
    of the path.  At the beginning of the simulation, the simulated
    bandwidth is set at 5 Mbps.  It increases to 10 Mbps after 2.5
    seconds.  The RTT remains constant at 100ms.  The test verifies that
-   100 simulations of a 7MB download all complete in less than 7.6
+   100 simulations of a 7MB download all complete in less than 7.9
    seconds.
 
    The goal of the test is to verify that C4 promptly discovers the
    increase in bandwidth, and increases the transmission rate.
+
+
+
+
+
+
+Huitema, et al.            Expires 5 June 2026                  [Page 5]
+
+Internet-Draft                  C4 Tests                   December 2025
+
 
 2.2.5.  Drop and back
 
@@ -272,15 +289,7 @@ Internet-Draft                  C4 Tests                    October 2025
    simulation, the simulated bandwidth is set at 10 Mbps.  It decreases
    to 5 Mbps after 1.5 second, then returns to 10 Mbps after 2 seconds.
    The RTT remains constant at 100ms.  The test verifies that 100
-   simulations of a 7MB download all complete in less than 8 seconds.
-
-
-
-
-Huitema, et al.           Expires 13 April 2026                 [Page 5]
-
-Internet-Draft                  C4 Tests                    October 2025
-
+   simulations of a 7MB download all complete in less than 8.15 seconds.
 
    The goal of the test is to verify that C4 adapts promptly to changes
    in the available bandwidth on a path.
@@ -308,7 +317,28 @@ Internet-Draft                  C4 Tests                    October 2025
    The goal of the test is to verify that C4 react properly exercises
    the "slow down" mechanism to discover the new RTT.
 
-2.3.  Handling of High Jitter Environments
+2.3.  L4S and ECN
+
+   The "ECN" test simulates a 20 Mbps link, with an 80ms RTT, and a
+   bottleneck buffer capacity corresponding to 1 BDP.  The test verifies
+   that 100 simulated downloads of 10 MB all complete in less than 5.6
+   seconds.
+
+
+
+
+
+
+
+
+
+
+Huitema, et al.            Expires 5 June 2026                  [Page 6]
+
+Internet-Draft                  C4 Tests                   December 2025
+
+
+2.4.  Handling of High Jitter Environments
 
    In the design of C4, we have been paying special attention to "bad
    Wi-Fi" environments, in which the usual delays of a few milliseconds
@@ -330,14 +360,6 @@ Internet-Draft                  C4 Tests                    October 2025
    *  A Poisson arrival arrival model with lambda = 12, and an interval
       length of 7.5ms to account for Wi-Fi packet restransmission.
 
-
-
-
-Huitema, et al.           Expires 13 April 2026                 [Page 6]
-
-Internet-Draft                  C4 Tests                    October 2025
-
-
    We combine these generators models by using a coefficient "x" that
    indicates the general degree of collisions and repetitions:
 
@@ -354,16 +376,25 @@ Internet-Draft                  C4 Tests                    October 2025
    have been using this simulation of jitter to test our implementation
    of multiple congestion control algorithms.
 
-2.3.1.  Bad Wi-Fi test
+2.4.1.  Bad Wi-Fi test
 
    The "bad Wi-Fi" test simulates a connection experiencing a high level
    of jitter.  The average jitter is set to 7ms, which implies multiple
    spikes of 100 to 200ms every second.  The data rate is set to 10Mbps,
    and the base RTT before jitter is set to 2ms, i.e., simulating a
    local server.  The test pass if 100 different 10MB downloads each
-   complete in less than 4.3 seconds.
+   complete in less than 4.5 seconds.
 
-2.3.2.  Wifi fade trial
+
+
+
+
+Huitema, et al.            Expires 5 June 2026                  [Page 7]
+
+Internet-Draft                  C4 Tests                   December 2025
+
+
+2.4.2.  Wifi fade trial
 
    The "Wi-Fi fade" trial simulates varying conditions.  The connection
    starts with a data rate of 20Mbps, an 80ms latency, and Wi-Fi jitter
@@ -372,7 +403,7 @@ Internet-Draft                  C4 Tests                    October 2025
    rate and jitter return to the original condition.  The test pass if
    100 different 10MB downloads each complete in less than 6.2 seconds.
 
-2.3.3.  Wifi suspension trial
+2.4.3.  Wifi suspension trial
 
    The "Wi-Fi suspension" test simulates a connection experiencing
    multiple "suspensions".  For every 1.8 second of a 2 second interval,
@@ -383,18 +414,7 @@ Internet-Draft                  C4 Tests                    October 2025
    anyhow.  The test pass if 100 different 10MB downloads each complete
    in less than 5.4 seconds.
 
-
-
-
-
-
-
-Huitema, et al.           Expires 13 April 2026                 [Page 7]
-
-Internet-Draft                  C4 Tests                    October 2025
-
-
-2.4.  Competition with itself
+2.5.  Competition with itself
 
    In accordance with [RFC9743], we design series of tests of multiple
    competing flows all using C4.  We want to test different conditions,
@@ -407,71 +427,86 @@ Internet-Draft                  C4 Tests                    October 2025
    only be achieved if the main connection gets "about half" of the
    bandwidth.
 
-2.4.1.  Two short C4 simultaneous connections
+2.5.1.  Two short C4 simultaneous connections
 
    Our first test simulates two C4 connections starting at the same time
    and using the same path.  The path has a 20Mbps data rate and 80ms
    RTT.  The background connection tries to download 10MB, the main
    connection downloads 5MB.  The test pass if in 100 trials the main
-   connection completes in less than 5.75 seconds.
+   connection completes in less than 6.7 seconds.
 
-2.4.2.  Short background C4 connection first
+
+
+
+
+
+
+
+
+
+
+Huitema, et al.            Expires 5 June 2026                  [Page 8]
+
+Internet-Draft                  C4 Tests                   December 2025
+
+
+2.5.2.  Short background C4 connection first
 
    The "background first" test simulates two C4 connections using the
    same path with the background connection starting 0.5 seconds before
    the main connection.  The path has a 20Mbps data rate and 80ms RTT.
    The background connection tries to download 10MB, the main connection
    downloads 5MB.  The test pass if in 100 trials the main connection
-   completes in less than 6.65 seconds after the beginning of the trial.
+   completes in less than 8.15 seconds after the beginning of the trial.
 
-2.4.3.  Short background C4 connection last
+2.5.3.  Short background C4 connection last
 
    The "background last" simulates two C4 connections using the same
    path with the background connection starting at the 0.5 seconds after
    the main connection.  The path has a 50Mbps data rate and 30ms RTT.
    The background connection tries to download 20MB, the main connection
    downloads 10MB.  The test pass if in 100 trials the main connection
-   completes in less than 3.6 seconds after the beginning of the trial.
+   completes in less than 4.1 seconds after the beginning of the trial.
 
-2.4.4.  Two long C4 connections
+2.5.4.  Two long C4 connections
 
    The long connection test simulates two C4 connections starting at the
    same time and using the same path.  The path has a 20Mbps data rate
    and 80ms RTT.  The background connection tries to download 30MB, the
    main connection downloads 20MB.  The test pass if in 100 trials the
-   main connection completes in less than 22.4 seconds.
+   main connection completes in less than 22.8 seconds.
 
-
-
-
-
-Huitema, et al.           Expires 13 April 2026                 [Page 8]
-
-Internet-Draft                  C4 Tests                    October 2025
-
-
-2.4.5.  Long background C4 connection last
+2.5.5.  Long background C4 connection last
 
    The long "background last" test simulates two C4 connections using
    the same path with the background connection starting 1 second after
    the main connection.  The path has a 10Mbps data rate and 70ms RTT.
    The background connection tries to download 15MB, the main connection
    downloads 10MB.  The test pass if in 100 trials the main connection
-   completes in less than 22 seconds after the beginning of the trial.
+   completes in less than 22.2 seconds after the beginning of the trial.
 
-2.4.6.  Compete with C4 over bad Wi-Fi
+2.5.6.  Compete with C4 over bad Wi-Fi
 
    The "compete over bad Wi-Fi" test simulates two C4 connections using
    the same "bad Wi-Fi" path and starting, with the main connection
    starting 1 second after the background connection.  The path has a
    10Mbps data rate and 2ms RTT, plus Wi-Fi jitter set to 7ms average --
    the same jitter characteristics as in the "bad Wi-Fi" test (see
-   Section 2.3.1).  The background connection tries to download 10MB,
+   Section 2.4.1).  The background connection tries to download 10MB,
    the main connection downloads 4MB.  The test pass if in each of 100
    trials the main connection completes in less than 13 seconds after
    the beginning of the trial.
 
-2.5.  Competition with Cubic
+
+
+
+
+Huitema, et al.            Expires 5 June 2026                  [Page 9]
+
+Internet-Draft                  C4 Tests                   December 2025
+
+
+2.6.  Competition with Cubic
 
    In accordance with [RFC9743], we design series of tests of multiple
    competing flows using C4 and Cubic.  We want to test different
@@ -484,7 +519,7 @@ Internet-Draft                  C4 Tests                    October 2025
    only be achieved if the main connection gets "about half" of the
    bandwidth.
 
-2.5.1.  Two short C4 and Cubic connections
+2.6.1.  Two short C4 and Cubic connections
 
    Our first test simulates two C4 and Cubic connections starting at the
    same time and using the same path.  The path has a 20Mbps data rate
@@ -492,21 +527,7 @@ Internet-Draft                  C4 Tests                    October 2025
    10MB, the main connection downloads 5MB.  The test pass if in 100
    trials the main connection completes in less than 6.7 seconds.
 
-
-
-
-
-
-
-
-
-
-Huitema, et al.           Expires 13 April 2026                 [Page 9]
-
-Internet-Draft                  C4 Tests                    October 2025
-
-
-2.5.2.  Two long C4 and Cubic connections
+2.6.2.  Two long C4 and Cubic connections
 
    The long connection test simulates two C4 and Cubic connections
    starting at the same time and using the same path.  The path has a
@@ -515,7 +536,7 @@ Internet-Draft                  C4 Tests                    October 2025
    in 100 trials the main connection completes in less than 22.2
    seconds.
 
-2.5.3.  Long Cubic background connection last
+2.6.3.  Long Cubic background connection last
 
    The long "background last" test simulates two C4 and Cubic
    connections using the same path with the background Cubic connection
@@ -525,19 +546,27 @@ Internet-Draft                  C4 Tests                    October 2025
    trials the main connection completes in less than 22 seconds after
    the beginning of the trial.
 
-2.5.4.  Compete with Cubic over bad Wi-Fi
+2.6.4.  Compete with Cubic over bad Wi-Fi
 
    The "compete over bad Wi-Fi" test simulates two C4 and Cubic
    connections using the same "bad Wi-Fi" path, with the main connection
    starting 1 second after the background connection.  The path has a
    10Mbps data rate and 2ms RTT, plus Wi-Fi jitter set to 7ms average --
    the same jitter characteristics as in the "bad Wi-Fi" test (see
-   Section 2.3.1).  The background connection tries to download 10MB,
+   Section 2.4.1).  The background connection tries to download 10MB,
+
+
+
+Huitema, et al.            Expires 5 June 2026                 [Page 10]
+
+Internet-Draft                  C4 Tests                   December 2025
+
+
    the main connection downloads 4MB.  The test pass if in each of 100
-   trials the main connection completes in less than 11 seconds after
+   trials the main connection completes in less than 12.5 seconds after
    the beginning of the trial.
 
-2.6.  Competition with BBR
+2.7.  Competition with BBR
 
    In accordance with [RFC9743], we design series of tests of multiple
    competing flows using C4 and BBR.  We want to test different
@@ -550,19 +579,7 @@ Internet-Draft                  C4 Tests                    October 2025
    only be achieved if the main connection gets "about half" of the
    bandwidth.
 
-
-
-
-
-
-
-
-Huitema, et al.           Expires 13 April 2026                [Page 10]
-
-Internet-Draft                  C4 Tests                    October 2025
-
-
-2.6.1.  Two short C4 and BBR connections
+2.7.1.  Two short C4 and BBR connections
 
    Our first test simulates two C4 and BBR connections starting at the
    same time and using the same path.  The path has a 20Mbps data rate
@@ -570,7 +587,7 @@ Internet-Draft                  C4 Tests                    October 2025
    the main connection downloads 5MB.  The test pass if in 100 trials
    the main connection completes in less than 6.7 seconds.
 
-2.6.2.  Two long C4 and BBR connections
+2.7.2.  Two long C4 and BBR connections
 
    The long connection test simulates two C4 and BBR connections
    starting at the same time and using the same path.  The path has a
@@ -578,7 +595,7 @@ Internet-Draft                  C4 Tests                    October 2025
    download 30MB, the main connection downloads 20MB.  The test pass if
    in 100 trials the main connection completes in less than 23 seconds.
 
-2.6.3.  Long BBR background connection last
+2.7.3.  Long BBR background connection last
 
    The long "background last" test simulates two C4 and BBR connections
    using the same path with the background BBR connection starting 1
@@ -588,19 +605,32 @@ Internet-Draft                  C4 Tests                    October 2025
    main connection completes in less than 23 seconds after the beginning
    of the trial.
 
-2.6.4.  Compete with BBR over bad Wi-Fi
+
+
+
+
+
+
+
+
+Huitema, et al.            Expires 5 June 2026                 [Page 11]
+
+Internet-Draft                  C4 Tests                   December 2025
+
+
+2.7.4.  Compete with BBR over bad Wi-Fi
 
    The "compete over bad Wi-Fi" test simulates two C4 and BBR
    connections using the same "bad Wi-Fi" path, with the main connection
    starting 1 second after the background BBR connection.  The path has
    a 10Mbps data rate and 2ms RTT, plus Wi-Fi jitter set to 7ms average
    -- the same jitter characteristics as in the "bad Wi-Fi" test (see
-   Section 2.3.1).  The background connection tries to download 10MB,
+   Section 2.4.1).  The background connection tries to download 10MB,
    the main connection downloads 4MB.  The test pass if in each of 100
    trials the main connection completes in less than 13.5 seconds after
    the beginning of the trial.
 
-2.7.  Handling of Multimedia Applications
+2.8.  Handling of Multimedia Applications
 
    C4 is specifically designed to properly handle multimedia
    applications.  We test that function by running simulations of a call
@@ -608,15 +638,6 @@ Internet-Draft                  C4 Tests                    October 2025
 
    *  a simulated audio stream sending 80 bytes simulated audio segments
       every 20 ms.
-
-
-
-
-
-Huitema, et al.           Expires 13 April 2026                [Page 11]
-
-Internet-Draft                  C4 Tests                    October 2025
-
 
    *  a simulated compressed video stream, sending 30 frames per second,
       organized as groups of 30 frames each starting with a 37500 bytes
@@ -646,7 +667,14 @@ Internet-Draft                  C4 Tests                    October 2025
    and for the simulated compressed video measured after the start time
    are below the specified values.
 
-2.7.1.  Media on High Speed Connection
+
+
+Huitema, et al.            Expires 5 June 2026                 [Page 12]
+
+Internet-Draft                  C4 Tests                   December 2025
+
+
+2.8.1.  Media on High Speed Connection
 
    The "high speed" media test verifies how C4 handles media on a 100
    Mbps connection with a 30ms RTT.  The test lasts for 5 video groups
@@ -655,7 +683,7 @@ Internet-Draft                  C4 Tests                    October 2025
    and the maximum delay is set to 79ms.  The test is successful if 100
    trials are all successful.
 
-2.7.2.  Media on 10 Mbps Connection
+2.8.2.  Media on 10 Mbps Connection
 
    The "high speed" media test verifies how C4 handles media on a 10
    Mbps connection with a 40ms RTT.  The test lasts for 5 video groups
@@ -664,17 +692,7 @@ Internet-Draft                  C4 Tests                    October 2025
    and the maximum delay is set to 160ms.  The test is successful if 100
    trials are all successful.
 
-
-
-
-
-
-Huitema, et al.           Expires 13 April 2026                [Page 12]
-
-Internet-Draft                  C4 Tests                    October 2025
-
-
-2.7.3.  Media for 20 seconds
+2.8.3.  Media for 20 seconds
 
    The "20 seconds" media test verifies that media performance does not
    degrade over time, simulating a 100Mbps connection with a 30ms RTT.
@@ -683,35 +701,43 @@ Internet-Draft                  C4 Tests                    October 2025
    expected average delay is set to 33ms, and the maximum delay is set
    to 80ms.  The test is successful if 100 trials are all successful.
 
-2.7.4.  Media over varying RTT
+2.8.4.  Media over varying RTT
 
    The "varying RTT" media test verifies that media performance does not
    degrade over time, simulating a 100Mbps connection with a 30ms RTT,
    that changes to a 100ms RTT after 1 second.  The test lasts for 10
    video groups of frames, i.e. 10 seconds.  The measurements start 5
    seconds after the start of the connection.  The expected average
-   delay is set to 110ms, and the maximum delay is set to 120ms.  The
+   delay is set to 110ms, and the maximum delay is set to 126ms.  The
    test is successful if 100 trials are all successful.
 
-2.7.5.  Media over varying Wi-Fi
+2.8.5.  Media over varying Wi-Fi
 
    The "varying Wi-Fi" media test verifies that media performance does
    not degrade too much on a connection that has the kind of jitter
-   discussed in Section 2.3.  The connection has the characteristics
-   similar to the "fading Wi-Fi" scenario described in Section 2.3.2.
+   discussed in Section 2.4.  The connection has the characteristics
+   similar to the "fading Wi-Fi" scenario described in Section 2.4.2.
    The connection starts with a data rate of 20Mbps, 40ms RTT, and Wi-Fi
    jitter with average 1ms.  After 1 second, the data rate drops to
    2Mbps and the jitter average increases to 12ms.  The test lasts for 5
    video groups of frames, i.e. 5 seconds.  The measurements start 200ms
    after the start of the connection.  The expected average delay is set
+
+
+
+Huitema, et al.            Expires 5 June 2026                 [Page 13]
+
+Internet-Draft                  C4 Tests                   December 2025
+
+
    to 110ms, and the maximum delay is set to 350ms.  The test is
    successful if 100 trials are all successful.
 
-2.7.6.  Media with Wi-Fi suspensions
+2.8.6.  Media with Wi-Fi suspensions
 
    The "varying Wi-Fi" media test verifies that media performance does
    not degrade too much on a connection experiences suspensions as
-   discussed in Section 2.3.3.  For every 1.8 second of a 2 second
+   discussed in Section 2.4.3.  For every 1.8 second of a 2 second
    interval, the data rate is set to 20Mbps, and the base RTT before
    jitter is set to 10ms.  For the last 200ms of these intervals, the
    data rate is set to 0.  The test lasts for 5 video groups of frames,
@@ -720,29 +746,19 @@ Internet-Draft                  C4 Tests                    October 2025
    maximum delay is set to 202ms.  The test is successful if 100 trials
    are all successful.
 
-
-
-
-
-
-Huitema, et al.           Expires 13 April 2026                [Page 13]
-
-Internet-Draft                  C4 Tests                    October 2025
-
-
-2.7.7.  Media over bad Wi-Fi
+2.8.7.  Media over bad Wi-Fi
 
    The "bad Wi-Fi" media test verifies that media performance does not
    degrade too much on a connection that has the kind of jitter
-   discussed in Section 2.3.  The connection has the characteristics
-   similar to the "bad Wi-Fi" scenario described in Section 2.3.1.  The
+   discussed in Section 2.4.  The connection has the characteristics
+   similar to the "bad Wi-Fi" scenario described in Section 2.4.1.  The
    average jitter is set to 7ms, which implies multiple spikes of 100 to
    200ms every second.  The data rate is set to 20Mbps, and the base RTT
    before jitter is set to 2ms, i.e., simulating a local server.  The
    test lasts for 5 video groups of frames, i.e. 5 seconds.  The
    measurements start 200ms after the start of the connection.  The
-   expected average delay is set to 75ms, and the maximum delay is set
-   to 360ms.  The test is successful if 100 trials are all successful.
+   expected average delay is set to 105ms, and the maximum delay is set
+   to 410ms.  The test is successful if 100 trials are all successful.
 
 3.  Tests
 
@@ -763,6 +779,13 @@ Internet-Draft                  C4 Tests                    October 2025
 
    We did not include specific security oriented tests in this document.
 
+
+
+Huitema, et al.            Expires 5 June 2026                 [Page 14]
+
+Internet-Draft                  C4 Tests                   December 2025
+
+
 5.  IANA Considerations
 
    This document has no IANA actions.
@@ -774,24 +797,12 @@ Internet-Draft                  C4 Tests                    October 2025
               DOI 10.17487/RFC9000, May 2021,
               <https://www.rfc-editor.org/info/rfc9000>.
 
-
-
-
-
-
-
-
-Huitema, et al.           Expires 13 April 2026                [Page 14]
-
-Internet-Draft                  C4 Tests                    October 2025
-
-
    [I-D.ietf-moq-transport]
               Nandakumar, S., Vasiliev, V., Swett, I., and A. Frindell,
               "Media over QUIC Transport", Work in Progress, Internet-
-              Draft, draft-ietf-moq-transport-14, 2 September 2025,
+              Draft, draft-ietf-moq-transport-15, 20 October 2025,
               <https://datatracker.ietf.org/doc/html/draft-ietf-moq-
-              transport-14>.
+              transport-15>.
 
    [I-D.ietf-tsvwg-careful-resume]
               Kuhn, N., Stephan, E., Fairhurst, G., Secchi, R., and C.
@@ -825,6 +836,12 @@ Authors' Addresses
    Email: huitema@huitema.net
 
 
+
+Huitema, et al.            Expires 5 June 2026                 [Page 15]
+
+Internet-Draft                  C4 Tests                   December 2025
+
+
    Suhas Nandakumar
    Cisco
    Email: snandaku@cisco.com
@@ -837,4 +854,43 @@ Authors' Addresses
 
 
 
-Huitema, et al.           Expires 13 April 2026                [Page 15]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Huitema, et al.            Expires 5 June 2026                 [Page 16]

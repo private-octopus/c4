@@ -233,6 +233,14 @@ The goal of the test is to verify that C4 react properly
 exercises the "slow down" mechanism to discover the new RTT.
 
 
+## L4S and ECN {#ecn}
+
+The "ECN" test simulates a 20 Mbps link,
+with an 80ms RTT, and a bottleneck buffer capacity corresponding
+to 1 BDP. The test verifies that 100 simulated downloads of
+10 MB all complete in less than 5.6 seconds.
+
+
 ## Handling of High Jitter Environments {#c4-wifi}
 
 In the design of C4, we have been paying special attention to
@@ -280,7 +288,7 @@ The "bad Wi-Fi" test simulates a connection experiencing a high level of
 jitter. The average jitter is set to 7ms, which implies multiple spikes
 of 100 to 200ms every second. The data rate is set to 10Mbps, and the base
 RTT before jitter is set to 2ms, i.e., simulating a local server. The test
-pass if 100 different 10MB downloads each complete in less than 4.3 seconds.
+pass if 100 different 10MB downloads each complete in less than 4.5 seconds.
 
 ### Wifi fade trial {#wifi-fade}
 
@@ -433,7 +441,7 @@ the same jitter characteristics as in the "bad Wi-Fi" test (see {{bad-wifi}}).
 The background connection
 tries to download 10MB, the main connection downloads 4MB.
 The test pass if in each of 100 trials the main connection completes
-in less than 11 seconds after the beginning of the trial.
+in less than 12.5 seconds after the beginning of the trial.
 
 ## Competition with BBR
 
@@ -490,7 +498,6 @@ The background connection
 tries to download 10MB, the main connection downloads 4MB.
 The test pass if in each of 100 trials the main connection completes
 in less than 13.5 seconds after the beginning of the trial.
-
 
 ## Handling of Multimedia Applications
 
@@ -559,7 +566,7 @@ that changes to a 100ms RTT after 1 second.
 The test lasts for 10 video groups of frames, i.e. 10 seconds. 
 The measurements start 5 seconds after the
 start of the connection. The expected average delay is set to 110ms,
-and the maximum delay is set to 120ms. The test is successful if
+and the maximum delay is set to 126ms. The test is successful if
 100 trials are all successful.
 
 ### Media over varying Wi-Fi

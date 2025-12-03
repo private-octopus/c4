@@ -410,8 +410,16 @@ delay component ever higher -- and eventually resulting in
 
 To avoid that, we can have periodic periods in which the
 endpoint sends data at deliberately slower than the
-rate estimate. This enables us to get a "clean" measurement
+rate estimate. This would enable a "clean" measurement
 of the Max RTT.
+
+However, tests showed that only measuring
+the Max RTT during recovery periods is not reactive enough.
+For example, if the underlying RTT changes, we would need to wait
+up to 6 RTT before registering the change. In practice, we can
+measure the Max RTT in both the "recovery" and "cruising"
+periods, i.e., all the periods in which data is sent at most
+at the "nominal data rate".
 
 If we are dealing with jitter, the clean Max RTT measurements
 will include whatever jitter was happening at the time of the
@@ -437,10 +445,12 @@ packets sent during the recovery period.
 * if `max_rtt_sample` is larger than `nominal_max_rtt`, set
 `nominal_max_rtt` to that value.
 * else, set `nominal_max_rtt` to:
+
 ~~~
    nominal_max_rtt = gamma*max_rtt_sample + 
                      (1-gamma)*nominal_max_rtt
 ~~~
+
 The `gamma` coefficient is set to `1/8` in our initial trials.
 
 ### Preventing Runaway Max RTT
@@ -552,7 +562,7 @@ that happened as follow:
   continue to be acknowledged during recovery.
 * if enough packets are acknowledged, they will cause
   a rate measurement close to the previous nominal rate.
-* if C4 accepts this new nomnal rate, the flow will
+* if C4 accepts this new nominal rate, the flow will
   bounce back to the previous transmission rate, erasing
   the effects of the congestion signal.
 
@@ -694,7 +704,7 @@ state. On entering recovery, C4 reduces the `nominal_rate`
 by a factor "beta":
 
 ~~~
-    // on congestion detected:
+    # on congestion detected:
     nominal_rate = (1-beta)*nominal_rate
 ~~~
 The cofficient `beta` differs depending on the nature of the congestion
@@ -752,7 +762,7 @@ and only lasts for one round trip. That limited increase is not
 expected to increase the size of queues by more than a small
 fraction of the bandwidth\*delay product. It might cause a
 slight increase of the measured RTT for a short period, or
-perhaps cause some ECN signalling, but it should not cause packet
+perhaps cause some ECN signaling, but it should not cause packet
 losses -- unless competing connections have caused large queues.
 If there was no extra
 capacity available, C4 does not increase the nominal CWND and
@@ -827,7 +837,7 @@ connection was saturating the path, any additional traffic
 did cause queuing or losses, and the second connection had
 no chance to grow.
 
-This "second comer shut down" effect happend particularly often
+This "second comer shut down" effect happened particularly often
 on high jitter links. The established connections had tuned their
 timers or congestion window to account for the high jitter. The
 second connection was basing their timers on their first
@@ -903,9 +913,9 @@ and pushing will only result in slow increases increases, maybe 6.25% after 6 RT
 This means we would only double the bandwidth after about 68 RTT, or increase
 from 10 to 65 Mbps after 185 RTT -- by which time the LEO station might
 have connected to a different orbiting satellite. To go faster, we implement
-a "cascade": if the previous pushing at 6.25% was successful, the next
+a "cascade": if the previous pushes at 6.25% was successful, the next
 pushing will use 25% (see {{variable-pushing}}), or an intermediate
-value if the observed ratio of ECN marks is greater than 0. If three successive pushings
+value if the observed ratio of ECN marks is greater than 0. If three successive pushes
 all result in increases of the
 nominal rate, C4 will reenter the "startup" mode, during which each RTT
 can result in a 100% increase of rate and CWND.
@@ -1010,9 +1020,9 @@ increasing the send rate by 25% does not always result in a 25%
 increase of the acknowledged rate. Delay jitter, for example,
 may result in lower measurement. We initially computed the threshold
 for detecting "significant" increase as 1/2 of the increase in
-the sending rate, but multiple simulation shows that was too high and
+the sending rate, but multiple simulation shows that was too high
 and caused lower performance. We now set that threshold to 1/4 of the
-increase in he sending rate.
+increase in the sending rate.
 
 ## Pushing rate and Cascades
 
@@ -1026,7 +1036,7 @@ at a high rate increases the chance of building queues,
 overfilling the buffers, causing losses, and thus causing Cubic to back off.
 Pushing at a lower rate like 6.25% would not have that effect, and C4
 would keep using a lower share of the network. This is why we will always
-push at 25% in the "pig war" mode.
+pushed at 25% in the "pig war" mode.
 
 The computation of the interval between pushes is tied to the need to
 compete nicely, and follows the general idea that

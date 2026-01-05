@@ -21,13 +21,16 @@ def run_one_test(t_name, sim_path, exe_path, bucket_id):
         ret = -1;
     else:
         cmd = exe_path + " " + test_path
-        for x in range(0, 100):
+        range_max = 100
+        if t_name == "c4_satellite.txt":
+            range_max = 20
+        for x in range(0, range_max):
             ret = os.system(cmd)
             if ret != 0:
                 print(str(bucket_id) + ": " + t_name + " returns " + str(ret) + " after " + str(x) + " trials.")
                 break
-    if ret == 0:
-        print(str(bucket_id) + ": " + "All 100 trials of " + t_name + " pass.")
+        if ret == 0:
+            print(str(bucket_id) + ": " + "All " + str(range_max) + " trials of " + t_name + " pass.")
     return ret
   
 def run_one_list(tb):

@@ -5,7 +5,8 @@ import pandas as pd
 
 # main
 
-header_set = [ 'time', 'rate', 'n-rate', 'bytes', 'rtt', 'send-delay', 'nominal-rtt', 'state', 'path-bw', 'is_cc' ]
+header_set = [ 'time', 'rate', 'n-rate', 'bytes', 'rtt', 'send-delay', 'nominal-rtt', 'state', 'path-bw',
+                 'is_cc', 'beta', 'cc', 'ecn_a', 'smoothed_rtt', 'rtt_variant', 'alpha_previous' ]
 line_set = []
 
 for line in open(sys.argv[1], "r"):

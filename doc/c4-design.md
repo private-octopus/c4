@@ -1051,6 +1051,61 @@ and then maybe switch to startup mode if a lot of capacity is
 available. This is something that we intend to test, but have not
 implemented yet.
 
+## Adaptation to ECN/L4S
+
+Tests with L4S active queue management showed the tension between the
+periodic updates and L4S goal to minimize queue sizes. Typical L4S deployment
+start marking packets with ECN/CE when the queue size is about 1.5ms, and
+increase the mark rate progressively as the queue size increases,
+reaching 100% when the queue size is about 2ms. If C4 pushes at 25% every 6 RTT,
+and if the bandwidth estimate is accurate,
+the queue size will increase by 25% of the RTT during the first roundtrip,
+before any correction signal can be applied. The increased marking
+rate will affect all connections sharing the bottleneck, which is
+not desirable.
+
+L4S is tuned for the "Prague" algorithm, which increases CWIN by one packet every
+RTT. In a typical trial with a 20ms RTT and a 100 Mbps data rate, it takes 0.12ms
+to send a packet, and thus 12.5 RTT before building a queue of 1.5ms. In the same
+conditions, C4 would have increased the rate by 25% after 6 RTT in the
+aggressive scenario, thus triggering a high rate of marking.
+
+The cascade process made the problem even worse. If a push at 6.25% does increase
+the nominal rate, the next push will be at 25%. If that push and the next one
+did increase the nominal rate, C4 will reenter the initial phase, even if some
+of the pushes did cause ECN/CE marks. The initial phase will then cause a lot
+of packet losses, which will degrade performance.
+
+
+To mitigate this issue, we had to add a "very low" pushing mode, setting the
+pushing rate to only 3.125% if the previous push resulted in a high rate of ECN/CE marks.
+We also replaced the somewhat adhoc "count of successive probes" by the management
+of a "probe level", defining 4 levels:
+
+- level 0: pushing at 3.125%, spend 1 cycle in cruising before pushing.
+- level 1: pushing at 6.25%, spend 4 cycles in cruising before pushing.
+- level 2: pushing at 25%, spend at most 1 cycle in cruising before pushing.
+- level 3: pushing at 25%, spend at most 1 cycle in cruising before pushing.
+
+The "probe level" is updated after the recovery phase as follow:
+
+- if the previous probe was successful and did not result in a high rate of ECN/CE marks,
+  increase the probe level by 1. If the probe level was already at 3, reenter the startup phase.
+- if the previous probe was successful but did result in a high rate of ECN/CE marks,
+  remain at the same probe level.
+- if the previous probe was not successful but did not result in a high rate of ECN/CE marks,
+  stay at probe level 0 if already at that level, otherwise move back to probe level 1.
+- if the previous probe was not successful and did result in a high rate of ECN/CE marks,
+  move to probe level 0.
+
+This logic treats the CE marking differently from other congestion signals, because
+the CE marks are an intentional indication of congestion by the network, and is thus
+less ambiguous than delay increases or packet losses, which can be caused by other
+factors such as delay jitter or random transmission issues. Simulations show that
+this logic allows to quickly discover the available capacity in L4S networks, whithout spuriously
+reentering the startup phase and causing packet losses. It is equivalent to the
+previous logic when the network does not support L4S.
+
 # Revisiting the Initial Phase
 
 Our November 2025 design of C4 included a "rate based"

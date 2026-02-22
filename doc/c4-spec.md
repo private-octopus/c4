@@ -210,9 +210,12 @@ C4 maintains a set of variables tracking the evolution of the flow:
 
 - running min RTT, an approximation of the min RTT for the flow,
 - number of eras without increase (see {{c4-initial}}),
-- number of successful pushes,
 - current state of the algorithm, which can be Initial, Recovery,
   Cruising or Pushing.
+- probe level.
+
+The probe level determines how aggressive the pushing phase is, and also
+how long to wait between recovery and pushing.
 
 ## Per era variables {#era-variables}
 
@@ -395,7 +398,8 @@ assess the loss rate.
 
 On exiting the Initial state, C4 computes an estimate of the nominal
 max RTT as the quotient of the half the last CWND divided by the last
-nominal rate, and updates the "nominal max RTT" accordingly.
+nominal rate, and updates the "nominal max RTT" accordingly. The probe level
+is set to 1.
 
 ### Reentering the initial state
 
@@ -434,8 +438,20 @@ less,
 * An increase of at least 1/4th of the expected increase otherwise,
 for example an increase of 1/16th if `alpha_previous` was 5/4.
 
-C4 re-enters "Initial" at the end of the recovery period if the evaluation
-shows 3 successive rate increases without congestion, or if
+The probe level is updated as follow:
+
+* If the prior pushing was successful, and did not trigger an excessive rate of ECN/CE marks,
+  the probe level is increased by 1.
+* If the prior pushing was successful but did trigger an excessive rate of ECN/CE marks,
+  the probe level remains unchanged.
+* If the prior pushing was not successful but did not trigger an excessive rate of ECN/CE marks,
+  the probe level left unchanged if it was 0, set to 1 otherwise.
+* If the prior pushing was not successful and did trigger an excessive rate of ECN/CE marks,
+  the probe level is set to 0.
+
+
+C4 re-enters "Initial" at the end of the recovery period if the probe level
+as reached a value 4 or larger, or if
 high jitter requires restarting the Initial phase (see
 {{restart-high-jitter}}. Otherwise, C4 enters cruising.
 
@@ -465,27 +481,25 @@ This will be done at most once per flow.
 The Cruising state is entered from the Recovery state. 
 The coefficient `alpha_current` is set to 1.
 
-C4 will normally transition from Cruising state to Pushing state
-after 4 eras. It will transition to Recovery before that if
-a congestion signal is received.
+C4 will transition from Cruising state to Pushing state
+after a number of eras that depend on the probe level:
+
+- 1 era if the probe level is 0,
+- 4 eras if the probe level is 1,
+- 1 era if the probe level is 2 or 3.
+
+C4 will transition to Recovery before that if
+a congestion signal is received before transition to Pushing.
 
 ## Pushing state {#c4-pushing}
 
 The Pushing state is entered from the Cruising state.
 
-The coefficient `alpha_current` depend on whether the
-previous
-pushing attempt was successful (see {{c4-recovery}}),
-and also of the current value of `ecn_alpha`
-(see {{process-ecn}}):
+The coefficient `alpha_current` depend on the probe level:
 
-~~~
-   if not previous_attempt_successful:
-       alpha_current = 17/16
-   else:
-       alpha_current = 17/16 +
-          17/16 * (1 - ecn_alpha / ecn_threshold)
-~~~
+- If the probe level is 0, `alpha_current` is set to 33/32.
+- If the probe level is 1, `alpha_current` is set to 17/16.
+- If the probe level is 2 or higher, `alpha_current` is set to 5/4.
 
 C4 exits the pushing state after one era, or if a congestion
 signal is received before that. In an exception to
@@ -527,13 +541,13 @@ drive these flows towards sharing the available resource evenly.
 The sensitivity coefficient varies from 0 to 1, according to
 a simple curve:
 
-* set sensitivity to 0 if data rate is lower than 50000B/s
+* set sensitivity to 0 if data rate is lower than 50000 B/s
 * linear interpolation between 0 and 0.92 for values
-  between 50,000 and 1,000,000B/s.
+  between 50,000 and 1,000,000 B/s.
 * linear interpolation between 0.92 and 1 for values
-  between 1,000,000 and 10,000,000B/s.
+  between 1,000,000 and 10,000,000 B/s.
 * set sensitivity to 1 if data rate is higher than
-  10,000,000B/s
+  10,000,000 B/s
 
 The sensitivity index is then used to set the value of delay and
 loss and CE thresholds.

@@ -158,7 +158,7 @@ periodic small bumps during the "push" transitions.
 This scenario simulates a 20MB download over a 200 Mbps link,
 with a 40ms RTT, and a bottleneck buffer capacity corresponding
 to 1 BDP. The test verifies that 100 simulations all complete
-in less than 1.31 seconds.
+in less than 1.3 seconds.
 
 This short test shows that the initial phase correctly discover
 the path capacity, and that the transmission operates at
@@ -237,7 +237,7 @@ exercises the "slow down" mechanism to discover the new RTT.
 The "ECN" test simulates a 20 Mbps link,
 with an 80ms RTT, and a bottleneck buffer capacity corresponding
 to 1 BDP. The test verifies that 100 simulated downloads of
-10 MB all complete in less than 5 seconds.
+10 MB all complete in less than 4.5 seconds.
 
 ## Handling of High Jitter Environments {#c4-wifi}
 
@@ -383,7 +383,7 @@ the same jitter characteristics as in the "bad Wi-Fi" test (see {{bad-wifi}}).
 The background connection
 tries to download 10MB, the main connection downloads 4MB.
 The test pass if in each of 100 trials the main connection completes
-in less than 11 seconds after the beginning of the trial.
+in less than 12 seconds after the beginning of the trial.
 
 ## Competition with Cubic
 

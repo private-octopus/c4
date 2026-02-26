@@ -5,9 +5,9 @@
 Network Working Group                                         C. Huitema
 Internet-Draft                                      Private Octopus Inc.
 Intended status: Informational                             S. Nandakumar
-Expires: 30 August 2026                                      C. Jennings
+Expires: 25 August 2026                                      C. Jennings
                                                                    Cisco
-                                                        26 February 2026
+                                                        21 February 2026
 
 
           Testing of Christian's Congestion Control Code (C4)
@@ -40,7 +40,7 @@ Status of This Memo
    time.  It is inappropriate to use Internet-Drafts as reference
    material or to cite them other than as "work in progress."
 
-   This Internet-Draft will expire on 30 August 2026.
+   This Internet-Draft will expire on 25 August 2026.
 
 Copyright Notice
 
@@ -53,7 +53,7 @@ Copyright Notice
 
 
 
-Huitema, et al.          Expires 30 August 2026                 [Page 1]
+Huitema, et al.            Expires 6 June 2026                  [Page 1]
 
 Internet-Draft                  C4 Tests                   February 2026
 
@@ -109,7 +109,7 @@ Table of Contents
 
 
 
-Huitema, et al.          Expires 30 August 2026                 [Page 2]
+Huitema, et al.          Expires 25 August 2026                 [Page 2]
 
 Internet-Draft                  C4 Tests                   February 2026
 
@@ -118,11 +118,11 @@ Internet-Draft                  C4 Tests                   February 2026
    3.  Tests . . . . . . . . . . . . . . . . . . . . . . . . . . . .  14
      3.1.  Loopback tests  . . . . . . . . . . . . . . . . . . . . .  14
      3.2.  Webex prototype deployments . . . . . . . . . . . . . . .  14
-   4.  Security Considerations . . . . . . . . . . . . . . . . . . .  14
+   4.  Security Considerations . . . . . . . . . . . . . . . . . . .  15
    5.  IANA Considerations . . . . . . . . . . . . . . . . . . . . .  15
    6.  Informative References  . . . . . . . . . . . . . . . . . . .  15
-   Acknowledgments . . . . . . . . . . . . . . . . . . . . . . . . .  15
-   Authors' Addresses  . . . . . . . . . . . . . . . . . . . . . . .  15
+   Acknowledgments . . . . . . . . . . . . . . . . . . . . . . . . .  16
+   Authors' Addresses  . . . . . . . . . . . . . . . . . . . . . . .  16
 
 1.  Introduction
 
@@ -165,7 +165,7 @@ Internet-Draft                  C4 Tests                   February 2026
 
 
 
-Huitema, et al.          Expires 30 August 2026                 [Page 3]
+Huitema, et al.          Expires 25 August 2026                 [Page 3]
 
 Internet-Draft                  C4 Tests                   February 2026
 
@@ -221,7 +221,7 @@ Internet-Draft                  C4 Tests                   February 2026
 
 
 
-Huitema, et al.          Expires 30 August 2026                 [Page 4]
+Huitema, et al.          Expires 25 August 2026                 [Page 4]
 
 Internet-Draft                  C4 Tests                   February 2026
 
@@ -230,20 +230,20 @@ Internet-Draft                  C4 Tests                   February 2026
 
    This scenario simulates a 10MB download over a 20 Mbps link, with an
    80ms RTT, and a bottlneck buffer capacity corresponding to 1 BDP.
-   The test verifies that 100 simulations all complete in less than 5
+   The test verifies that 100 simulations all complete in less than 4.7
    seconds.
 
    In a typical simulation, we see a initial phase complete in less than
    800ms, followed by a recovery phase in which the transmission rate
    stabilizes to the line rate.  After that, the RTT remains very close
    to the path RTT, except for periodic small bumps during the "push"
-   transitions.  The typical test completes in 4.85 seconds.
+   transitions.
 
 2.2.2.  Simulation of a simple 200Mbps connection
 
    This scenario simulates a 20MB download over a 200 Mbps link, with a
    40ms RTT, and a bottleneck buffer capacity corresponding to 1 BDP.
-   The test verifies that 100 simulations all complete in less than 1.25
+   The test verifies that 100 simulations all complete in less than 1.3
    seconds.
 
    This short test shows that the initial phase correctly discover the
@@ -258,7 +258,7 @@ Internet-Draft                  C4 Tests                   February 2026
    also tests the support for careful resume
    [I-D.ietf-tsvwg-careful-resume] by setting the remembered CWND to
    18750000 bytes and the remembered RTT to 600.123ms.  The test
-   verifies that 100 simulations all complete in less than 7.4 seconds.
+   verifies that 100 simulations all complete in less than 7.7 seconds.
 
 2.2.4.  Low and up
 
@@ -277,7 +277,7 @@ Internet-Draft                  C4 Tests                   February 2026
 
 
 
-Huitema, et al.          Expires 30 August 2026                 [Page 5]
+Huitema, et al.          Expires 25 August 2026                 [Page 5]
 
 Internet-Draft                  C4 Tests                   February 2026
 
@@ -323,7 +323,7 @@ Internet-Draft                  C4 Tests                   February 2026
 
    The "ECN" test simulates a 20 Mbps link, with an 80ms RTT, and a
    bottleneck buffer capacity corresponding to 1 BDP.  The test verifies
-   that 100 simulated downloads of 10 MB all complete in less than 5.6
+   that 100 simulated downloads of 10 MB all complete in less than 4.5
    seconds.
 
 
@@ -333,7 +333,7 @@ Internet-Draft                  C4 Tests                   February 2026
 
 
 
-Huitema, et al.          Expires 30 August 2026                 [Page 6]
+Huitema, et al.            Expires 6 June 2026                  [Page 6]
 
 Internet-Draft                  C4 Tests                   February 2026
 
@@ -383,13 +383,13 @@ Internet-Draft                  C4 Tests                   February 2026
    spikes of 100 to 200ms every second.  The data rate is set to 10Mbps,
    and the base RTT before jitter is set to 2ms, i.e., simulating a
    local server.  The test pass if 100 different 10MB downloads each
-   complete in less than 4.5 seconds.
+   complete in less than 4.3 seconds.
 
 
 
 
 
-Huitema, et al.          Expires 30 August 2026                 [Page 7]
+Huitema, et al.            Expires 6 June 2026                  [Page 7]
 
 Internet-Draft                  C4 Tests                   February 2026
 
@@ -445,7 +445,7 @@ Internet-Draft                  C4 Tests                   February 2026
 
 
 
-Huitema, et al.          Expires 30 August 2026                 [Page 8]
+Huitema, et al.            Expires 6 June 2026                  [Page 8]
 
 Internet-Draft                  C4 Tests                   February 2026
 
@@ -474,7 +474,7 @@ Internet-Draft                  C4 Tests                   February 2026
    same time and using the same path.  The path has a 20Mbps data rate
    and 80ms RTT.  The background connection tries to download 30MB, the
    main connection downloads 20MB.  The test pass if in 100 trials the
-   main connection completes in less than 22.8 seconds.
+   main connection completes in less than 23 seconds.
 
 2.5.5.  Long background C4 connection last
 
@@ -483,7 +483,7 @@ Internet-Draft                  C4 Tests                   February 2026
    the main connection.  The path has a 10Mbps data rate and 70ms RTT.
    The background connection tries to download 15MB, the main connection
    downloads 10MB.  The test pass if in 100 trials the main connection
-   completes in less than 22.2 seconds after the beginning of the trial.
+   completes in less than 23 seconds after the beginning of the trial.
 
 2.5.6.  Compete with C4 over bad Wi-Fi
 
@@ -494,14 +494,14 @@ Internet-Draft                  C4 Tests                   February 2026
    the same jitter characteristics as in the "bad Wi-Fi" test (see
    Section 2.4.1).  The background connection tries to download 10MB,
    the main connection downloads 4MB.  The test pass if in each of 100
-   trials the main connection completes in less than 13 seconds after
+   trials the main connection completes in less than 12 seconds after
    the beginning of the trial.
 
 
 
 
 
-Huitema, et al.          Expires 30 August 2026                 [Page 9]
+Huitema, et al.            Expires 6 June 2026                  [Page 9]
 
 Internet-Draft                  C4 Tests                   February 2026
 
@@ -525,7 +525,7 @@ Internet-Draft                  C4 Tests                   February 2026
    same time and using the same path.  The path has a 20Mbps data rate
    and 80ms RTT.  The background Cubic connection tries to download
    10MB, the main connection downloads 5MB.  The test pass if in 100
-   trials the main connection completes in less than 6.7 seconds.
+   trials the main connection completes in less than 6.8 seconds.
 
 2.6.2.  Two long C4 and Cubic connections
 
@@ -533,8 +533,7 @@ Internet-Draft                  C4 Tests                   February 2026
    starting at the same time and using the same path.  The path has a
    20Mbps data rate and 80ms RTT.  The background connection tries to
    download 30MB, the main connection downloads 20MB.  The test pass if
-   in 100 trials the main connection completes in less than 22.2
-   seconds.
+   in 100 trials the main connection completes in less than 23 seconds.
 
 2.6.3.  Long Cubic background connection last
 
@@ -543,7 +542,7 @@ Internet-Draft                  C4 Tests                   February 2026
    starting 1 second after the main connection.  The path has a 10Mbps
    data rate and 70ms RTT.  The background connection tries to download
    15MB, the main connection downloads 10MB.  The test pass if in 100
-   trials the main connection completes in less than 22 seconds after
+   trials the main connection completes in less than 23 seconds after
    the beginning of the trial.
 
 2.6.4.  Compete with Cubic over bad Wi-Fi
@@ -554,15 +553,15 @@ Internet-Draft                  C4 Tests                   February 2026
    10Mbps data rate and 2ms RTT, plus Wi-Fi jitter set to 7ms average --
    the same jitter characteristics as in the "bad Wi-Fi" test (see
    Section 2.4.1).  The background connection tries to download 10MB,
+   the main connection downloads 4MB.  The test pass if in each of 100
 
 
 
-Huitema, et al.          Expires 30 August 2026                [Page 10]
+Huitema, et al.            Expires 6 June 2026                 [Page 10]
 
 Internet-Draft                  C4 Tests                   February 2026
 
 
-   the main connection downloads 4MB.  The test pass if in each of 100
    trials the main connection completes in less than 12.5 seconds after
    the beginning of the trial.
 
@@ -613,7 +612,7 @@ Internet-Draft                  C4 Tests                   February 2026
 
 
 
-Huitema, et al.          Expires 30 August 2026                [Page 11]
+Huitema, et al.            Expires 6 June 2026                 [Page 11]
 
 Internet-Draft                  C4 Tests                   February 2026
 
@@ -627,7 +626,7 @@ Internet-Draft                  C4 Tests                   February 2026
    -- the same jitter characteristics as in the "bad Wi-Fi" test (see
    Section 2.4.1).  The background connection tries to download 10MB,
    the main connection downloads 4MB.  The test pass if in each of 100
-   trials the main connection completes in less than 13.5 seconds after
+   trials the main connection completes in less than 14.5 seconds after
    the beginning of the trial.
 
 2.8.  Handling of Multimedia Applications
@@ -669,7 +668,7 @@ Internet-Draft                  C4 Tests                   February 2026
 
 
 
-Huitema, et al.          Expires 30 August 2026                [Page 12]
+Huitema, et al.            Expires 6 June 2026                 [Page 12]
 
 Internet-Draft                  C4 Tests                   February 2026
 
@@ -725,7 +724,7 @@ Internet-Draft                  C4 Tests                   February 2026
 
 
 
-Huitema, et al.          Expires 30 August 2026                [Page 13]
+Huitema, et al.            Expires 6 June 2026                 [Page 13]
 
 Internet-Draft                  C4 Tests                   February 2026
 
@@ -757,8 +756,8 @@ Internet-Draft                  C4 Tests                   February 2026
    before jitter is set to 2ms, i.e., simulating a local server.  The
    test lasts for 5 video groups of frames, i.e. 5 seconds.  The
    measurements start 200ms after the start of the connection.  The
-   expected average delay is set to 120ms, and the maximum delay is set
-   to 675ms.  The test is successful if 100 trials are all successful.
+   expected average delay is set to 100ms, and the maximum delay is set
+   to 680ms.  The test is successful if 100 trials are all successful.
 
 3.  Tests
 
@@ -766,25 +765,31 @@ Internet-Draft                  C4 Tests                   February 2026
 
 3.1.  Loopback tests
 
-   To do.  Write down.
+   Loopback tests were performed on Windows, downloading 10GB of data
+   over a loopback connection.  They showed picoquic using C4 achieving
+   a data rate of 3Gbps, slightly more than the 2.9Gbps achieved when
+   using Cubic or the 2.6 Gbps achieved when using BBR.
 
 3.2.  Webex prototype deployments
 
    To do.  Write down.
 
-4.  Security Considerations
-
-   This documentation of protocol testing does not have any particular
-   security considerations.
-
-   We did not include specific security oriented tests in this document.
 
 
 
-Huitema, et al.          Expires 30 August 2026                [Page 14]
+
+
+
+Huitema, et al.          Expires 25 August 2026                [Page 14]
 
 Internet-Draft                  C4 Tests                   February 2026
 
+
+Huitema, et al.            Expires 6 June 2026                 [Page 14]
+
+Internet-Draft                  C4 Tests                   December 2025
+
+   We did not include specific security oriented tests in this document.
 
 5.  IANA Considerations
 
@@ -825,6 +830,16 @@ Internet-Draft                  C4 Tests                   February 2026
               Repository , 2025,
               <https://https://github.com/private-octopus/picoquic_ns>.
 
+
+
+
+
+
+Huitema, et al.          Expires 25 August 2026                [Page 15]
+
+Internet-Draft                  C4 Tests                   February 2026
+
+
 Acknowledgments
 
    TODO acknowledge.
@@ -837,9 +852,9 @@ Authors' Addresses
 
 
 
-Huitema, et al.          Expires 30 August 2026                [Page 15]
+Huitema, et al.            Expires 6 June 2026                 [Page 15]
 
-Internet-Draft                  C4 Tests                   February 2026
+Internet-Draft                  C4 Tests                   December 2025
 
 
    Suhas Nandakumar
@@ -893,4 +908,4 @@ Internet-Draft                  C4 Tests                   February 2026
 
 
 
-Huitema, et al.          Expires 30 August 2026                [Page 16]
+Huitema, et al.            Expires 6 June 2026                 [Page 16]

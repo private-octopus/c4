@@ -5,9 +5,9 @@
 Network Working Group                                         C. Huitema
 Internet-Draft                                      Private Octopus Inc.
 Intended status: Experimental                              S. Nandakumar
-Expires: 30 August 2026                                      C. Jennings
+Expires: 25 August 2026                                      C. Jennings
                                                                    Cisco
-                                                        26 February 2026
+                                                        21 February 2026
 
 
        Specification of Christian's Congestion Control Code (C4)
@@ -40,7 +40,7 @@ Status of This Memo
    time.  It is inappropriate to use Internet-Drafts as reference
    material or to cite them other than as "work in progress."
 
-   This Internet-Draft will expire on 30 August 2026.
+   This Internet-Draft will expire on 5 June 2026.
 
 Copyright Notice
 
@@ -53,7 +53,7 @@ Copyright Notice
 
 
 
-Huitema, et al.          Expires 30 August 2026                 [Page 1]
+Huitema, et al.            Expires 5 June 2026                  [Page 1]
 
 Internet-Draft              C4 Specification               February 2026
 
@@ -66,37 +66,53 @@ Internet-Draft              C4 Specification               February 2026
 
 Table of Contents
 
-   1.  Introduction  . . . . . . . . . . . . . . . . . . . . . . . .   2
+   1.  Introduction  . . . . . . . . . . . . . . . . . . . . . . . .   3
    2.  Key Words . . . . . . . . . . . . . . . . . . . . . . . . . .   3
    3.  C4 variables  . . . . . . . . . . . . . . . . . . . . . . . .   3
-     3.1.  Nominal rate  . . . . . . . . . . . . . . . . . . . . . .   3
+     3.1.  Nominal rate  . . . . . . . . . . . . . . . . . . . . . .   4
      3.2.  Nominal max RTT . . . . . . . . . . . . . . . . . . . . .   4
      3.3.  Global variables  . . . . . . . . . . . . . . . . . . . .   5
      3.4.  Per era variables . . . . . . . . . . . . . . . . . . . .   6
    4.  States and Transition . . . . . . . . . . . . . . . . . . . .   6
      4.1.  Setting pacing rate, congestion window and quantum  . . .   7
-     4.2.  Initial state . . . . . . . . . . . . . . . . . . . . . .   8
-     4.3.  Recovery state  . . . . . . . . . . . . . . . . . . . . .   9
-       4.3.1.  Restarting Initial if High Jitter . . . . . . . . . .  10
-     4.4.  Cruising state {#c4-cruising }  . . . . . . . . . . . . .  10
-     4.5.  Pushing state . . . . . . . . . . . . . . . . . . . . . .  10
-   5.  Handling of congestion signals  . . . . . . . . . . . . . . .  11
-     5.1.  Variable Sensitivity  . . . . . . . . . . . . . . . . . .  11
-     5.2.  Detecting Excessive Delays  . . . . . . . . . . . . . . .  12
-     5.3.  Detecting Excessive Losses  . . . . . . . . . . . . . . .  12
-       5.3.1.  Do not react to Probe Time Out  . . . . . . . . . . .  12
-     5.4.  Detecting Excessive CE Marks  . . . . . . . . . . . . . .  13
-     5.5.  Applying congestion signals . . . . . . . . . . . . . . .  13
-       5.5.1.  Rate Reduction on Congestion  . . . . . . . . . . . .  13
-   6.  Security Considerations . . . . . . . . . . . . . . . . . . .  14
-   7.  IANA Considerations . . . . . . . . . . . . . . . . . . . . .  14
-   8.  References  . . . . . . . . . . . . . . . . . . . . . . . . .  14
-     8.1.  Normative References  . . . . . . . . . . . . . . . . . .  14
-     8.2.  Informative References  . . . . . . . . . . . . . . . . .  14
-   Acknowledgments . . . . . . . . . . . . . . . . . . . . . . . . .  15
-   Changes since previous versions . . . . . . . . . . . . . . . . .  15
-     Changes since draft-huitema-ccwg-c4-spec-00 . . . . . . . . . .  15
-   Authors' Addresses  . . . . . . . . . . . . . . . . . . . . . . .  15
+     4.2.  Initial state . . . . . . . . . . . . . . . . . . . . . .   9
+       4.2.1.  Reentering the initial state  . . . . . . . . . . . .   9
+     4.3.  Recovery state  . . . . . . . . . . . . . . . . . . . . .  10
+       4.3.1.  Restarting Initial if High Jitter . . . . . . . . . .  11
+     4.4.  Cruising state {#c4-cruising }  . . . . . . . . . . . . .  11
+     4.5.  Pushing state . . . . . . . . . . . . . . . . . . . . . .  11
+   5.  Handling of congestion signals  . . . . . . . . . . . . . . .  12
+     5.1.  Variable Sensitivity  . . . . . . . . . . . . . . . . . .  12
+     5.2.  Detecting Excessive Delays  . . . . . . . . . . . . . . .  13
+     5.3.  Detecting Excessive Losses  . . . . . . . . . . . . . . .  13
+       5.3.1.  Do not react to Probe Time Out  . . . . . . . . . . .  13
+     5.4.  Detecting Excessive CE Marks  . . . . . . . . . . . . . .  14
+     5.5.  Applying congestion signals . . . . . . . . . . . . . . .  14
+       5.5.1.  Rate Reduction on Congestion  . . . . . . . . . . . .  14
+   6.  Implementation considerations . . . . . . . . . . . . . . . .  15
+     6.1.  Rate measurement should be conservative . . . . . . . . .  15
+     6.2.  Pacing and CPU load . . . . . . . . . . . . . . . . . . .  16
+     6.3.  Nominal max RTT on low latency links  . . . . . . . . . .  16
+   7.  Security Considerations . . . . . . . . . . . . . . . . . . .  16
+   8.  IANA Considerations . . . . . . . . . . . . . . . . . . . . .  16
+   9.  References  . . . . . . . . . . . . . . . . . . . . . . . . .  16
+     9.1.  Normative References  . . . . . . . . . . . . . . . . . .  17
+     9.2.  Informative References  . . . . . . . . . . . . . . . . .  17
+   Acknowledgments . . . . . . . . . . . . . . . . . . . . . . . . .  17
+   Changes since previous versions . . . . . . . . . . . . . . . . .  17
+     Changes since draft-huitema-ccwg-c4-spec-00 . . . . . . . . . .  17
+   Authors' Addresses  . . . . . . . . . . . . . . . . . . . . . . .  18
+
+
+
+
+
+
+
+Huitema, et al.            Expires 5 June 2026                  [Page 2]
+
+Internet-Draft              C4 Specification               February 2026
+
 
 1.  Introduction
 
@@ -104,15 +120,6 @@ Table of Contents
    algorithm designed to support Real-Time multimedia applications,
    specifically multimedia applications using QUIC [RFC9000] and the
    Media over QUIC transport [I-D.ietf-moq-transport].
-
-
-
-
-
-Huitema, et al.          Expires 30 August 2026                 [Page 2]
-
-Internet-Draft              C4 Specification               February 2026
-
 
    The two main variables describing the state of a flow are the
    "nominal rate" (see Section 3.1) and the "nominal max RTT" (see
@@ -155,20 +162,21 @@ Internet-Draft              C4 Specification               February 2026
    a set a variables per flow (see Section 3.3) and per era (see
    Section 3.4).
 
-3.1.  Nominal rate
+
+
+
+Huitema, et al.          Expires 25 August 2026                 [Page 3]
+
+Internet-Draft              C4 Specification               February 2026
+
+Huitema, et al.            Expires 5 June 2026                  [Page 3]
+
+Internet-Draft              C4 Specification               December 2025
 
    The nominal rate is an estimate of the bandwidth available to the
    flow.  On initialization, the nominal rate is set to zero, and
    default values are used when setting the pacing rate and CWND for the
    flow.
-
-
-
-
-Huitema, et al.          Expires 30 August 2026                 [Page 3]
-
-Internet-Draft              C4 Specification               February 2026
-
 
    C4 evaluates the nominal rate after acknowledgements are received
    using the number of bytes acknowledged since the packet was sent
@@ -212,19 +220,18 @@ Internet-Draft              C4 Specification               February 2026
    on the path in the absence of queues.  The RTT samples observed for
    the flow are the sum of four components:
 
-   *  the latency of the path
-
-   *  the jitter introduced by processes like link layer contention or
-      link layer retransmission
-
-   *  queuing delays caused by competing applications
 
 
-
-Huitema, et al.          Expires 30 August 2026                 [Page 4]
+Huitema, et al.          Expires 25 August 2026                 [Page 4]
 
 Internet-Draft              C4 Specification               February 2026
 
+
+Huitema, et al.            Expires 5 June 2026                  [Page 4]
+
+Internet-Draft              C4 Specification               December 2025
+
+   *  queuing delays caused by competing applications
 
    *  queuing delays introduced by C4 itself.
 
@@ -267,20 +274,20 @@ Internet-Draft              C4 Specification               February 2026
 
    *  running min RTT, an approximation of the min RTT for the flow,
 
-   *  number of eras without increase (see Section 4.2),
-
-   *  number of successful pushes,
-
-   *  current state of the algorithm, which can be Initial, Recovery,
-      Cruising or Pushing.
 
 
 
-
-Huitema, et al.          Expires 30 August 2026                 [Page 5]
+Huitema, et al.          Expires 25 August 2026                 [Page 5]
 
 Internet-Draft              C4 Specification               February 2026
 
+
+Huitema, et al.            Expires 5 June 2026                  [Page 5]
+
+Internet-Draft              C4 Specification               December 2025
+
+   The probe level determines how aggressive the pushing phase is, and
+   also how long to wait between recovery and pushing.
 
 3.4.  Per era variables
 
@@ -319,24 +326,19 @@ Internet-Draft              C4 Specification               February 2026
       "cruising" state until at least 4 RTT and the connection is not
       "app limited".  At that point, it enters "pushing".
 
-   *  "Pushing": the connection is using a rate and CWND 25% larger than
-      "nominal_rate" and "nominal_CWND".  It remains in that state for
-      one round trip, i.e., until the first packet send while "pushing"
-      is acknowledged.  At that point, it enters the "recovery" state.
-
-   These transitions are summarized in the following state diagram.
 
 
 
 
-
-
-
-
-Huitema, et al.          Expires 30 August 2026                 [Page 6]
+Huitema, et al.          Expires 25 August 2026                 [Page 6]
 
 Internet-Draft              C4 Specification               February 2026
 
+Huitema, et al.            Expires 5 June 2026                  [Page 6]
+
+Internet-Draft              C4 Specification               December 2025
+
+   These transitions are summarized in the following state diagram.
 
                        Start
                          |
@@ -380,19 +382,19 @@ Internet-Draft              C4 Specification               February 2026
 
    *  congestion window: set to the equivalent of 10 packets,
 
-   *  congestion quantum: set to zero.
+
+
+Huitema, et al.          Expires 25 August 2026                 [Page 7]
+
+Internet-Draft              C4 Specification               February 2026
+
+Huitema, et al.            Expires 5 June 2026                  [Page 7]
+
+Internet-Draft              C4 Specification               December 2025
 
    If the nominal rate or the nominal max RTT are both assessed, C4 sets
    pacing rate, and congestion window to values that depends on these
    variables and on a coefficient alpha_current:
-
-
-
-
-Huitema, et al.          Expires 30 August 2026                 [Page 7]
-
-Internet-Draft              C4 Specification               February 2026
-
 
    if (c4_state == initial):
        margin = 0
@@ -429,46 +431,77 @@ Internet-Draft              C4 Specification               February 2026
    sending large batches of packets creates "instant queues" and causes
    some Active Queue Management mechanisms to mark packets as ECN/CE, or
    drop them.  As a compromise, we set the quantum to 4 milliseconds
-   worth of transmission.
+   worth of transmission, while capping it to 64KB.
 
    quantum = max ( min (pacing_rate*4_milliseconds, 64KB), 2*MTU)
 
-4.2.  Initial state
-
-   When the flow is initialized, it enters the Initial state, during
-   which it does a first assessment of the "nominal rate" and "nominal
-   max RTT".  The coefficient alpha_current is set to 2.  The "nominal
-   rate" and "nominal max RTT" are initialized to zero, which will cause
-   pacing rate and CWND to be set default initial values.  The nominal
-   max RTT will be set to the first assessed RTT value, but is not
-   otherwise changed during the initial phase.  The nominal rate is
 
 
 
-Huitema, et al.          Expires 30 August 2026                 [Page 8]
+
+
+
+Huitema, et al.          Expires 25 August 2026                 [Page 8]
 
 Internet-Draft              C4 Specification               February 2026
 
+Huitema, et al.            Expires 5 June 2026                  [Page 8]
+
+Internet-Draft              C4 Specification               December 2025
 
-   updated after receiving acknowledgements, see {#nominal-rate}.
+   When the flow is first initialized, it enters the Initial state,
+   during which it does a first assessment of the "nominal rate" and
+   "nominal max RTT".  The coefficient alpha_current is set to 2.  The
+   "nominal rate" and "nominal max RTT" are initialized to zero, which
+   will cause pacing rate to be set to a default initial value.  The
+   nominal max RTT will be set to the first assessed RTT value, but is
+   not otherwise changed before the end of the initial phase.  The CWND
+   will be set to the default initial value, corresponding to 10
+   packets.
+
+   During the initial state, the nominal rate is updated after receiving
+   acknowledgements, see Section 3.1.  The value of CWND is increased
+   after each acknowledgement by the number of bytes newly acknowledged
+   by this acknowledgement.
 
    C4 will exit the Initial state and enter Recovery if the nominal rate
    does not increase for 3 consecutive eras, omitting the eras for which
    the transmission was "application limited".
 
-   C4 exit the Initial if receiving a congestion signal and the
+   C4 exit the Initial when receiving a congestion signal if the
    following conditions are true:
 
-   1- If the signal is due to "delay", C4 will only exit the initial
-   state if the nominal_rate did not increase in the last 2 eras.
+   1- If the signal is due to "delay" or "ECN", C4 will only exit the
+   initial state if the nominal_rate did not increase in the last 2
+   eras.
 
    2- If the signal is due to "loss", C4 will only exit the initial
    state if more than 20 packets have been received.
 
-   The restriction on delay signals is meant to prevent spurious exit
-   due to delay jitter.  The restriction on loss signals is meant to
-   ensure that enough packets have been received to properly assess the
-   loss rate.
+   The restriction on delay signals and ECN is meant to prevent spurious
+   exit due to delay jitter or competing connections.  The restriction
+   on loss signals is meant to ensure that enough packets have been
+   received to properly assess the loss rate.
+
+   On exiting the Initial state, C4 computes an estimate of the nominal
+   max RTT as the quotient of the half the last CWND divided by the last
+   nominal rate, and updates the "nominal max RTT" accordingly.  The
+   probe level is set to 1.
+
+4.2.1.  Reentering the initial state
+
+   When reentering the initial state, C4 already has an estimate of the
+   current nominal rate and nominal max RTT.  CWND is set to the product
+   of nominal rate and nominal max RTT.  The initial state then operates
+   as specified in Section 4.2.
+
+
+
+
+Huitema, et al.          Expires 25 August 2026                 [Page 9]
+
+Internet-Draft              C4 Specification               February 2026
+
 
 4.3.  Recovery state
 
@@ -498,21 +531,40 @@ Internet-Draft              C4 Specification               February 2026
    *  Any increase if the prior pushing rate (alpha_prior) was 17/16 or
       less,
 
+   *  An increase of at least 1/4th of the expected increase otherwise,
+      for example an increase of 1/16th if alpha_previous was 5/4.
+
+   The probe level is updated as follow:
+
+   *  If the prior pushing was successful, and did not trigger an
+      excessive rate of ECN/CE marks, the probe level is increased by 1.
+
+   *  If the prior pushing was successful but did trigger an excessive
+      rate of ECN/CE marks, the probe level remains unchanged.
+
+   *  If the prior pushing was not successful but did not trigger an
+      excessive rate of ECN/CE marks, the probe level left unchanged if
+      it was 0, set to 1 otherwise.
+
+   *  If the prior pushing was not successful and did trigger an
+      excessive rate of ECN/CE marks, the probe level is set to 0.
 
 
 
-Huitema, et al.          Expires 30 August 2026                 [Page 9]
+Huitema, et al.            Expires 5 June 2026                  [Page 9]
+
+Internet-Draft              C4 Specification               December 2025
+
+
+Huitema, et al.          Expires 25 August 2026                [Page 10]
 
 Internet-Draft              C4 Specification               February 2026
 
 
-   *  An increase of at least 1/4th of the expected increase otherwise,
-      for example an increase of 1/16th if alpha_previous was 5/4.
-
-   C4 re-enters "Initial" at the end of the recovery period if the
-   evaluation shows 3 successive rate increases without congestion, or
-   if high jitter requires restarting the Initial phase (see
-   Section 4.3.1.  Otherwise, C4 enters cruising.
+   C4 re-enters "Initial" at the end of the recovery period if the probe
+   level as reached a value 4 or larger, or if high jitter requires
+   restarting the Initial phase (see Section 4.3.1.  Otherwise, C4
+   enters cruising.
 
    Reception of a congestion signal during the Initial phase does not
    cause a change in the nominal_rate or nominal_max_RTT.
@@ -537,30 +589,37 @@ Internet-Draft              C4 Specification               February 2026
    The Cruising state is entered from the Recovery state.  The
    coefficient alpha_current is set to 1.
 
-   C4 will normally transition from Cruising state to Pushing state
-   after 4 eras.  It will transition to Recovery before that if a
-   congestion signal is received.
+   C4 will transition from Cruising state to Pushing state after a
+   number of eras that depend on the probe level:
+
+   *  1 era if the probe level is 0,
+
+   *  4 eras if the probe level is 1,
+
+   *  1 era if the probe level is 2 or 3.
+
+   C4 will transition to Recovery before that if a congestion signal is
+   received before transition to Pushing.
 
 4.5.  Pushing state
 
    The Pushing state is entered from the Cruising state.
 
-   The coefficient alpha_current depend on whether the previous pushing
-   attempt was successful (see Section 4.3), and also of the current
-   value of ecn_alpha (see Section 5.4):
+   The coefficient alpha_current depend on the probe level:
 
-      if not previous_attempt_successful:
-          alpha_current = 17/16
-      else:
-          alpha_current = 17/16 +
-             17/16 * (1 - ecn_alpha / ecn_threshold)
+   *  If the probe level is 0, alpha_current is set to 33/32.
 
 
 
-Huitema, et al.          Expires 30 August 2026                [Page 10]
+Huitema, et al.            Expires 5 June 2026                 [Page 10]
 
-Internet-Draft              C4 Specification               February 2026
+Internet-Draft              C4 Specification               December 2025
 
+
+
+   *  If the probe level is 1, alpha_current is set to 17/16.
+
+   *  If the probe level is 2 or higher, alpha_current is set to 5/4.
 
    C4 exits the pushing state after one era, or if a congestion signal
    is received before that.  In an exception to standard congestion
@@ -604,24 +663,23 @@ Internet-Draft              C4 Specification               February 2026
    The sensitivity coefficient varies from 0 to 1, according to a simple
    curve:
 
-   *  set sensitivity to 0 if data rate is lower than 50000B/s
-
-   *  linear interpolation between 0 and 0.92 for values between 50,000
-      and 1,000,000B/s.
+   *  set sensitivity to 0 if data rate is lower than 50000 B/s
 
 
 
 
-
-Huitema, et al.          Expires 30 August 2026                [Page 11]
+Huitema, et al.          Expires 25 August 2026                [Page 12]
 
 Internet-Draft              C4 Specification               February 2026
 
+Huitema, et al.            Expires 5 June 2026                 [Page 11]
+
+Internet-Draft              C4 Specification               December 2025
 
    *  linear interpolation between 0.92 and 1 for values between
-      1,000,000 and 10,000,000B/s.
+      1,000,000 and 10,000,000 B/s.
 
-   *  set sensitivity to 1 if data rate is higher than 10,000,000B/s
+   *  set sensitivity to 1 if data rate is higher than 10,000,000 B/s
 
    The sensitivity index is then used to set the value of delay and loss
    and CE thresholds.
@@ -663,16 +721,17 @@ Internet-Draft              C4 Specification               February 2026
    sent packet has not been acknowledged.  This is not a robust
    congestion signal, because delay jitter may also cause PTO timeouts.
    When testing in "high jitter" conditions, we realized that we should
-   not change the state of C4 for losses detected solely based on timer,
-   and only react to those losses that are detected by gaps in
-   acknowledgements.
 
 
 
-Huitema, et al.          Expires 30 August 2026                [Page 12]
+Huitema, et al.            Expires 5 June 2026                 [Page 12]
 
 Internet-Draft              C4 Specification               February 2026
 
+
+   not change the state of C4 for losses detected solely based on timer,
+   and only react to those losses that are detected by gaps in
+   acknowledgements.
 
 5.4.  Detecting Excessive CE Marks
 
@@ -719,15 +778,16 @@ Internet-Draft              C4 Specification               February 2026
    nominal_rate by the factor "beta" corresponding to the congestion
    signal:
 
-       nominal_rate = (1-beta)*nominal_rate
 
 
-
-
-
-Huitema, et al.          Expires 30 August 2026                [Page 13]
+Huitema, et al.          Expires 25 August 2026                [Page 14]
 
 Internet-Draft              C4 Specification               February 2026
+
+
+Huitema, et al.            Expires 5 June 2026                 [Page 13]
+
+Internet-Draft              C4 Specification               December 2025
 
 
    The coefficient beta differs depending on the nature of the
@@ -743,24 +803,104 @@ Internet-Draft              C4 Specification               February 2026
                   delay_threshold))
 
    If the signal is an ECN/CE rate, the coefficient is proportional to
-   the difference between ecn_alpha and ecn_threshold, capped to '1/4':
+   the difference between ecn_alpha and ecn_threshold, capped to 1/4:
 
-       beta = min(1/4, (ecn_alpha - ecn_threshold)/ ecn_threshold))
+       beta = min(1/4, (ecn_alpha - ecn_threshold)/ ecn_threshold)
 
-6.  Security Considerations
+6.  Implementation considerations
+
+   Implementing C4 ought to be straightforward, but developers need to
+   pay attention to measurement of data rates and to pacing issues when
+   the CPU load is high.
+
+6.1.  Rate measurement should be conservative
+
+   The standard algorithm for rate measurement is to consider the amount
+   of data acknowledged in an interval of time, and divide that amount
+   by the duration of the interval.  This algorithm can result in over-
+   estimates of the rate in presence of data jitter.  These excessive
+   estimates could cause C4 to set a nominal rate higher than the
+   network path bandwidth, resulting in queue build-up and excessive
+   delays.
+
+   There are two known ways to reduce the effect of jitter: filter out
+   measurements in which the data rate measured through acknowledgements
+   is larger than the send rate; and, make sure that the measurement
+   interval are long enough so jitter only has a small influence.
+   Cautious implementations should use both strategies.
+
+
+
+
+
+
+
+
+
+
+
+Huitema, et al.          Expires 25 August 2026                [Page 15]
+
+Internet-Draft              C4 Specification               February 2026
+
+
+6.2.  Pacing and CPU load
+
+   C4 relies on pacing during to avoid sending data too fast during the
+   recovery, cruising and pushing states.  Pacing is often implemented
+   using a "leaky bucket" algorithm, which refills the bucket at the
+   pacing rate, allows transmission as long as there are enough tokens
+   in the bucket, and forces transmission to wait when all tokens are
+   consumed.  The wait time is computed based on the pacing rate and the
+   number of desired tokens, and is implemented using operating system
+   commands such as select(), poll(), epoll() or sleep().  In high CPU
+   load conditions, we observe that these commands often return after
+   more than the specified wait time, resulting in a lower sending rate
+   than the desired pacing rate.
+
+   This phenomenom is particularly visible in low-latency paths.  The
+   generic solution would probably be to estimate how much slower the
+   actual pacing is compared to the desired rate, and increase the
+   programmed pacing rate by a value proportional to these measurements.
+   This generic solution is not yet specified.  In between,
+   implementations had success with a simple fix: increase the pacing
+   rate 3/64th in "cruising" state when the RTT is less than 1ms.  This
+   definitely improved performance in low-latency environment, in
+   particular loopback interfaces.
+
+6.3.  Nominal max RTT on low latency links
+
+   When doing tests on low latency links, we observed on some systems a
+   lot of measurement jitter.  The measured RTT is the sum of the actual
+   RTT and some system wakeup delay, which can vary between a few
+   microseconds and maybe 1 millisecond.  The default algorithm will
+   adapt the nominal RTT after each roundtrip, which can lead to
+   excessively low values, causing a slowdown of the transmission.  A
+   solution is to set a "floor" value to the nominal max RTT, updating
+   it to the maximum of the measured value and the floor.  Setting the
+   floor value to 1ms did improve performance.
+
+7.  Security Considerations
 
    We do not believe that C4 introduce new security issues.  Or maybe
    there are, such as what happen if applications can be fooled in going
    to fast and overwhelming the network, or going too slow and
    underwhelming the application.  Discuss!
 
-7.  IANA Considerations
+8.  IANA Considerations
 
    This document has no IANA actions.
 
-8.  References
+9.  References
 
-8.1.  Normative References
+
+
+Huitema, et al.          Expires 25 August 2026                [Page 16]
+
+Internet-Draft              C4 Specification               February 2026
+
+
+9.1.  Normative References
 
    [RFC2119]  Bradner, S., "Key words for use in RFCs to Indicate
               Requirement Levels", BCP 14, RFC 2119,
@@ -771,7 +911,7 @@ Internet-Draft              C4 Specification               February 2026
               2119 Key Words", BCP 14, RFC 8174, DOI 10.17487/RFC8174,
               May 2017, <https://www.rfc-editor.org/info/rfc8174>.
 
-8.2.  Informative References
+9.2.  Informative References
 
    [RFC9000]  Iyengar, J., Ed. and M. Thomson, Ed., "QUIC: A UDP-Based
               Multiplexed and Secure Transport", RFC 9000,
@@ -781,9 +921,9 @@ Internet-Draft              C4 Specification               February 2026
 
 
 
-Huitema, et al.          Expires 30 August 2026                [Page 14]
+Huitema, et al.            Expires 5 June 2026                 [Page 14]
 
-Internet-Draft              C4 Specification               February 2026
+Internet-Draft              C4 Specification               December 2025
 
 
    [I-D.ietf-moq-transport]
@@ -809,9 +949,20 @@ Changes since previous versions
 
 Changes since draft-huitema-ccwg-c4-spec-00
 
+   Rewrote the description of the Initial state in Section 4.2 to remove
+   dependency on nominal max RTT.
+
    Added the specification of reaction to ECN in Section 5.4 and in
    Section 5.5.1.  Update section Section 4.5 to modulate pushing rate
    based on observed rate of ECN/CE marks.
+
+
+
+
+Huitema, et al.          Expires 25 August 2026                [Page 17]
+
+Internet-Draft              C4 Specification               February 2026
+
 
    Added the RTT margin consideration in Section 4.1, and changed the
    computation of the "quantum" from:
@@ -837,9 +988,9 @@ Authors' Addresses
 
 
 
-Huitema, et al.          Expires 30 August 2026                [Page 15]
+Huitema, et al.            Expires 5 June 2026                 [Page 15]
 
-Internet-Draft              C4 Specification               February 2026
+Internet-Draft              C4 Specification               December 2025
 
 
    Email: snandaku@cisco.com
@@ -893,4 +1044,4 @@ Internet-Draft              C4 Specification               February 2026
 
 
 
-Huitema, et al.          Expires 30 August 2026                [Page 16]
+Huitema, et al.            Expires 5 June 2026                 [Page 16]

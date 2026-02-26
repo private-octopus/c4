@@ -210,9 +210,12 @@ C4 maintains a set of variables tracking the evolution of the flow:
 
 - running min RTT, an approximation of the min RTT for the flow,
 - number of eras without increase (see {{c4-initial}}),
-- number of successful pushes,
 - current state of the algorithm, which can be Initial, Recovery,
   Cruising or Pushing.
+- probe level.
+
+The probe level determines how aggressive the pushing phase is, and also
+how long to wait between recovery and pushing.
 
 ## Per era variables {#era-variables}
 
@@ -347,7 +350,7 @@ packets in a single transaction, which improves performance. But
 sending large batches of packets creates "instant queues" and
 causes some Active Queue Management mechanisms to mark packets as
 ECN/CE, or drop them. As a compromise, we set the quantum to
-4 milliseconds worth of transmission.
+4 milliseconds worth of transmission, while capping it to 64KB.
 
 ~~~
 quantum = max ( min (pacing_rate*4_milliseconds, 64KB), 2*MTU)
@@ -355,36 +358,55 @@ quantum = max ( min (pacing_rate*4_milliseconds, 64KB), 2*MTU)
 
 ## Initial state {#c4-initial}
 
-When the flow is initialized, it enters the Initial state,
+When the flow is first initialized, it enters the Initial state,
 during which it does a first assessment of the
 "nominal rate" and "nominal max RTT".
 The coefficient `alpha_current` is set to 2. The
 "nominal rate" and "nominal max RTT" are initialized to zero,
-which will cause pacing rate and CWND to be set default
-initial values. The nominal max RTT will be set to the
+which will cause pacing rate to be set to a default
+initial value. The nominal max RTT will be set to the
 first assessed RTT value, but is not otherwise changed
-during the initial phase. The nominal rate is updated
-after receiving acknowledgements, see {#nominal-rate}.
+before the end of the initial phase.
+The CWND will be set to the default initial value,
+corresponding to 10 packets.
+
+During the initial state, the nominal rate is updated
+after receiving acknowledgements, see {{nominal-rate}}.
+The value of CWND is increased after each acknowledgement
+by the number of bytes newly acknowledged by this
+acknowledgement. 
 
 C4 will exit the Initial state and enter Recovery if the 
 nominal rate does not increase for 3 consecutive eras,
 omitting the eras for which the transmission was
 "application limited".
 
-C4 exit the Initial if receiving a congestion signal and the
+C4 exit the Initial when receiving a congestion signal if the
 following conditions are true:
 
-1- If the signal is due to "delay", C4 will only exit the
+1- If the signal is due to "delay" or "ECN", C4 will only exit the
    initial state if the `nominal_rate` did not increase
    in the last 2 eras.
 
 2- If the signal is due to "loss", C4 will only exit the
    initial state if more than 20 packets have been received.
 
-The restriction on delay signals is meant to prevent spurious exit
-due to delay jitter. The restriction on loss signals is meant
-to ensure that enough packets have been received to properly
+The restriction on delay signals and ECN is meant to prevent spurious exit
+due to delay jitter or competing connections. The restriction on loss
+signals is meant to ensure that enough packets have been received to properly
 assess the loss rate.
+
+On exiting the Initial state, C4 computes an estimate of the nominal
+max RTT as the quotient of the half the last CWND divided by the last
+nominal rate, and updates the "nominal max RTT" accordingly. The probe level
+is set to 1.
+
+### Reentering the initial state
+
+When reentering the initial state, C4 already has an estimate of the
+current nominal rate and nominal max RTT. CWND is set to the product of
+nominal rate and nominal max RTT. The initial state then operates as
+specified in {{c4-initial}}.
 
 ## Recovery state {#c4-recovery}
 
@@ -416,8 +438,20 @@ less,
 * An increase of at least 1/4th of the expected increase otherwise,
 for example an increase of 1/16th if `alpha_previous` was 5/4.
 
-C4 re-enters "Initial" at the end of the recovery period if the evaluation
-shows 3 successive rate increases without congestion, or if
+The probe level is updated as follow:
+
+* If the prior pushing was successful, and did not trigger an excessive rate of ECN/CE marks,
+  the probe level is increased by 1.
+* If the prior pushing was successful but did trigger an excessive rate of ECN/CE marks,
+  the probe level remains unchanged.
+* If the prior pushing was not successful but did not trigger an excessive rate of ECN/CE marks,
+  the probe level left unchanged if it was 0, set to 1 otherwise.
+* If the prior pushing was not successful and did trigger an excessive rate of ECN/CE marks,
+  the probe level is set to 0.
+
+
+C4 re-enters "Initial" at the end of the recovery period if the probe level
+as reached a value 4 or larger, or if
 high jitter requires restarting the Initial phase (see
 {{restart-high-jitter}}. Otherwise, C4 enters cruising.
 
@@ -447,27 +481,25 @@ This will be done at most once per flow.
 The Cruising state is entered from the Recovery state. 
 The coefficient `alpha_current` is set to 1.
 
-C4 will normally transition from Cruising state to Pushing state
-after 4 eras. It will transition to Recovery before that if
-a congestion signal is received.
+C4 will transition from Cruising state to Pushing state
+after a number of eras that depend on the probe level:
+
+- 1 era if the probe level is 0,
+- 4 eras if the probe level is 1,
+- 1 era if the probe level is 2 or 3.
+
+C4 will transition to Recovery before that if
+a congestion signal is received before transition to Pushing.
 
 ## Pushing state {#c4-pushing}
 
 The Pushing state is entered from the Cruising state.
 
-The coefficient `alpha_current` depend on whether the
-previous
-pushing attempt was successful (see {{c4-recovery}}),
-and also of the current value of `ecn_alpha`
-(see {{process-ecn}}):
+The coefficient `alpha_current` depend on the probe level:
 
-~~~
-   if not previous_attempt_successful:
-       alpha_current = 17/16
-   else:
-       alpha_current = 17/16 +
-          17/16 * (1 - ecn_alpha / ecn_threshold)
-~~~
+- If the probe level is 0, `alpha_current` is set to 33/32.
+- If the probe level is 1, `alpha_current` is set to 17/16.
+- If the probe level is 2 or higher, `alpha_current` is set to 5/4.
 
 C4 exits the pushing state after one era, or if a congestion
 signal is received before that. In an exception to
@@ -509,13 +541,13 @@ drive these flows towards sharing the available resource evenly.
 The sensitivity coefficient varies from 0 to 1, according to
 a simple curve:
 
-* set sensitivity to 0 if data rate is lower than 50000B/s
+* set sensitivity to 0 if data rate is lower than 50000 B/s
 * linear interpolation between 0 and 0.92 for values
-  between 50,000 and 1,000,000B/s.
+  between 50,000 and 1,000,000 B/s.
 * linear interpolation between 0.92 and 1 for values
-  between 1,000,000 and 10,000,000B/s.
+  between 1,000,000 and 10,000,000 B/s.
 * set sensitivity to 1 if data rate is higher than
-  10,000,000B/s
+  10,000,000 B/s
 
 The sensitivity index is then used to set the value of delay and
 loss and CE thresholds.
@@ -637,12 +669,70 @@ the acceptable margin, capped to `1/4`:
 ~~~
 
 If the signal is an ECN/CE rate, the coefficient is proportional
-to the difference between `ecn_alpha` and `ecn_threshold`, capped to '1/4':
+to the difference between `ecn_alpha` and `ecn_threshold`, capped to `1/4`:
 
 ~~~
-    beta = min(1/4, (ecn_alpha - ecn_threshold)/ ecn_threshold))
+    beta = min(1/4, (ecn_alpha - ecn_threshold)/ ecn_threshold)
 ~~~
 
+# Implementation considerations
+
+Implementing C4 ought to be straightforward, but developers need to pay
+attention to measurement of data rates and to pacing issues when the
+CPU load is high.
+
+## Rate measurement should be conservative
+
+The standard algorithm for rate measurement is to consider the amount
+of data acknowledged in an interval of time, and divide that amount
+by the duration of the interval. This algorithm can result in
+over-estimates of the rate in presence of data jitter. These
+excessive estimates could cause C4 to set a nominal rate higher
+than the network path bandwidth, resulting in queue build-up and
+excessive delays.
+
+There are two known ways to reduce the effect of jitter: filter out
+measurements in which the data rate measured through acknowledgements
+is larger than the send rate; and, make sure that the measurement
+interval are long enough so jitter only has a small influence. Cautious
+implementations should use both strategies.
+
+## Pacing and CPU load
+
+C4 relies on pacing during to avoid sending data too fast during the
+recovery, cruising and pushing states. Pacing is often implemented
+using a "leaky bucket" algorithm, which refills the bucket at the
+pacing rate, allows transmission as long as there are enough tokens
+in the bucket, and forces transmission to wait when all tokens are
+consumed. The wait time is computed based on the pacing rate
+and the number of desired tokens, and is implemented using
+operating system commands such as `select()`, `poll()`,
+`epoll()` or `sleep()`. In high CPU load conditions, we observe
+that these commands often return after more than the specified
+wait time, resulting in a lower sending rate than the desired
+pacing rate.
+
+This phenomenom is particularly visible in low-latency paths.
+The generic solution would probably be to estimate how much slower
+the actual pacing is compared to the desired rate, and increase the
+programmed pacing rate by a value proportional to these measurements.
+This generic solution is not yet specified. In between, implementations
+had success with a simple fix: increase the pacing rate 3/64th in
+"cruising" state when the RTT is less than 1ms. This definitely
+improved performance in low-latency environment, in particular
+loopback interfaces.
+
+## Nominal max RTT on low latency links
+
+When doing tests on low latency links, we observed on some systems
+a lot of measurement jitter. The measured RTT is the sum of the
+actual RTT and some system wakeup delay, which can vary between a
+few microseconds and maybe 1 millisecond. The default algorithm
+will adapt the nominal RTT after each roundtrip, which can lead
+to excessively low values, causing a slowdown of the transmission.
+A solution is to set a "floor" value to the nominal max RTT,
+updating it to the maximum of the measured value and the floor.
+Setting the floor value to 1ms did improve performance.
 
 # Security Considerations
 
@@ -669,6 +759,9 @@ This section should be deleted before publication as an RFC
 
 ## Changes since draft-huitema-ccwg-c4-spec-00
 {:numbered="false"}
+
+Rewrote the description of the Initial state in {{c4-initial}}
+to remove dependency on nominal max RTT.
 
 Added the specification of reaction to ECN in {{process-ecn}}
 and in {{rate-reduction}}. Update section {{c4-pushing}} to

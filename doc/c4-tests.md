@@ -145,21 +145,20 @@ when it is the sole user of a link. The list of test includes:
 This scenario simulates a 10MB download over a 20 Mbps link,
 with an 80ms RTT, and a bottlneck buffer capacity corresponding
 to 1 BDP. The test verifies that 100 simulations all complete
-in less than 5 seconds.
+in less than 4.7 seconds.
 
 In a typical simulation, we see a initial phase complete in less
 than 800ms, followed by a recovery phase in which the
 transmission rate stabilizes to the line rate. After that,
 the RTT remains very close to the path RTT, except for
-periodic small bumps during the "push" transitions. The typical
-test completes in 4.85 seconds.
+periodic small bumps during the "push" transitions.
 
 ### Simulation of a simple 200Mbps connection
 
 This scenario simulates a 20MB download over a 200 Mbps link,
 with a 40ms RTT, and a bottleneck buffer capacity corresponding
 to 1 BDP. The test verifies that 100 simulations all complete
-in less than 1.25 seconds.
+in less than 1.3 seconds.
 
 This short test shows that the initial phase correctly discover
 the path capacity, and that the transmission operates at
@@ -175,7 +174,7 @@ The scenario also tests the support for careful resume
 the remembered CWND to 18750000 bytes and the
 remembered RTT to 600.123ms.
 The test verifies that 100 simulations all complete
-in less than 7.4 seconds.
+in less than 7.7 seconds.
 
 ### Low and up
 
@@ -238,8 +237,7 @@ exercises the "slow down" mechanism to discover the new RTT.
 The "ECN" test simulates a 20 Mbps link,
 with an 80ms RTT, and a bottleneck buffer capacity corresponding
 to 1 BDP. The test verifies that 100 simulated downloads of
-10 MB all complete in less than 5.6 seconds.
-
+10 MB all complete in less than 4.5 seconds.
 
 ## Handling of High Jitter Environments {#c4-wifi}
 
@@ -288,7 +286,7 @@ The "bad Wi-Fi" test simulates a connection experiencing a high level of
 jitter. The average jitter is set to 7ms, which implies multiple spikes
 of 100 to 200ms every second. The data rate is set to 10Mbps, and the base
 RTT before jitter is set to 2ms, i.e., simulating a local server. The test
-pass if 100 different 10MB downloads each complete in less than 4.5 seconds.
+pass if 100 different 10MB downloads each complete in less than 4.3 seconds.
 
 ### Wifi fade trial {#wifi-fade}
 
@@ -362,7 +360,7 @@ same time and using the same path. The path has a 20Mbps data rate
 and 80ms RTT. The background connection
 tries to download 30MB, the main connection downloads 20MB.
 The test pass if in 100 trials the main connection completes
-in less than 22.8 seconds.
+in less than 23 seconds.
 
 ### Long background C4 connection last
 
@@ -372,7 +370,7 @@ with the background connection starting
 and 70ms RTT. The background connection
 tries to download 15MB, the main connection downloads 10MB.
 The test pass if in 100 trials the main connection completes
-in less than 22.2 seconds after the beginning of the trial.
+in less than 23 seconds after the beginning of the trial.
 
 ### Compete with C4 over bad Wi-Fi
 
@@ -385,7 +383,7 @@ the same jitter characteristics as in the "bad Wi-Fi" test (see {{bad-wifi}}).
 The background connection
 tries to download 10MB, the main connection downloads 4MB.
 The test pass if in each of 100 trials the main connection completes
-in less than 13 seconds after the beginning of the trial.
+in less than 12 seconds after the beginning of the trial.
 
 ## Competition with Cubic
 
@@ -408,7 +406,7 @@ same time and using the same path. The path has a 20Mbps data rate
 and 80ms RTT. The background Cubic connection
 tries to download 10MB, the main connection downloads 5MB.
 The test pass if in 100 trials the main connection completes
-in less than 6.7 seconds.
+in less than 6.8 seconds.
 
 ### Two long C4 and Cubic connections
 
@@ -417,7 +415,7 @@ same time and using the same path. The path has a 20Mbps data rate
 and 80ms RTT. The background connection
 tries to download 30MB, the main connection downloads 20MB.
 The test pass if in 100 trials the main connection completes
-in less than 22.2 seconds.
+in less than 23 seconds.
 
 ### Long Cubic background connection last
 
@@ -428,7 +426,7 @@ with the background Cubic connection starting
 and 70ms RTT. The background connection
 tries to download 15MB, the main connection downloads 10MB.
 The test pass if in 100 trials the main connection completes
-in less than 22 seconds after the beginning of the trial.
+in less than 23 seconds after the beginning of the trial.
 
 ### Compete with Cubic over bad Wi-Fi
 
@@ -497,7 +495,7 @@ the same jitter characteristics as in the "bad Wi-Fi" test (see {{bad-wifi}}).
 The background connection
 tries to download 10MB, the main connection downloads 4MB.
 The test pass if in each of 100 trials the main connection completes
-in less than 13.5 seconds after the beginning of the trial.
+in less than 14.5 seconds after the beginning of the trial.
 
 ## Handling of Multimedia Applications
 
@@ -611,8 +609,8 @@ of 100 to 200ms every second. The data rate is set to 20Mbps, and the base
 RTT before jitter is set to 2ms, i.e., simulating a local server.
 The test lasts for 5 video groups of frames,
 i.e. 5 seconds. The measurements start 200ms after the
-start of the connection. The expected average delay is set to 120ms,
-and the maximum delay is set to 675ms. The test is successful if
+start of the connection. The expected average delay is set to 100ms,
+and the maximum delay is set to 680ms. The test is successful if
 100 trials are all successful.
 
 # Tests
@@ -621,7 +619,10 @@ We need real life tests as well.
 
 ## Loopback tests
 
-To do. Write down.
+Loopback tests were performed on Windows, downloading 10GB of data over
+a loopback connection. They showed picoquic using C4 achieving a data rate
+of 3Gbps, slightly more than the 2.9Gbps achieved when using Cubic or the
+2.6 Gbps achieved when using BBR.
 
 ## Webex prototype deployments
 

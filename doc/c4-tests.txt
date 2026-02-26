@@ -5,13 +5,13 @@
 Network Working Group                                         C. Huitema
 Internet-Draft                                      Private Octopus Inc.
 Intended status: Informational                             S. Nandakumar
-Expires: 6 June 2026                                         C. Jennings
+Expires: 30 August 2026                                      C. Jennings
                                                                    Cisco
-                                                         3 December 2025
+                                                        26 February 2026
 
 
           Testing of Christian's Congestion Control Code (C4)
-                   draft-huitema-ccwg-c4-test-latest
+                     draft-huitema-ccwg-c4-test-01
 
 Abstract
 
@@ -40,11 +40,11 @@ Status of This Memo
    time.  It is inappropriate to use Internet-Drafts as reference
    material or to cite them other than as "work in progress."
 
-   This Internet-Draft will expire on 6 June 2026.
+   This Internet-Draft will expire on 30 August 2026.
 
 Copyright Notice
 
-   Copyright (c) 2025 IETF Trust and the persons identified as the
+   Copyright (c) 2026 IETF Trust and the persons identified as the
    document authors.  All rights reserved.
 
    This document is subject to BCP 78 and the IETF Trust's Legal
@@ -53,9 +53,9 @@ Copyright Notice
 
 
 
-Huitema, et al.            Expires 6 June 2026                  [Page 1]
+Huitema, et al.          Expires 30 August 2026                 [Page 1]
 
-Internet-Draft                  C4 Tests                   December 2025
+Internet-Draft                  C4 Tests                   February 2026
 
 
    Please review these documents carefully, as they describe your rights
@@ -109,9 +109,9 @@ Table of Contents
 
 
 
-Huitema, et al.            Expires 6 June 2026                  [Page 2]
+Huitema, et al.          Expires 30 August 2026                 [Page 2]
 
-Internet-Draft                  C4 Tests                   December 2025
+Internet-Draft                  C4 Tests                   February 2026
 
 
        2.8.7.  Media over bad Wi-Fi  . . . . . . . . . . . . . . . .  14
@@ -165,9 +165,9 @@ Internet-Draft                  C4 Tests                   December 2025
 
 
 
-Huitema, et al.            Expires 6 June 2026                  [Page 3]
+Huitema, et al.          Expires 30 August 2026                 [Page 3]
 
-Internet-Draft                  C4 Tests                   December 2025
+Internet-Draft                  C4 Tests                   February 2026
 
 
    That implementation is designed so that the same code can be used in
@@ -221,9 +221,9 @@ Internet-Draft                  C4 Tests                   December 2025
 
 
 
-Huitema, et al.            Expires 6 June 2026                  [Page 4]
+Huitema, et al.          Expires 30 August 2026                 [Page 4]
 
-Internet-Draft                  C4 Tests                   December 2025
+Internet-Draft                  C4 Tests                   February 2026
 
 
 2.2.1.  Simulation of a simple 20Mbps connection
@@ -277,9 +277,9 @@ Internet-Draft                  C4 Tests                   December 2025
 
 
 
-Huitema, et al.            Expires 6 June 2026                  [Page 5]
+Huitema, et al.          Expires 30 August 2026                 [Page 5]
 
-Internet-Draft                  C4 Tests                   December 2025
+Internet-Draft                  C4 Tests                   February 2026
 
 
 2.2.5.  Drop and back
@@ -333,9 +333,9 @@ Internet-Draft                  C4 Tests                   December 2025
 
 
 
-Huitema, et al.            Expires 6 June 2026                  [Page 6]
+Huitema, et al.          Expires 30 August 2026                 [Page 6]
 
-Internet-Draft                  C4 Tests                   December 2025
+Internet-Draft                  C4 Tests                   February 2026
 
 
 2.4.  Handling of High Jitter Environments
@@ -389,9 +389,9 @@ Internet-Draft                  C4 Tests                   December 2025
 
 
 
-Huitema, et al.            Expires 6 June 2026                  [Page 7]
+Huitema, et al.          Expires 30 August 2026                 [Page 7]
 
-Internet-Draft                  C4 Tests                   December 2025
+Internet-Draft                  C4 Tests                   February 2026
 
 
 2.4.2.  Wifi fade trial
@@ -445,9 +445,9 @@ Internet-Draft                  C4 Tests                   December 2025
 
 
 
-Huitema, et al.            Expires 6 June 2026                  [Page 8]
+Huitema, et al.          Expires 30 August 2026                 [Page 8]
 
-Internet-Draft                  C4 Tests                   December 2025
+Internet-Draft                  C4 Tests                   February 2026
 
 
 2.5.2.  Short background C4 connection first
@@ -501,9 +501,9 @@ Internet-Draft                  C4 Tests                   December 2025
 
 
 
-Huitema, et al.            Expires 6 June 2026                  [Page 9]
+Huitema, et al.          Expires 30 August 2026                 [Page 9]
 
-Internet-Draft                  C4 Tests                   December 2025
+Internet-Draft                  C4 Tests                   February 2026
 
 
 2.6.  Competition with Cubic
@@ -557,9 +557,9 @@ Internet-Draft                  C4 Tests                   December 2025
 
 
 
-Huitema, et al.            Expires 6 June 2026                 [Page 10]
+Huitema, et al.          Expires 30 August 2026                [Page 10]
 
-Internet-Draft                  C4 Tests                   December 2025
+Internet-Draft                  C4 Tests                   February 2026
 
 
    the main connection downloads 4MB.  The test pass if in each of 100
@@ -613,9 +613,9 @@ Internet-Draft                  C4 Tests                   December 2025
 
 
 
-Huitema, et al.            Expires 6 June 2026                 [Page 11]
+Huitema, et al.          Expires 30 August 2026                [Page 11]
 
-Internet-Draft                  C4 Tests                   December 2025
+Internet-Draft                  C4 Tests                   February 2026
 
 
 2.7.4.  Compete with BBR over bad Wi-Fi
@@ -669,9 +669,9 @@ Internet-Draft                  C4 Tests                   December 2025
 
 
 
-Huitema, et al.            Expires 6 June 2026                 [Page 12]
+Huitema, et al.          Expires 30 August 2026                [Page 12]
 
-Internet-Draft                  C4 Tests                   December 2025
+Internet-Draft                  C4 Tests                   February 2026
 
 
 2.8.1.  Media on High Speed Connection
@@ -725,9 +725,9 @@ Internet-Draft                  C4 Tests                   December 2025
 
 
 
-Huitema, et al.            Expires 6 June 2026                 [Page 13]
+Huitema, et al.          Expires 30 August 2026                [Page 13]
 
-Internet-Draft                  C4 Tests                   December 2025
+Internet-Draft                  C4 Tests                   February 2026
 
 
    to 110ms, and the maximum delay is set to 350ms.  The test is
@@ -781,9 +781,9 @@ Internet-Draft                  C4 Tests                   December 2025
 
 
 
-Huitema, et al.            Expires 6 June 2026                 [Page 14]
+Huitema, et al.          Expires 30 August 2026                [Page 14]
 
-Internet-Draft                  C4 Tests                   December 2025
+Internet-Draft                  C4 Tests                   February 2026
 
 
 5.  IANA Considerations
@@ -800,9 +800,9 @@ Internet-Draft                  C4 Tests                   December 2025
    [I-D.ietf-moq-transport]
               Nandakumar, S., Vasiliev, V., Swett, I., and A. Frindell,
               "Media over QUIC Transport", Work in Progress, Internet-
-              Draft, draft-ietf-moq-transport-15, 20 October 2025,
+              Draft, draft-ietf-moq-transport-16, 13 January 2026,
               <https://datatracker.ietf.org/doc/html/draft-ietf-moq-
-              transport-15>.
+              transport-16>.
 
    [I-D.ietf-tsvwg-careful-resume]
               Kuhn, N., Stephan, E., Fairhurst, G., Secchi, R., and C.
@@ -837,9 +837,9 @@ Authors' Addresses
 
 
 
-Huitema, et al.            Expires 6 June 2026                 [Page 15]
+Huitema, et al.          Expires 30 August 2026                [Page 15]
 
-Internet-Draft                  C4 Tests                   December 2025
+Internet-Draft                  C4 Tests                   February 2026
 
 
    Suhas Nandakumar
@@ -893,4 +893,4 @@ Internet-Draft                  C4 Tests                   December 2025
 
 
 
-Huitema, et al.            Expires 6 June 2026                 [Page 16]
+Huitema, et al.          Expires 30 August 2026                [Page 16]

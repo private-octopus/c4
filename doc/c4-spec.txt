@@ -5,13 +5,13 @@
 Network Working Group                                         C. Huitema
 Internet-Draft                                      Private Octopus Inc.
 Intended status: Experimental                              S. Nandakumar
-Expires: 25 August 2026                                      C. Jennings
+Expires: 30 August 2026                                      C. Jennings
                                                                    Cisco
-                                                        21 February 2026
+                                                        26 February 2026
 
 
        Specification of Christian's Congestion Control Code (C4)
-                     draft-huitema-ccwg-c4-spec-01
+                     draft-huitema-ccwg-c4-spec-02
 
 Abstract
 
@@ -40,7 +40,7 @@ Status of This Memo
    time.  It is inappropriate to use Internet-Drafts as reference
    material or to cite them other than as "work in progress."
 
-   This Internet-Draft will expire on 5 June 2026.
+   This Internet-Draft will expire on 30 August 2026.
 
 Copyright Notice
 
@@ -53,7 +53,7 @@ Copyright Notice
 
 
 
-Huitema, et al.            Expires 5 June 2026                  [Page 1]
+Huitema, et al.          Expires 30 August 2026                 [Page 1]
 
 Internet-Draft              C4 Specification               February 2026
 
@@ -109,7 +109,7 @@ Table of Contents
 
 
 
-Huitema, et al.            Expires 5 June 2026                  [Page 2]
+Huitema, et al.          Expires 30 August 2026                 [Page 2]
 
 Internet-Draft              C4 Specification               February 2026
 
@@ -165,13 +165,12 @@ Internet-Draft              C4 Specification               February 2026
 
 
 
-Huitema, et al.          Expires 25 August 2026                 [Page 3]
+Huitema, et al.          Expires 30 August 2026                 [Page 3]
 
 Internet-Draft              C4 Specification               February 2026
 
-Huitema, et al.            Expires 5 June 2026                  [Page 3]
-
-Internet-Draft              C4 Specification               December 2025
+
+3.1.  Nominal rate
 
    The nominal rate is an estimate of the bandwidth available to the
    flow.  On initialization, the nominal rate is set to zero, and
@@ -222,14 +221,15 @@ Internet-Draft              C4 Specification               December 2025
 
 
 
-Huitema, et al.          Expires 25 August 2026                 [Page 4]
+Huitema, et al.          Expires 30 August 2026                 [Page 4]
 
 Internet-Draft              C4 Specification               February 2026
 
 
-Huitema, et al.            Expires 5 June 2026                  [Page 4]
-
-Internet-Draft              C4 Specification               December 2025
+   *  the latency of the path
+
+   *  the jitter introduced by processes like link layer contention or
+      link layer retransmission
 
    *  queuing delays caused by competing applications
 
@@ -277,14 +277,17 @@ Internet-Draft              C4 Specification               December 2025
 
 
 
-Huitema, et al.          Expires 25 August 2026                 [Page 5]
+Huitema, et al.          Expires 30 August 2026                 [Page 5]
 
 Internet-Draft              C4 Specification               February 2026
 
 
-Huitema, et al.            Expires 5 June 2026                  [Page 5]
-
-Internet-Draft              C4 Specification               December 2025
+   *  number of eras without increase (see Section 4.2),
+
+   *  current state of the algorithm, which can be Initial, Recovery,
+      Cruising or Pushing.
+
+   *  probe level.
 
    The probe level determines how aggressive the pushing phase is, and
    also how long to wait between recovery and pushing.
@@ -330,13 +333,15 @@ Internet-Draft              C4 Specification               December 2025
 
 
 
-Huitema, et al.          Expires 25 August 2026                 [Page 6]
+Huitema, et al.          Expires 30 August 2026                 [Page 6]
 
 Internet-Draft              C4 Specification               February 2026
 
-Huitema, et al.            Expires 5 June 2026                  [Page 6]
-
-Internet-Draft              C4 Specification               December 2025
+
+   *  "Pushing": the connection is using a rate and CWND 25% larger than
+      "nominal_rate" and "nominal_CWND".  It remains in that state for
+      one round trip, i.e., until the first packet send while "pushing"
+      is acknowledged.  At that point, it enters the "recovery" state.
 
    These transitions are summarized in the following state diagram.
 
@@ -384,13 +389,12 @@ Internet-Draft              C4 Specification               December 2025
 
 
 
-Huitema, et al.          Expires 25 August 2026                 [Page 7]
+Huitema, et al.          Expires 30 August 2026                 [Page 7]
 
 Internet-Draft              C4 Specification               February 2026
 
-Huitema, et al.            Expires 5 June 2026                  [Page 7]
-
-Internet-Draft              C4 Specification               December 2025
+
+   *  congestion quantum: set to zero.
 
    If the nominal rate or the nominal max RTT are both assessed, C4 sets
    pacing rate, and congestion window to values that depends on these
@@ -441,13 +445,12 @@ Internet-Draft              C4 Specification               December 2025
 
 
 
-Huitema, et al.          Expires 25 August 2026                 [Page 8]
+Huitema, et al.          Expires 30 August 2026                 [Page 8]
 
 Internet-Draft              C4 Specification               February 2026
 
-Huitema, et al.            Expires 5 June 2026                  [Page 8]
-
-Internet-Draft              C4 Specification               December 2025
+
+4.2.  Initial state
 
    When the flow is first initialized, it enters the Initial state,
    during which it does a first assessment of the "nominal rate" and
@@ -498,7 +501,7 @@ Internet-Draft              C4 Specification               December 2025
 
 
 
-Huitema, et al.          Expires 25 August 2026                 [Page 9]
+Huitema, et al.          Expires 30 August 2026                 [Page 9]
 
 Internet-Draft              C4 Specification               February 2026
 
@@ -551,12 +554,10 @@ Internet-Draft              C4 Specification               February 2026
 
 
 
-Huitema, et al.            Expires 5 June 2026                  [Page 9]
-
-Internet-Draft              C4 Specification               December 2025
 
 
-Huitema, et al.          Expires 25 August 2026                [Page 10]
+
+Huitema, et al.          Expires 30 August 2026                [Page 10]
 
 Internet-Draft              C4 Specification               February 2026
 
@@ -611,10 +612,10 @@ Internet-Draft              C4 Specification               February 2026
 
 
 
-Huitema, et al.            Expires 5 June 2026                 [Page 10]
-
-Internet-Draft              C4 Specification               December 2025
 
+Huitema, et al.          Expires 30 August 2026                [Page 11]
+
+Internet-Draft              C4 Specification               February 2026
 
 
    *  If the probe level is 1, alpha_current is set to 17/16.
@@ -668,13 +669,13 @@ Internet-Draft              C4 Specification               December 2025
 
 
 
-Huitema, et al.          Expires 25 August 2026                [Page 12]
+Huitema, et al.          Expires 30 August 2026                [Page 12]
 
 Internet-Draft              C4 Specification               February 2026
 
-Huitema, et al.            Expires 5 June 2026                 [Page 11]
-
-Internet-Draft              C4 Specification               December 2025
+
+   *  linear interpolation between 0 and 0.92 for values between 50,000
+      and 1,000,000 B/s.
 
    *  linear interpolation between 0.92 and 1 for values between
       1,000,000 and 10,000,000 B/s.
@@ -724,7 +725,7 @@ Internet-Draft              C4 Specification               December 2025
 
 
 
-Huitema, et al.            Expires 5 June 2026                 [Page 12]
+Huitema, et al.          Expires 30 August 2026                [Page 13]
 
 Internet-Draft              C4 Specification               February 2026
 
@@ -780,15 +781,12 @@ Internet-Draft              C4 Specification               February 2026
 
 
 
-Huitema, et al.          Expires 25 August 2026                [Page 14]
+Huitema, et al.          Expires 30 August 2026                [Page 14]
 
 Internet-Draft              C4 Specification               February 2026
 
 
-Huitema, et al.            Expires 5 June 2026                 [Page 13]
-
-Internet-Draft              C4 Specification               December 2025
-
+       nominal_rate = (1-beta)*nominal_rate
 
    The coefficient beta differs depending on the nature of the
    congestion signal.  For packet losses, it is set to 1/4, similar to
@@ -839,7 +837,7 @@ Internet-Draft              C4 Specification               December 2025
 
 
 
-Huitema, et al.          Expires 25 August 2026                [Page 15]
+Huitema, et al.          Expires 30 August 2026                [Page 15]
 
 Internet-Draft              C4 Specification               February 2026
 
@@ -895,7 +893,7 @@ Internet-Draft              C4 Specification               February 2026
 
 
 
-Huitema, et al.          Expires 25 August 2026                [Page 16]
+Huitema, et al.          Expires 30 August 2026                [Page 16]
 
 Internet-Draft              C4 Specification               February 2026
 
@@ -917,14 +915,6 @@ Internet-Draft              C4 Specification               February 2026
               Multiplexed and Secure Transport", RFC 9000,
               DOI 10.17487/RFC9000, May 2021,
               <https://www.rfc-editor.org/info/rfc9000>.
-
-
-
-
-Huitema, et al.            Expires 5 June 2026                 [Page 14]
-
-Internet-Draft              C4 Specification               December 2025
-
 
    [I-D.ietf-moq-transport]
               Nandakumar, S., Vasiliev, V., Swett, I., and A. Frindell,
@@ -959,7 +949,7 @@ Changes since draft-huitema-ccwg-c4-spec-00
 
 
 
-Huitema, et al.          Expires 25 August 2026                [Page 17]
+Huitema, et al.          Expires 30 August 2026                [Page 17]
 
 Internet-Draft              C4 Specification               February 2026
 
@@ -985,14 +975,6 @@ Authors' Addresses
 
    Suhas Nandakumar
    Cisco
-
-
-
-Huitema, et al.            Expires 5 June 2026                 [Page 15]
-
-Internet-Draft              C4 Specification               December 2025
-
-
    Email: snandaku@cisco.com
 
 
@@ -1023,25 +1005,4 @@ Internet-Draft              C4 Specification               December 2025
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-Huitema, et al.            Expires 5 June 2026                 [Page 16]
+Huitema, et al.          Expires 30 August 2026                [Page 18]

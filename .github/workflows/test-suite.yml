@@ -43,7 +43,7 @@ jobs:
           if [ ${QDRESULT} != 0 ]; then exit 1; fi;
           ../picoquic/pico_sim -S ../picoquic ./sim_specs/c4_vs_c4.txt && QDRESULT=$? 
           if [ ${QDRESULT} != 0 ]; then exit 1; fi;
-          ../picoquic/picoquic/pico_sim -S ../picoquic ./sim_specs/c4_after_c4.txt && QDRESULT=$? 
+          ../picoquic/pico_sim -S ../picoquic ./sim_specs/c4_after_c4.txt && QDRESULT=$? 
           if [ ${QDRESULT} != 0 ]; then exit 1; fi;
           ../picoquic/pico_sim -S ../picoquic ./sim_specs/c4_before_c4.txt && QDRESULT=$? 
           if [ ${QDRESULT} != 0 ]; then exit 1; fi;

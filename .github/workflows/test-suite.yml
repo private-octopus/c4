@@ -29,8 +29,10 @@ jobs:
           ./ci/build_picoquic.sh
       - name: Check the install
         run: |
-          ls -l ../picoquic/picoquic
-          ../picoquic/picoquic -h
+          echo "Checking the picoquic installation..."
+          pwd
+          ls -l ../picoquic/
+          ../picoquic/pico_sim -h
       - name: Do simple tests
         run: |
           ulimit -c unlimited -S
@@ -41,7 +43,7 @@ jobs:
           if [ ${QDRESULT} != 0 ]; then exit 1; fi;
           ../picoquic/pico_sim -S ../picoquic ./sim_specs/c4_vs_c4.txt && QDRESULT=$? 
           if [ ${QDRESULT} != 0 ]; then exit 1; fi;
-          ../picoquic/picoquic/pico_sim -S ../picoquic ./sim_specs/c4_after_c4.txt && QDRESULT=$? 
+          ../picoquic/pico_sim -S ../picoquic ./sim_specs/c4_after_c4.txt && QDRESULT=$? 
           if [ ${QDRESULT} != 0 ]; then exit 1; fi;
           ../picoquic/pico_sim -S ../picoquic ./sim_specs/c4_before_c4.txt && QDRESULT=$? 
           if [ ${QDRESULT} != 0 ]; then exit 1; fi;

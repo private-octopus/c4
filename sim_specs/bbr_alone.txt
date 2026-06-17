@@ -5,6 +5,7 @@ nb_connections: 1
 main_target_time: 10000000
 data_rate_in_gbps: 0.02
 latency: 40000
+jitter: 2000
 queue_delay_max: 30000
 icid: ccc0bb00
 qlog_dir: cclog

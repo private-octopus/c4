@@ -27,7 +27,7 @@ def run_one_test(t_name, sim_path, exe_path, exe_options, bucket_id, stats_dir):
         ret = -1;
     else:
         range_max = 100
-        if t_name == "c4_satellite.txt":
+        if t_name.endswith("_satellite.txt"):
             range_max = 20
         cmd = exe_path + " -N " + str(range_max) + " " + " ".join(exe_options) + " " + test_path
         #print(cmd)

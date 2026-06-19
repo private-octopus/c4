@@ -40,10 +40,11 @@ algo_dict = {
 # groups of tests
 
 test_groups = [
-    [ "simple", ["alone", "low_and_up", "drop_and_back", "blackhole", "satellite"], "time"],
-    [ "wifi", [ "wifi_bad", "wifi_fade", "wifi_suspension"], "time" ],
-    [ "media", [ "media", "media10", "media_short_long", "media_wb", "media_wf", "media_ws" ], "media" ],
-    [ "compete", [ "vs_bbr", "vs_c4", "vs_cubic", "wifi_bad_bbr", "wifi_bad_c4", "wifi_bad_cubic" ], "time" ]
+    [ "simple", ["alone", "alone_200", "low_and_up", "drop_and_back", "blackhole", "short_long", "satellite"], "time"],
+    [ "media", [ "media", "media10", "media_600fr", "media_short_long", "media_wb", "media_wf", "media_ws" ], "media" ],
+    [ "compete", [ "vs_bbr", "vs_c4", "vs_cubic", "after_c4", "before_c4", "vs_c4_lg", "vs_c4_lg2", "vs_bbr_lg", "vs_bbr_lg2", "vs_cubic_lg", "vs_cubic_lg2"], "time" ],
+    [ "wifi", [ "wifi_bad", "wifi_fade", "wifi_suspension", "wifi_bad_bbr", "wifi_bad_c4", "wifi_bad_cubic" ], "time" ],
+    [ "ecn", [ "ecn", "ecn_c4", "ecn_cubic", "ecn_bbr" ], "time" ]
 ]
 
 
@@ -146,30 +147,29 @@ class report_list:
             F.write("Here the statistics for the " + tg[0] + " test cases.\n\n")
             self.do_case_metrics(F, tg[0], tg[1], tg[2])
             F.write("\n")
-            
-        F.write("## others\n")
-        F.write("Here the statistics for the other test cases.\n\n")
-        F.write("| average time | c4 | bbr | cubic |\n")
-        F.write("|----| ---:| ---:| ---:|\n")
-        for tc in self.test_cases:
-           if not tc in self.reported:
-                sm = "| " + tc + " | " 
-                has_metric = False
-                for i in range(0,3):
-                    x = 0
-                    if self.test_cases[tc].alg_report[i] == None:
-                        sm += " |"
-                    else:
-                        x = self.test_cases[tc].alg_report[i].average('time')
-                        sm += " " + str(x) + " |"
-                    if x > 0:
-                        has_metric = True
-                if has_metric:
-                    F.write(sm + '\n')
+         
+        if len(self.test_cases) > len(self.reported):
+            F.write("## others\n")
+            F.write("Here the statistics for the other test cases.\n\n")
+            F.write("| average time | c4 | bbr | cubic |\n")
+            F.write("|----| ---:| ---:| ---:|\n")
+            for tc in self.test_cases:
+               if not tc in self.reported:
+                    sm = "| " + tc + " | " 
+                    has_metric = False
+                    for i in range(0,3):
+                        x = 0
+                        if self.test_cases[tc].alg_report[i] == None:
+                            sm += " |"
+                        else:
+                            x = self.test_cases[tc].alg_report[i].average('time')
+                            sm += " " + str(x) + " |"
+                        if x > 0:
+                            has_metric = True
+                    if has_metric:
+                        F.write(sm + '\n')
 
-        F.write("\n")
-
-
+            F.write("\n")
 
 # main
 

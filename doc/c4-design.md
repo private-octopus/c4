@@ -1329,7 +1329,7 @@ stops increasing. The main advantage of the two steps approach is
 to reduce the amount of queuing when that happens. However,
 if the cascade starts using large increments, the benefits over
 BBR's continous approach are not obvious. The BBR algorithm is
-continuous, and when it stops the probe bandwidth always
+continuous, and when it stops, the probe bandwidth always
 exceed the nominal bandwidth by just 25%. The C4 algorithm is
 not continuous. If it stops during the first RTT, the excess bandwidth
 will be at most 6.125% of the available bandwidth, but up to 25% if it stops

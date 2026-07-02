@@ -1201,7 +1201,7 @@ of the "careful resume" scenario in the initial phase.
 In some scenarios, the bandwidth of a path may suddenly drop. 
 This will normally cause congestion events such as packet losses or ECN marks,
 and C4 will react by reducing the nominal rate by the specified "beta" coefficient.
-However, while these reductions in bandidth are adequate for the small decreases
+However, while these reductions in bandwidth are adequate for the small decreases
 due to increased competition, they are not sufficient for the large drops.
 Such large drops can happen after routing events. In satellite
 based network, this happens if the connection switches to a different satellite.

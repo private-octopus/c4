@@ -1206,7 +1206,7 @@ due to increased competition, they are not sufficient for the large drops.
 Such large drops can happen after routing events. In satellite
 based network, this happens if the connection switches to a different satellite.
 
-Simulation showed that the large drop scenario C4 reacted by a series of
+Simulation showed that in the large drop scenario C4 reacted by a series of
 small reductions until finally matching the available bandwidth. This means
 operating for a long period in conditions of congestion, with large queues
 and packet losses. We solved that problem by detecting the persistence of

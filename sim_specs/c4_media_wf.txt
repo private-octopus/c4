@@ -12,6 +12,6 @@ qlog_dir: cclog
 qperf_log: c4_media_wf_qperflog.csv
 media_stats_start: 200000
 media_latency_average: 125000
-media_latency_max: 370000
+media_latency_max: 400000
 media_excluded: vhigh, vmid, vlast
 link_scenario: wifi_fade

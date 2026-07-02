@@ -40,11 +40,11 @@ algo_dict = {
 # groups of tests
 
 test_groups = [
-    [ "simple", ["alone", "alone_200", "low_and_up", "drop_and_back", "blackhole", "short_long", "satellite"], "time"],
-    [ "compete", [ "vs_bbr", "vs_c4", "vs_cubic", "after_c4", "before_c4", "vs_c4_lg", "vs_c4_lg2", "vs_bbr_lg", "vs_bbr_lg2", "vs_cubic_lg", "vs_cubic_lg2"], "time" ],
-    [ "wifi", [ "wifi_bad", "wifi_fade", "wifi_suspension", "wifi_bad_bbr", "wifi_bad_c4", "wifi_bad_cubic" ], "time" ],
-    [ "ecn", [ "ecn", "ecn_c4", "ecn_cubic", "ecn_bbr" ], "time" ],
-    [ "media", [ "media", "media10", "media_600fr", "media_short_long", "media_wb", "media_wf", "media_ws", "media_ecn" ], "media" ],
+    [ "network events", ["alone", "alone_200", "low_and_up", "drop_and_back", "blackhole", "short_long", "satellite"], "time", "Reaction to network events" ],
+    [ "compete", [ "vs_bbr", "vs_c4", "vs_cubic", "after_c4", "before_c4", "vs_c4_lg", "vs_c4_lg2", "vs_bbr_lg", "vs_bbr_lg2", "vs_cubic_lg", "vs_cubic_lg2"], "time", "Competition" ],
+    [ "wifi", [ "wifi_bad", "wifi_fade", "wifi_suspension", "wifi_bad_bbr", "wifi_bad_c4", "wifi_bad_cubic" ], "time", "Wi-Fi"],
+    [ "ecn", [ "ecn", "ecn_c4", "ecn_cubic", "ecn_bbr" ], "time", "ECN" ],
+    [ "media", [ "media", "media10", "media_600fr", "media_short_long", "media_wb", "media_wf", "media_ws", "media_ecn" ], "media", "Media" ],
 ]
 
 
@@ -157,7 +157,7 @@ class report_list:
         F.write("Here is a collection of statistics on all test cases.\n\n")
         for tg in test_groups:
             F.write("## " + tg[0] + "\n")
-            F.write("Here the statistics for the " + tg[0] + " test cases.\n\n")
+            F.write("Here the statistics for the " + tg[3] + " test cases.\n\n")
             self.do_case_metrics(F, tg[0], tg[1], tg[2])
             F.write("\n")
          

@@ -87,6 +87,7 @@ informative:
 
    RFC9330:
    RFC9331:
+   RFC9959:
    I-D.briscoe-iccrg-prague-congestion-control:
    ICCRG-LEO:
     target: https://datatracker.ietf.org/meeting/122/materials/slides-122-iccrg-mind-the-misleading-effects-of-leo-mobility-on-end-to-end-congestion-control-00
@@ -172,6 +173,13 @@ depends on the state of the protocol, and set the CWND for
 the path to the product of that pacing rate by the max RTT.
 The design of these mechanisms is
 discussed in {{congestion}}.
+
+Over time, we updated C4 to:
+
+* Focus on the pacing rate as the control varaible, and use an estimated of
+  the largest path RTT to set the CWND, as explained in {{simplify}}
+* Improve the handling of congestion response, growth cascade and
+  careful resume, as explained in {{revision-after-second-design}}
 
 # Studying the reaction to delays {#react-to-delays}
 
@@ -1145,7 +1153,6 @@ we would be able to increase the max RTT safely, when appropriate.
 However, we could not find variables that were both easy to monitor
 and well correlated with the actual cause of the delay. 
 
-
 ## Building a robust initial estimator
 
 The "rate based" initial estimator requires estimating both the
@@ -1181,6 +1188,204 @@ ssthresh variable after exiting the Initial phase, but it
 can set the max RTT to the quotient of ssthresh by the
 final rate estimate.
 
+# Revision after the second design {#revision-after-second-design}
+
+The first design, presented to the IETF in March 2026, was showing some good
+promises, but it needed some extra work. we have been able to develop and test
+three significant improvements: better reaction to a drop in path bandwidth,
+resolving the issues with the cascade design, and improve the handling
+of the "careful resume" scenario in the initial phase.
+
+## Reaction to a drop in path bandwidth
+
+In some scenarios, the bandwidth of a path may suddenly drop. 
+This will normally cause congestion events such as packet losses or ECN marks,
+and C4 will react by reducing the nominal rate by the specified "beta" coefficient.
+However, while these reductions in bandidth are adequate for the small decreases
+due to increased competition, they are not sufficient for the large drops.
+Such large drops can happen after routing events. In satellite
+based network, this happens if the connection switches to a different satellite.
+
+Simulation showed that the large drop scenario C4 reacted by a series of
+small reductions until finally matching the available bandwidth. This means
+operating for a long period in conditions of congestion, with large queues
+and packet losses. We solved that problem by detecting the persistence of
+condition and reacting forcefully to sustained congestion.
+
+We improved C4 by monitoring the number of "recent congestions". If C4
+observes more than 2 successive congestion events it will drop the nominal
+rate to the value of the "recent maximum rate", which hopefull reflects the
+new path bandwidth.
+
+This change resulted in a significant improvement in the performance measured
+in simulations of path bandwidth reductions.
+
+## Two steps cascade or continuous push 
+
+When C4 engages in pushing, we see a clear difference in the amount of
+data in flight, between the consecutive cruising, pushing and recovery phase,
+as shown on the conceptual figure below:
+
+~~~
+ ^
+B|              :         :
+y|              :         *
+t|              :        *:*
+e|              :       * : *
+s|              :      *  :  *
+ |              :     *   :   *
+i|              :    *    :    *                     
+n|              :   *     :     *
+ |              :  *      :      *
+f|              : *       :       *
+l|              :*        :        *
+i|    ...********         :         *...
+g|              :         :              
+h|    cruising  : pushing : recovery
+t|              :         :
+ +---------------------------------------->
+                                      time
+~~~
+
+Before entering the pushing phase, C4 is sending at the nominal rate, and
+the bytes in transit are proportional to the product of the nominal rate by
+the RTT. The sending rate increases during the pushing phase, until reaching
+the product of the pushing rate by the RTT. During the recovery period, the
+bytes in transit decrease, and by the end of that period they should
+be equal to the nominal rate times the RTT.
+
+The pushing period ends when the first packet sent during "pushing" is
+acknowledged. The recovery period ends when the last packet sent during the
+pushing period is acknowledged. The rate measurements during the recovery period
+correspond to the transmission during the the pushing period.
+
+### Two steps cascade
+
+If the highest rate measured during the recovery period is higher than the
+nominal rate, C4 assesses that the pushing was successful, which indicates
+that the previous nominal rate was smaller than the path capacity, possibly
+because the path capacity increased. We use these measurements to tune the
+rate at which C4 is pushing. 
+
+By default, C4 tries small rate increases during pushes, 6.25% by default
+or 3.25% if the path is providing ECN feedback. If the pushing detects
+available capacity, C4 may try larger increases, such as 25%, 50%, 100%
+or even 200%, inorder to quickly adapt to the new path capacity. However,
+trying larger increases has a risk: if the increased rate exceeds the
+path capacity, queues will build, and packets may well be lost. C4
+attempts to find the right push level by assessing the result of
+the previous push at the end of the recovery phase:
+
+* if the new rate measurement grew by less than 25% of the rate increase,
+  C4 will reset the pushing rate to its default value.
+* if the rate measurement grew by at least 75% of the rate increase, C4
+  will start pushing at the next level.
+* if the rate measurement is intermediate, C4 might keep the increase
+  rate unchanged, or might decide to only push at a lower level.
+
+In short, the two step process allows C4 to perform a "cautious cascade",
+increasing the push level fast enough to adapt quickly, but backing off
+as soon as the path appears saturated.
+
+### Finding out why the cascade does not work.
+
+We need to program the different levels of the cascade. We know that we
+should not set the first level too large, because adopting a large value
+causes the queue size and the RTT to periodically increase. Our philosophy
+is to use a small increase, like 6.25%, that causes minimal disruption.
+This allows C4 to start pushing frequently, and thus reduce the delay
+needed to detect a change in bandwidth.
+
+We have also observed that increasing too fast may cause queues and losses.
+The whole point of the two step approach is to proceed cautiously and always
+test the result of the previous increase before increasing the push rate.
+In practice, this means limiting the largest levels to 100% increase, on par
+with slow start.
+
+This leaves a choice for the second level of the cascade. We tried two
+values: 25%, similar to the BBR push rate; 50%, twice that rate, since we
+are twice more cautious. (We could have tried 56.25%, equivalent to 2
+BBR rounds at 25%). The following table compares the increments applied
+by BBR after each successive RTT and the multiplier from the original
+rate. BBR increases by 25% after each RTT, but that C4 only
+increases the data rate every other RTT. The cascade helps, and once
+C4 starts increasing at 100% per period, it does catch up. However,
+BBR will be more aggressive for the first rounds.
+
+| Nb rounds | BBR-INC | C4-25-INC | C4-50-INC | BBR-BW | C4-25-BW | C4-50-BW |
+| --:| --:| --:| --:| --:| --:|--:|
+| 0 | 0 | 0 | 0 | 1 | 1 | 1 |
+| 1 | 25% | 6.25% | 6.25% |  1.25  | 1.06 | 1.06 |
+| 2 | 25% | 0% | 0% |  1.56  | 1.00 | 1 |
+| 3 | 25% | 25% | 50% |  1.95  | 1.33 | 1.59 |
+| 4 | 25% | 0% | 0% |  2.44  | 1.06 | 1.06 |
+| 5 | 25% | 100% | 100% |  3.05  | 2.66 | 3.19 |
+| 6 | 25% | 0% | 0% |  3.81  | 1.33 | 1.59 |
+| 7 | 25% | 100% | 100% |  4.77  | 5.31 | 6.38 |
+| 8 | 25% | 0% | 0% |  5.96  | 2.66 | 3.19 |
+
+The BBR probe BW or the BBR cascade stop when the measured rate
+stops increasing. The main advantage of the two steps approach is
+to reduce the amount of queuing when that happens. However,
+if the cascade starts using large increments, the benefits over
+BBR's continous approach are not obvious. The BBR algorithm is
+continuous, and when it stops the probe bandwidth always
+exceed the nominal bandwidth by just 25%. The C4 algorithm is
+not continuous. If it stops during the first RTT, the excess bandwidth
+will be at most 6.125% of the available bandwidth, but up to 25% if it stops
+in the second RTT and up to 100% later. In short, the cautious
+approach pays off during the initial "6%" probing stage, grows
+slower than BBr after that, and also produces larger queues. In short,
+we have a bug.
+
+### Addind a Pushing state
+
+We can capture the lessons of the previous analysis by splitting
+the "pushing" state in two:
+
+* A "probing" state executed frequently, with a low 6.125% probing
+  margin.
+* A "pushing" state similar to the "probe-BW" state of BBR, pushing
+  at 25%, remaining in the same state until the measurements
+  stop increasing.
+
+## Support for careful resume
+
+The performance measurements of the previous version of C4 showed
+worse performance in the "geo stationary satellite" scenario. The typical slow
+start algorithm doubles the congestion window after every RTT, which requires
+a number of RTT proportional to the logarithm of the bandwidth delay product.
+Transmission via geostationary satellite has a 600ms RTT, which means large
+bandwith delay product, and a long time to reach the available bandwidth.
+
+The "careful resume" algorithm specified in {{RFC9959}} was designed to address
+that issue, and we had implemented it in C4. However,
+the previous implementation of careful resume was inefficient, because it was
+too tightly enmeshed with the "slow start" logic. It is simpler to treat "resuming"
+as a state by itself, rather than a complication of startup.
+
+The resuming state is entered when the stack sets the seed CWIN, from which we
+deduce the the seed rate. During that state, pacing rate and CWIN are pegged
+to the seed values. The state lasts for 2 eras, giving enough time for the
+rate measurement to stabilize. The eras are expanded if the connection is app
+limited, to avoid exiting too early. After two eras, or at any time if congestion
+is detected, the state transitions to recovery.
+
+The performance of the satellite test are significantly improved. They are better
+than BBR, almost on par with Cubic, and within the 7 second performance target
+set for that test:
+
+|  average time for simple tests| c4 | bbr | cubic | c4_pushing | this PR |
+| --------- | ---:| ---:| ---:| ---:| ---:|
+| satellite |  7660817 | 7431946 | 6704246 | 7660783 | 6807146 |
+
+|  top 90% time for simple tests| c4 | bbr | cubic | c4_pushing | This PR|
+| --------- | ---:| ---:| ---:| ---:| ---:|
+| satellite |  7661569 | 7432276 | 6704247 | 7661405 | 6807183 |
+
+It might be possible to improve a bit more by some further tuning, for example
+exiting directly to cruising instead of recovery if the nominal rate matches the
+seed rate. This might be something for further work.
 
 # State Machine
 
@@ -1191,6 +1396,12 @@ The state machine for C4 has the following states:
   exits startup if the "nominal_cwnd" does not
   increase for 3 consecutive round trips. When the
   connection exits startup, it enters "recovery".
+* "resuming": management of careful resume, during which the CWND and pacing rate are
+  pegged to the seed values. The state lasts for 2 eras,
+  giving enough time for the rate measurement to stabilize.
+  The eras are expanded if the connection is app limited,
+  to avoid exiting too early. After two eras, or at any time
+  if congestion is detected, the state transitions to recovery.
 * "recovery": the connection enters that state after
   "startup", "pushing", or a congestion detection in
   a "cruising" state. It remains in that state for
@@ -1209,12 +1420,17 @@ The state machine for C4 has the following states:
   remain in "cruising" state until at least 4 RTT and
   the connection is not "app limited". At that
   point, it enters "pushing".
+* "probing": the connection is using a rate and CWND 6.15%
+  larger than "nominal_rate" and "nominal_CWND". After
+  1 RTT, it moves back to "recovery" in order to assess
+  the results. If the data rate appears to have increased,
+  the connection moves to the "pushing" state.
 * "pushing": the connection is using a rate and CWND 25%
   larger than "nominal_rate" and "nominal_CWND".
-  It remains in that state
-  for one round trip, i.e., until the first packet
-  send while "pushing" is acknowledged. At that point,
-  it enters the "recovery" state.
+  It remains in that state for at least one round trip,
+  and until the measured rate stops growing. If the
+  pushing lasts more than 3 RTT, C4 re-enters the
+  initial state.
 
 These transitions are summarized in the following state
 diagram.
@@ -1228,28 +1444,38 @@ diagram.
                       v                        |
                  +----------+                  |
                  | Startup  |                  |
-                 +----|-----+                  |
-                      |                        |
-                      v                        |
+                 +-|--|-----+                  |
+         +---------+  |                        | 
+         |            |                        |
+         v            |                        |
+   +----------+       |                        |
+   | Resuming |       |                        |
+   +-----|----+       |                        |
+         +---------+  |                        |
+                   |  |                        |
+                   v  v                        |
                  +------------+                |
   +--+---------->|  Recovery  |                |
   ^  ^           +----|---|---+                |
-  |  |                |   |     Rapid Increase |
-  |  |                |   +------------------->+
-  |  |                |
-  |  |                v
-  |  |           +----------+
-  |  |           | Cruising |
-  |  |           +-|--|-----+
-  |  | Congestion  |  |
-  |  +-------------+  |
-  |                   |
-  |                   v
-  |              +----------+
-  |              | Pushing  |
-  |              +----|-----+
-  |                   |
-  +<------------------+
+  |  |                |   | Rate increase      |
+  |  |                |   +---------+          |
+  |  |                |             |          |
+  |  |                v             |          |
+  |  |           +----------+       |          |
+  |  |           | Cruising |       |          |
+  |  |           +-|--|-----+       |          |
+  |  | Congestion  |  |        +---------+     |
+  |  +-------------+  |        | Pushing |     |
+  |                   |        +----|--|-+     |
+  |                   v             |  |       |
+  |              +----------+       |  +-------+
+  |              | Probing  |       |   Rapid
+  |              +----|-----+       |   increase
+  |                   |             |
+  +<------------------+             |
+  ^                                 |
+  |                                 |
+  +---------------------------------+
 
 ~~~
   

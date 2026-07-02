@@ -81,12 +81,13 @@ algorithm designed to support Real-Time multimedia applications, specifically
 multimedia applications using QUIC {{RFC9000}} and the Media
 over QUIC transport {{I-D.ietf-moq-transport}}. The design was validated by
 series of simulations, and also by initial deployments
-in control networks. We describe here these simulations (see {{simulations}})
-and tests (see {{tests}})
+in control networks. We describe here these simulations (see {{simulations}}),
+the simulation results for each of the test cases (see {{results}}),
+and the live networking tests (see {{live-tests}}).
 
-# Simulations
+# Description of simulation tests  {#simulations}
 
-We tested the design by running a series of simulations, which covered:
+We test the design by running a series of simulations, which cover:
 
 * reaction to network events
 
@@ -96,7 +97,7 @@ We tested the design by running a series of simulations, which covered:
 
 * handling of multimedia applications
 
-## Testing strategy
+* handling of ECN
 
 We are running the tests using the picoquic network simulator {{Picoquic_ns}}.
 The simulator embeds the picoquic implementation of QUIC {{Picoquic}}.
@@ -110,22 +111,6 @@ simulation, the code runs in "virtual time", with a virtual clock driven
 by simulation events such as arrival and departure of packets from
 simulated queues. With the virtual clock mechanism, we can simulate
 in a fraction of a second a connection that would last 10 seconds in "real time".
-
-Our basic test is to run a simulation, measure the simulated
-duration of a connection, and compare that to the expected nominal value.
-When we were developing the C4, we used that for detecting possible
-regressions, and progressively refine the specification of the
-algorithm.
-
-Simulations include random events, such as network jitter or the
-precise timing of packet arrivals and departure. Minute changes in starting
-conditions can have cascading effects. When running the same test multiple
-times, we are likely to observe different values each time.
-When comparing two code versions, we
-may also observe different results of a given test, but it is hard to know
-whether these results. To get reliable results, we run each test 100
-times, and we consider the test passing if all the worse result of
-these 100 times was withing the expected value.
 
 ## Reaction to network events
 
@@ -144,8 +129,7 @@ when it is the sole user of a link. The list of test includes:
 
 This scenario simulates a 10MB download over a 20 Mbps link,
 with an 80ms RTT, and a bottlneck buffer capacity corresponding
-to 1 BDP. The test verifies that 100 simulations all complete
-in less than 4.7 seconds.
+to 1 BDP.
 
 In a typical simulation, we see a initial phase complete in less
 than 800ms, followed by a recovery phase in which the
@@ -157,8 +141,7 @@ periodic small bumps during the "push" transitions.
 
 This scenario simulates a 20MB download over a 200 Mbps link,
 with a 40ms RTT, and a bottleneck buffer capacity corresponding
-to 1 BDP. The test verifies that 100 simulations all complete
-in less than 1.3 seconds.
+to 1 BDP.
 
 This short test shows that the initial phase correctly discover
 the path capacity, and that the transmission operates at
@@ -173,8 +156,6 @@ The scenario also tests the support for careful resume
 {{I-D.ietf-tsvwg-careful-resume}} by setting
 the remembered CWND to 18750000 bytes and the
 remembered RTT to 600.123ms.
-The test verifies that 100 simulations all complete
-in less than 7.7 seconds.
 
 ### Low and up
 
@@ -182,8 +163,7 @@ The "low and up" scenario simulates a sudden increase in the
 capacity of the path. At the beginning of the simulation,
 the simulated bandwidth is set at 5 Mbps. It increases to
 10 Mbps after 2.5 seconds. The RTT remains constant at
-100ms. The test verifies that 100 simulations of a
-7MB download all complete in less than 8.6 seconds.
+100ms.
 
 The goal of the test is to verify that C4 promptly
 discovers the increase in bandwidth, and
@@ -197,8 +177,7 @@ At the beginning of the simulation,
 the simulated bandwidth is set at 10 Mbps. It decreases
 to 5 Mbps after 1.5 second, then returns to 10 Mbps
 after 2 seconds. The RTT remains constant at
-100ms. The test verifies that 100 simulations of a
-7MB download all complete in less than 8.25 seconds.
+100ms.
 
 The goal of the test is to verify that C4 adapts
 promptly to changes in the available bandwidth on a
@@ -212,32 +191,29 @@ At the beginning of the simulation,
 the simulated bandwidth is set at . After 2 seconds,
 the path capacity is set to 0, and is restored to normal
 2 seconds later. The RTT remains constant at
-70ms. The test verifies that 100 simulations of a
-10MB download all complete in less than 6.1 seconds.
+70ms.
 
 The goal of the test is to verify that C4 recovers
 promptly after a short suspension of the path.
 
-### Short to long
+### Short and long
 
 The "short and long" scenario simulates a sudden increase in the
 latency of the path.
 At the beginning of the simulation,
 the simulated RTT is set at 30ms. After 1 second, the
 latency increases to 100ms. The data rate remains constant at
-100ms. The test verifies that 100 simulations of a
-20MB download all complete in less than 22 seconds.
+100ms.
 
 The goal of the test is to verify that C4 react properly
 exercises the "slow down" mechanism to discover the new RTT.
 
 
-## L4S and ECN {#ecn}
+## L4S and ECN {#ecn-simulations}
 
 The "ECN" test simulates a 20 Mbps link,
 with an 80ms RTT, and a bottleneck buffer capacity corresponding
-to 1 BDP. The test verifies that 100 simulated downloads of
-10 MB all complete in less than 4.5 seconds.
+to 1 BDP. 
 
 ## Handling of High Jitter Environments {#c4-wifi}
 
@@ -285,8 +261,7 @@ congestion control algorithms.
 The "bad Wi-Fi" test simulates a connection experiencing a high level of
 jitter. The average jitter is set to 7ms, which implies multiple spikes
 of 100 to 200ms every second. The data rate is set to 10Mbps, and the base
-RTT before jitter is set to 2ms, i.e., simulating a local server. The test
-pass if 100 different 10MB downloads each complete in less than 4.3 seconds.
+RTT before jitter is set to 2ms, i.e., simulating a local server.
 
 ### Wifi fade trial {#wifi-fade}
 
@@ -294,9 +269,7 @@ The "Wi-Fi fade" trial simulates varying conditions. The connection starts
 with a data rate of 20Mbps, an 80ms latency, and Wi-Fi jitter
 with average 1ms. After 1 second, the data rate drops to 2Mbps
 and the jitter average increases to 12ms. After another 2 seconds,
-data rate and jitter return to the original condition. The test
-pass if 100 different 10MB downloads each complete in less than 6.2
-seconds.
+data rate and jitter return to the original condition.
 
 ### Wifi suspension trial {#wifi-suspension}
 
@@ -306,9 +279,7 @@ the data rate is set to 20Mbps, and the base
 RTT before jitter is set to 10ms. For the last 200ms of these
 intervals, the data rate is set to 0. This model was developed
 before we got a better understanding of the Wi-Fi jitter. It is
-obsolete, but we kept it as a test case anyhow.  The test
-pass if 100 different 10MB downloads each complete in less than 5.4
-seconds.
+obsolete, but we kept it as a test case anyhow.
 
 ## Competition with itself
 
@@ -330,8 +301,6 @@ Our first test simulates two C4 connections starting at the
 same time and using the same path. The path has a 20Mbps data rate
 and 80ms RTT. The background connection
 tries to download 10MB, the main connection downloads 5MB.
-The test pass if in 100 trials the main connection completes
-in less than 6.7 seconds.
 
 ### Short background C4 connection first
 
@@ -340,8 +309,6 @@ with the background connection starting
 0.5 seconds before the main connection. The path has a 20Mbps data rate
 and 80ms RTT. The background connection
 tries to download 10MB, the main connection downloads 5MB.
-The test pass if in 100 trials the main connection completes
-in less than 8.15 seconds after the beginning of the trial.
 
 ### Short background C4 connection last
 
@@ -350,8 +317,6 @@ with the background connection starting at the
 0.5 seconds after the main connection. The path has a 50Mbps data rate
 and 30ms RTT. The background connection
 tries to download 20MB, the main connection downloads 10MB.
-The test pass if in 100 trials the main connection completes
-in less than 4.1 seconds after the beginning of the trial.
 
 ### Two long C4 connections
 
@@ -359,8 +324,6 @@ The long connection test simulates two C4 connections starting at the
 same time and using the same path. The path has a 20Mbps data rate
 and 80ms RTT. The background connection
 tries to download 30MB, the main connection downloads 20MB.
-The test pass if in 100 trials the main connection completes
-in less than 23 seconds.
 
 ### Long background C4 connection last
 
@@ -369,8 +332,6 @@ with the background connection starting
 1 second after the main connection. The path has a 10Mbps data rate
 and 70ms RTT. The background connection
 tries to download 15MB, the main connection downloads 10MB.
-The test pass if in 100 trials the main connection completes
-in less than 23 seconds after the beginning of the trial.
 
 ### Compete with C4 over bad Wi-Fi
 
@@ -382,8 +343,6 @@ set to 7ms average --
 the same jitter characteristics as in the "bad Wi-Fi" test (see {{bad-wifi}}).
 The background connection
 tries to download 10MB, the main connection downloads 4MB.
-The test pass if in each of 100 trials the main connection completes
-in less than 12 seconds after the beginning of the trial.
 
 ## Competition with Cubic
 
@@ -405,8 +364,6 @@ Our first test simulates two C4 and Cubic connections starting at the
 same time and using the same path. The path has a 20Mbps data rate
 and 80ms RTT. The background Cubic connection
 tries to download 10MB, the main connection downloads 5MB.
-The test pass if in 100 trials the main connection completes
-in less than 6.8 seconds.
 
 ### Two long C4 and Cubic connections
 
@@ -414,8 +371,6 @@ The long connection test simulates two C4 and Cubic connections starting at the
 same time and using the same path. The path has a 20Mbps data rate
 and 80ms RTT. The background connection
 tries to download 30MB, the main connection downloads 20MB.
-The test pass if in 100 trials the main connection completes
-in less than 23 seconds.
 
 ### Long Cubic background connection last
 
@@ -425,8 +380,6 @@ with the background Cubic connection starting
 1 second after the main connection. The path has a 10Mbps data rate
 and 70ms RTT. The background connection
 tries to download 15MB, the main connection downloads 10MB.
-The test pass if in 100 trials the main connection completes
-in less than 23 seconds after the beginning of the trial.
 
 ### Compete with Cubic over bad Wi-Fi
 
@@ -438,8 +391,6 @@ set to 7ms average --
 the same jitter characteristics as in the "bad Wi-Fi" test (see {{bad-wifi}}).
 The background connection
 tries to download 10MB, the main connection downloads 4MB.
-The test pass if in each of 100 trials the main connection completes
-in less than 12.5 seconds after the beginning of the trial.
 
 ## Competition with BBR
 
@@ -461,8 +412,6 @@ Our first test simulates two C4 and BBR connections starting at the
 same time and using the same path. The path has a 20Mbps data rate
 and 80ms RTT. The background BBR connection
 tries to download 10MB, the main connection downloads 5MB.
-The test pass if in 100 trials the main connection completes
-in less than 6.7 seconds.
 
 ### Two long C4 and BBR connections
 
@@ -470,8 +419,6 @@ The long connection test simulates two C4 and BBR connections starting at the
 same time and using the same path. The path has a 20Mbps data rate
 and 80ms RTT. The background connection
 tries to download 30MB, the main connection downloads 20MB.
-The test pass if in 100 trials the main connection completes
-in less than 23 seconds.
 
 ### Long BBR background connection last
 
@@ -481,8 +428,6 @@ with the background BBR connection starting
 1 second after the main connection. The path has a 10Mbps data rate
 and 70ms RTT. The background connection
 tries to download 15MB, the main connection downloads 10MB.
-The test pass if in 100 trials the main connection completes
-in less than 23 seconds after the beginning of the trial.
 
 ### Compete with BBR over bad Wi-Fi
 
@@ -494,8 +439,6 @@ set to 7ms average --
 the same jitter characteristics as in the "bad Wi-Fi" test (see {{bad-wifi}}).
 The background connection
 tries to download 10MB, the main connection downloads 4MB.
-The test pass if in each of 100 trials the main connection completes
-in less than 14.5 seconds after the beginning of the trial.
 
 ## Handling of Multimedia Applications
 
@@ -552,9 +495,7 @@ The "20 seconds" media test verifies that media performance does not
 degrade over time, simulating a 100Mbps connection with a 30ms RTT.
 The test lasts for 20 video groups of frames, i.e. 20 seconds. 
 The measurements start 200ms after the
-start of the connection. The expected average delay is set to 33ms,
-and the maximum delay is set to 80ms. The test is successful if
-100 trials are all successful.
+start of the connection.
 
 ### Media over varying RTT
 
@@ -563,9 +504,7 @@ degrade over time, simulating a 100Mbps connection with a 30ms RTT,
 that changes to a 100ms RTT after 1 second.
 The test lasts for 10 video groups of frames, i.e. 10 seconds. 
 The measurements start 5 seconds after the
-start of the connection. The expected average delay is set to 110ms,
-and the maximum delay is set to 127ms. The test is successful if
-100 trials are all successful.
+start of the connection.
 
 ### Media over varying Wi-Fi
 
@@ -579,9 +518,7 @@ with average 1ms. After 1 second, the data rate drops to 2Mbps
 and the jitter average increases to 12ms.
 The test lasts for 5 video groups of frames,
 i.e. 5 seconds. The measurements start 200ms after the
-start of the connection. The expected average delay is set to 110ms,
-and the maximum delay is set to 350ms. The test is successful if
-100 trials are all successful.
+start of the connection.
 
 ### Media with Wi-Fi suspensions
 
@@ -594,9 +531,7 @@ RTT before jitter is set to 10ms. For the last 200ms of these
 intervals, the data rate is set to 0.
 The test lasts for 5 video groups of frames,
 i.e. 5 seconds. The measurements start 200ms after the
-start of the connection. The expected average delay is set to 23.6ms,
-and the maximum delay is set to 202ms. The test is successful if
-100 trials are all successful.
+start of the connection.
 
 ### Media over bad Wi-Fi
 
@@ -609,11 +544,151 @@ of 100 to 200ms every second. The data rate is set to 20Mbps, and the base
 RTT before jitter is set to 2ms, i.e., simulating a local server.
 The test lasts for 5 video groups of frames,
 i.e. 5 seconds. The measurements start 200ms after the
-start of the connection. The expected average delay is set to 100ms,
-and the maximum delay is set to 680ms. The test is successful if
-100 trials are all successful.
+start of the connection.
 
-# Tests
+# Simulation results {#results}
+
+Simulations include random events, such as network jitter or the
+precise timing of packet arrivals and departure. Minute changes in starting
+conditions can have cascading effects. To get reliable results, we run each test 100
+times. The simulator produces a log of each test execution (in QLOG formt), and a summary
+of each test results, including the completion time for each test, and for tests
+checking media the average and max frame delivery time.
+
+We present here a summary of the results, including the average and the 90th percentile
+of the completion time for each test. For media tests, we also report the average frame
+delivery time and the 90th percentile of the max frame delivery time.
+
+We run these tests for C4, Cubic and BBR, and present the results for these 3
+congestion control algorithms in a set of tables. All times are expressed in microseconds,
+and for all results lower time values are considered better.
+
+
+## Reaction to network events
+
+Here the statistics for the reaction to network events test cases.
+
+### average time for network events tests
+|  average time for network events tests| c4 | bbr | cubic |
+| --------- | ---:| ---:| ---:|
+| alone |  4653960 | 4692310 | 4494405 |
+| alone_200 |  1162182 | 1221435 | 1145092 |
+| low_and_up |  7760545 | 7506752 | 8059510 |
+| drop_and_back |  7696412 | 7626970 | 7629698 |
+| blackhole |  5628021 | 5811682 | 5696055 |
+| short_long |  17536604 | 42329502 | 21377188 |
+| satellite |  6807146 | 7470544 | 6704246 |
+###  top 90% time for network events tests
+|  top 90% time for network events tests| c4 | bbr | cubic |
+| --------- | ---:| ---:| ---:|
+| alone |  4858618 | 4698069 | 4536655 |
+| alone_200 |  1185228 | 1221964 | 1148340 |
+| low_and_up |  7763802 | 7511592 | 8073032 |
+| drop_and_back |  7698264 | 7630837 | 7632446 |
+| blackhole |  5628148 | 5815443 | 5699325 |
+| short_long |  17538410 | 43393690 | 21542453 |
+| satellite |  6807183 | 7468719 | 6704247 |
+
+## Competition
+Here the statistics for the competition test cases.
+
+###  average time for compete tests
+|  average time for compete tests| c4 | bbr | cubic |
+| --------- | ---:| ---:| ---:|
+| vs_bbr |  2971282 | 4510520 | 2855400 |
+| vs_c4 |  4443842 | 6750580 | 6834954 |
+| vs_cubic |  3479269 | 6977038 | 5370859 |
+| after_c4 |  5259943 | 6828214 | 7484218 |
+| before_c4 |  2718001 | 4029544 | 3088462 |
+| vs_c4_lg |  21047335 | 26137478 | 23243282 |
+| vs_c4_lg2 |  21109261 | 21112506 | 21776564 |
+| vs_bbr_lg |  16667356 | 21100357 | 15580530 |
+| vs_bbr_lg2 |  20738935 | 18712904 | 21451415 |
+| vs_cubic_lg |  17440089 | 21424354 | 20956933 |
+| vs_cubic_lg2 |  16951492 | 15503250 | 20662183 |
+###  top 90% time for compete tests
+|  top 90% time for compete tests| c4 | bbr | cubic |
+| --------- | ---:| ---:| ---:|
+| vs_bbr |  3002911 | 4577276 | 2874349 |
+| vs_c4 |  4684679 | 6824522 | 7360124 |
+| vs_cubic |  3555684 | 7090235 | 5582943 |
+| after_c4 |  6241866 | 7010853 | 7991923 |
+| before_c4 |  3056297 | 5435590 | 3992400 |
+| vs_c4_lg |  21141990 | 31955007 | 24370656 |
+| vs_c4_lg2 |  21175546 | 21189102 | 22317971 |
+| vs_bbr_lg |  16926578 | 21134232 | 15835426 |
+| vs_bbr_lg2 |  21125373 | 18970096 | 22033326 |
+| vs_cubic_lg |  18267834 | 21762622 | 21270070 |
+| vs_cubic_lg2 |  17409475 | 15667556 | 21010167 |
+
+## Wi-Fi
+Here the statistics for the Wi-Fi test cases.
+
+###  average time for wifi tests
+|  average time for wifi tests| c4 | bbr | cubic |
+| --------- | ---:| ---:| ---:|
+| wifi_bad |  4168880 | 5358894 | 4088419 |
+| wifi_fade |  5166804 | 5416554 | 5375971 |
+| wifi_suspension |  4565884 | 4615838 | 4600863 |
+| wifi_bad_bbr |  7093864 | 7528061 | 7505306 |
+| wifi_bad_c4 |  8659345 | 9640362 | 8677007 |
+| wifi_bad_cubic |  8384000 | 9339505 | 10093469 |
+###  top 90% time for wifi tests
+|  top 90% time for wifi tests| c4 | bbr | cubic |
+| --------- | ---:| ---:| ---:|
+| wifi_bad |  4695229 | 7533280 | 4368938 |
+| wifi_fade |  5446254 | 5586999 | 5588862 |
+| wifi_suspension |  4574263 | 4616324 | 4601013 |
+| wifi_bad_bbr |  10509521 | 12166234 | 13474180 |
+| wifi_bad_c4 |  11819738 | 12510546 | 12362274 |
+| wifi_bad_cubic |  10683265 | 12402231 | 13827776 |
+
+## ECN
+Here the statistics for the ECN test cases.
+
+###  average time for ecn tests
+|  average time for ecn tests| c4 | bbr | cubic |
+| --------- | ---:| ---:| ---:|
+| ecn |  4494164 | 4670054 | 4459971 |
+| ecn_c4 |  11457544 | 16972228 | 14090566 |
+| ecn_cubic |  8138028 | 9887030 | 13377954 |
+| ecn_bbr |  13106071 | 13322582 | 16989106 |
+###  top 90% time for ecn tests
+|  top 90% time for ecn tests| c4 | bbr | cubic |
+| --------- | ---:| ---:| ---:|
+| ecn |  4494072 | 4670724 | 4457946 |
+| ecn_c4 |  12383231 | 17366426 | 14527292 |
+| ecn_cubic |  8575740 | 10507068 | 13951250 |
+| ecn_bbr |  13360959 | 13370386 | 17545952 |
+
+## Media
+Here the statistics for the media test cases.
+
+###  average av_latency for media tests
+|  average av_latency for media tests| c4 | bbr | cubic |
+| --------- | ---:| ---:| ---:|
+| media |  33511 | 33427 | 33512 |
+| media10 |  45207 | 44995 | 47756 |
+| media_600fr |  33625 | 33545 | 33629 |
+| media_short_long |  101035 | 133945 | 100760 |
+| media_wb |  80282 | 89858 | 78149 |
+| media_wf |  82690 | 87815 | 83163 |
+| media_ws |  22862 | 21644 | 22482 |
+| media_ecn |  34406 | 34481 | 34716 |
+###  top 90% max_latency for media tests
+|  top 90% max_latency for media tests| c4 | bbr | cubic |
+| --------- | ---:| ---:| ---:|
+| media |  43453 | 43453 | 43453 |
+| media10 |  71128 | 71128 | 92163 |
+| media_600fr |  43453 | 43453 | 43453 |
+| media_short_long |  117838 | 334491 | 109180 |
+| media_wb |  267162 | 313005 | 270403 |
+| media_wf |  296181 | 408626 | 314052 |
+| media_ws |  197821 | 195521 | 197821 |
+| media_ecn |  49700 | 50996 | 50996 |
+
+
+# Live Tests {#live-tests}
 
 We need real life tests as well.
 

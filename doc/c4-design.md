@@ -176,7 +176,7 @@ discussed in {{congestion}}.
 
 Over time, we updated C4 to:
 
-* Focus on the pacing rate as the control varaible, and use an estimated of
+* Focus on the pacing rate as the control varaible, and use an estimation of
   the largest path RTT to set the CWND, as explained in {{simplify}}
 * Improve the handling of congestion response, growth cascade and
   careful resume, as explained in {{revision-after-second-design}}

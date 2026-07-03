@@ -176,7 +176,7 @@ discussed in {{congestion}}.
 
 Over time, we updated C4 to:
 
-* Focus on the pacing rate as the control varaible, and use an estimation of
+* Focus on the pacing rate as the control variable, and use an estimation of
   the largest path RTT to set the CWND, as explained in {{simplify}}
 * Improve the handling of congestion response, growth cascade and
   careful resume, as explained in {{revision-after-second-design}}
@@ -894,7 +894,6 @@ For the CE mark threshold, the rule is:
 loss_threshold = 1/32 + 1/32 * (1-sensitivity);
 ~~~
 
-
 This very simple change allowed us to stabilize the results. In our
 competition tests we see sharing of resource almost equitably between
 C4 connections, and reasonably between C4 and Cubic or C4 and BBR.
@@ -1349,6 +1348,28 @@ the "pushing" state in two:
   at 25%, remaining in the same state until the measurements
   stop increasing.
 
+### Keeping Probing and Pushing as separate state
+
+The design recomended in this section separates the Probing and Pushing states.
+We considered simplifying the design and merging the two states, and tried
+that in an experiment: just enter the pushing state and use the 6.125% increase
+for the first RTT, and then switch to 25% as soon as a measurement shows an increase
+in rate. 
+
+The results were mixed. One test out of 22 did improve significantly, i.e.,
+competition with a BBR connection that starts after the C4 connection, showing performance
+more than 20% better than the previous version. This is probably because the merging
+of the two states makes C4 more aggressive. However, several other tests showed regressions,
+including the "drop and back" test, which showed a 6% regression. This is probably
+due to the reduced agility of the merged state: each cycle of cruising-pushing-recovery
+lasts 5 RTT instead of 4, causing the change in bandwidth to be detected later.
+
+The merged state also caused regressions in the testing of competiton between C4 connections,
+and in the Wi-Fi scenarios, probably due to the excessive aggressivity of the merged solution.
+The separation of Probing and Pushing states appear to be a good compromise between agility 
+and aggressivity.
+
+
 ## Support for careful resume
 
 The performance measurements of the previous version of C4 showed
@@ -1477,7 +1498,11 @@ diagram.
   |                                 |
   +---------------------------------+
 
-~~~
+~~~C4 exits the pushing state after one era, or if a congestion
+signal is received before that. In an exception to
+standard congestion processing, the reduction in `nominal_rate` and
+`nominal_max_RTT` are not applied if the congestion signal
+is tied to a packet sent during the Probing state.
   
 
 # Security Considerations

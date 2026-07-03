@@ -40,10 +40,11 @@ algo_dict = {
 # groups of tests
 
 test_groups = [
-    [ "simple", ["alone", "low_and_up", "drop_and_back", "blackhole", "satellite"], "time"],
-    [ "wifi", [ "wifi_bad", "wifi_fade", "wifi_suspension"], "time" ],
-    [ "media", [ "media", "media10", "media_short_long", "media_wb", "media_wf", "media_ws" ], "media" ],
-    [ "compete", [ "vs_bbr", "vs_c4", "vs_cubic", "wifi_bad_bbr", "wifi_bad_c4", "wifi_bad_cubic" ], "time" ]
+    [ "network events", ["alone", "alone_200", "low_and_up", "drop_and_back", "blackhole", "short_long", "satellite"], "time", "Reaction to network events" ],
+    [ "compete", [ "vs_bbr", "vs_c4", "vs_cubic", "after_c4", "before_c4", "vs_c4_lg", "vs_c4_lg2", "vs_bbr_lg", "vs_bbr_lg2", "vs_cubic_lg", "vs_cubic_lg2"], "time", "Competition" ],
+    [ "wifi", [ "wifi_bad", "wifi_fade", "wifi_suspension", "wifi_bad_bbr", "wifi_bad_c4", "wifi_bad_cubic" ], "time", "Wi-Fi"],
+    [ "ecn", [ "ecn", "ecn_c4", "ecn_cubic", "ecn_bbr" ], "time", "ECN" ],
+    [ "media", [ "media", "media10", "media_600fr", "media_short_long", "media_wb", "media_wf", "media_ws", "media_ecn" ], "media", "Media" ],
 ]
 
 
@@ -67,32 +68,38 @@ class test_report:
         return int(round(x))
 
 class test_case_group:
-    def __init__(self, tc):
+    def __init__(self, tc, nb_alts):
         self.tc = tc
         self.alg_report = [ None, None, None ]
+        for i in range(0,nb_alts):
+            self.alg_report.append(None)
 
 # Grouping of reports
 
 class report_list:
-    def __init__(self):
+    def __init__(self, nb_alts):
         self.test_cases=dict()
         self.reported = set()
+        self.nb_alts = nb_alts
 
-    def add_dir(self, dir_path):
+    def add_dir(self, dir_path, n):
         for report_name in os.listdir(dir_path):
             if report_name.endswith(".csv"):
                 algo_case = report_name[:-4]
                 algo_case_part = algo_case.split("_")
                 if len(algo_case_part) > 1:
                     algo = algo_case_part[0]
-                    if algo in algo_dict:
+                    if algo in algo_dict and (n == 0 or algo == "c4"):
                         tc = algo_case[(len(algo) + 1):]
                         rp = test_report(algo, tc)
                         rp.load(os.path.join(dir_path, report_name))
                         if not tc in self.test_cases:
-                            self.test_cases[tc] = test_case_group(tc)
-                        self.test_cases[tc].alg_report[algo_dict[algo]] = rp
-
+                            self.test_cases[tc] = test_case_group(tc, self.nb_alts)
+                        if n == 0:
+                            algo_rank = algo_dict[algo]
+                        else:
+                            algo_rank = n+2
+                        self.test_cases[tc].alg_report[algo_rank] = rp
     
 
     def do_metric_report(self, F, grp, tl, metric, use_top_90):
@@ -103,8 +110,15 @@ class report_list:
         top += " for " + grp + " tests"
 
         F.write("### " + top + "\n")
-        F.write("| " + top + "| c4 | bbr | cubic |\n")
-        F.write("| --------- | ---:| ---:| ---:|\n")
+        F.write("| " + top + "| c4 | bbr | cubic |")
+        for i in range(0, self.nb_alts):
+            F.write(" c4_" + str(i+1) + " |")
+        F.write("\n")
+
+        F.write("| --------- | ---:| ---:| ---:|")
+        for i in range(0, self.nb_alts):
+            F.write(" ---:|")
+        F.write("\n")
 
         for tc in tl:
             if not tc in self.test_cases:
@@ -113,7 +127,7 @@ class report_list:
 
             sm = "| " + tc + " | " 
             has_metric = False
-            for i in range(0,3):
+            for i in range(0,3 + self.nb_alts):
                 x = 0
                 if tc_data.alg_report[i] == None:
                     sm += " |"
@@ -143,39 +157,50 @@ class report_list:
         F.write("Here is a collection of statistics on all test cases.\n\n")
         for tg in test_groups:
             F.write("## " + tg[0] + "\n")
-            F.write("Here the statistics for the " + tg[0] + " test cases.\n\n")
+            F.write("Here the statistics for the " + tg[3] + " test cases.\n\n")
             self.do_case_metrics(F, tg[0], tg[1], tg[2])
             F.write("\n")
-            
-        F.write("## others\n")
-        F.write("Here the statistics for the other test cases.\n\n")
-        F.write("| average time | c4 | bbr | cubic |\n")
-        F.write("|----| ---:| ---:| ---:|\n")
-        for tc in self.test_cases:
-           if not tc in self.reported:
-                sm = "| " + tc + " | " 
-                has_metric = False
-                for i in range(0,3):
-                    x = 0
-                    if self.test_cases[tc].alg_report[i] == None:
-                        sm += " |"
-                    else:
-                        x = self.test_cases[tc].alg_report[i].average('time')
-                        sm += " " + str(x) + " |"
-                    if x > 0:
-                        has_metric = True
-                if has_metric:
-                    F.write(sm + '\n')
+         
+        if len(self.test_cases) > len(self.reported):
+            F.write("## others\n")
+            F.write("Here the statistics for the other test cases.\n\n")
+            F.write("| average time | c4 | bbr | cubic |\n")
+            F.write("|----| ---:| ---:| ---:|\n")
+            for tc in self.test_cases:
+               if not tc in self.reported:
+                    sm = "| " + tc + " | " 
+                    has_metric = False
+                    for i in range(0,3):
+                        x = 0
+                        if self.test_cases[tc].alg_report[i] == None:
+                            sm += " |"
+                        else:
+                            x = self.test_cases[tc].alg_report[i].average('time')
+                            sm += " " + str(x) + " |"
+                        if x > 0:
+                            has_metric = True
+                    if has_metric:
+                        F.write(sm + '\n')
 
-        F.write("\n")
+            F.write("\n")
 
-
+def usage(ret_code):
+    print("Usage: " + sys.argv[0] + " <output.md> <stats-dir> [<alt-dir>*]\n") 
+    print("Stats dir contains stats summary for tests with C4 (current), BBR and Cubic.")
+    print("Each optional alt dir contains resuls with a version of C4 in development.")
+    print("Results lines will show results for C4, BBR, Cubic and each version in test.")
+    if ret_code != 0:
+        exit(ret_code)
 
 # main
 
-rl = report_list()
+if len(sys.argv) < 3:
+    usage(-1)
 
-rl.add_dir(sys.argv[1])
+rl = report_list(len(sys.argv) - 3)
 
-with open(sys.argv[2], "wt") as F:
+for i in range(2, len(sys.argv)):
+    rl.add_dir(sys.argv[i], i-2)
+
+with open(sys.argv[1], "wt") as F:
     rl.do_report(F)

@@ -5,9 +5,9 @@
 Network Working Group                                         C. Huitema
 Internet-Draft                                      Private Octopus Inc.
 Intended status: Informational                             S. Nandakumar
-Expires: 2 January 2027                                      C. Jennings
+Expires: 4 January 2027                                      C. Jennings
                                                                    Cisco
-                                                             1 July 2026
+                                                             3 July 2026
 
 
            Design of Christian's Congestion Control Code (C4)
@@ -43,7 +43,7 @@ Status of This Memo
    time.  It is inappropriate to use Internet-Drafts as reference
    material or to cite them other than as "work in progress."
 
-   This Internet-Draft will expire on 2 January 2027.
+   This Internet-Draft will expire on 4 January 2027.
 
 Copyright Notice
 
@@ -53,7 +53,7 @@ Copyright Notice
 
 
 
-Huitema, et al.          Expires 2 January 2027                 [Page 1]
+Huitema, et al.          Expires 4 January 2027                 [Page 1]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -109,19 +109,20 @@ Table of Contents
 
 
 
-Huitema, et al.          Expires 2 January 2027                 [Page 2]
+Huitema, et al.          Expires 4 January 2027                 [Page 2]
 
 Internet-Draft                  C4 Design                      July 2026
 
 
        9.2.3.  Addind a Pushing state  . . . . . . . . . . . . . . .  30
-     9.3.  Support for careful resume  . . . . . . . . . . . . . . .  30
-   10. State Machine . . . . . . . . . . . . . . . . . . . . . . . .  31
-   11. Security Considerations . . . . . . . . . . . . . . . . . . .  33
-   12. IANA Considerations . . . . . . . . . . . . . . . . . . . . .  34
-   13. Informative References  . . . . . . . . . . . . . . . . . . .  34
-   Acknowledgments . . . . . . . . . . . . . . . . . . . . . . . . .  36
-   Authors' Addresses  . . . . . . . . . . . . . . . . . . . . . . .  36
+       9.2.4.  Keeping Probing and Pushing as separate state . . . .  30
+     9.3.  Support for careful resume  . . . . . . . . . . . . . . .  31
+   10. State Machine . . . . . . . . . . . . . . . . . . . . . . . .  32
+   11. Security Considerations . . . . . . . . . . . . . . . . . . .  35
+   12. IANA Considerations . . . . . . . . . . . . . . . . . . . . .  35
+   13. Informative References  . . . . . . . . . . . . . . . . . . .  35
+   Acknowledgments . . . . . . . . . . . . . . . . . . . . . . . . .  37
+   Authors' Addresses  . . . . . . . . . . . . . . . . . . . . . . .  37
 
 1.  Introduction
 
@@ -161,15 +162,15 @@ Internet-Draft                  C4 Design                      July 2026
    The nominal rate is the pacing rate corresponding to the most recent
    estimate of the bandwidth available to the connection.  The nominal
    max RTT is the best estimate of the maximum RTT that can occur on the
-   network in the absence of queues.  When we do not observe delay
 
 
 
-Huitema, et al.          Expires 2 January 2027                 [Page 3]
+Huitema, et al.          Expires 4 January 2027                 [Page 3]
 
 Internet-Draft                  C4 Design                      July 2026
 
 
+   network in the absence of queues.  When we do not observe delay
    jitter, this coincides with the min RTT.  In the presence of jitter,
    it should be the sum of the min RTT and the maximum jitter.  C4 will
    compute a pacing rate as the nominal rate multiplied by a coefficient
@@ -179,9 +180,9 @@ Internet-Draft                  C4 Design                      July 2026
 
    Over time, we updated C4 to:
 
-   *  Focus on the pacing rate as the control varaible, and use an
-      estimated of the largest path RTT to set the CWND, as explained in
-      Section 3
+   *  Focus on the pacing rate as the control variable, and use an
+      estimation of the largest path RTT to set the CWND, as explained
+      in Section 3
 
    *  Improve the handling of congestion response, growth cascade and
       careful resume, as explained in Section 9
@@ -220,8 +221,7 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-
-Huitema, et al.          Expires 2 January 2027                 [Page 4]
+Huitema, et al.          Expires 4 January 2027                 [Page 4]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -277,7 +277,7 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 2 January 2027                 [Page 5]
+Huitema, et al.          Expires 4 January 2027                 [Page 5]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -333,7 +333,7 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 2 January 2027                 [Page 6]
+Huitema, et al.          Expires 4 January 2027                 [Page 6]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -389,7 +389,7 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 2 January 2027                 [Page 7]
+Huitema, et al.          Expires 4 January 2027                 [Page 7]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -445,7 +445,7 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 2 January 2027                 [Page 8]
+Huitema, et al.          Expires 4 January 2027                 [Page 8]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -501,7 +501,7 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 2 January 2027                 [Page 9]
+Huitema, et al.          Expires 4 January 2027                 [Page 9]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -557,7 +557,7 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 2 January 2027                [Page 10]
+Huitema, et al.          Expires 4 January 2027                [Page 10]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -613,7 +613,7 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 2 January 2027                [Page 11]
+Huitema, et al.          Expires 4 January 2027                [Page 11]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -669,7 +669,7 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 2 January 2027                [Page 12]
+Huitema, et al.          Expires 4 January 2027                [Page 12]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -725,7 +725,7 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 2 January 2027                [Page 13]
+Huitema, et al.          Expires 4 January 2027                [Page 13]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -781,7 +781,7 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 2 January 2027                [Page 14]
+Huitema, et al.          Expires 4 January 2027                [Page 14]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -837,7 +837,7 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 2 January 2027                [Page 15]
+Huitema, et al.          Expires 4 January 2027                [Page 15]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -893,7 +893,7 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 2 January 2027                [Page 16]
+Huitema, et al.          Expires 4 January 2027                [Page 16]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -949,7 +949,7 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 2 January 2027                [Page 17]
+Huitema, et al.          Expires 4 January 2027                [Page 17]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -1005,7 +1005,7 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 2 January 2027                [Page 18]
+Huitema, et al.          Expires 4 January 2027                [Page 18]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -1061,7 +1061,7 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 2 January 2027                [Page 19]
+Huitema, et al.          Expires 4 January 2027                [Page 19]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -1117,7 +1117,7 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 2 January 2027                [Page 20]
+Huitema, et al.          Expires 4 January 2027                [Page 20]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -1173,7 +1173,7 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 2 January 2027                [Page 21]
+Huitema, et al.          Expires 4 January 2027                [Page 21]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -1229,7 +1229,7 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 2 January 2027                [Page 22]
+Huitema, et al.          Expires 4 January 2027                [Page 22]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -1285,7 +1285,7 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 2 January 2027                [Page 23]
+Huitema, et al.          Expires 4 January 2027                [Page 23]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -1341,7 +1341,7 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 2 January 2027                [Page 24]
+Huitema, et al.          Expires 4 January 2027                [Page 24]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -1397,7 +1397,7 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 2 January 2027                [Page 25]
+Huitema, et al.          Expires 4 January 2027                [Page 25]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -1422,17 +1422,17 @@ Internet-Draft                  C4 Design                      July 2026
    will normally cause congestion events such as packet losses or ECN
    marks, and C4 will react by reducing the nominal rate by the
    specified "beta" coefficient.  However, while these reductions in
-   bandidth are adequate for the small decreases due to increased
+   bandwidth are adequate for the small decreases due to increased
    competition, they are not sufficient for the large drops.  Such large
    drops can happen after routing events.  In satellite based network,
    this happens if the connection switches to a different satellite.
 
-   Simulation showed that the large drop scenario C4 reacted by a series
-   of small reductions until finally matching the available bandwidth.
-   This means operating for a long period in conditions of congestion,
-   with large queues and packet losses.  We solved that problem by
-   detecting the persistence of condition and reacting forcefully to
-   sustained congestion.
+   Simulation showed that in the large drop scenario C4 reacted by a
+   series of small reductions until finally matching the available
+   bandwidth.  This means operating for a long period in conditions of
+   congestion, with large queues and packet losses.  We solved that
+   problem by detecting the persistence of condition and reacting
+   forcefully to sustained congestion.
 
    We improved C4 by monitoring the number of "recent congestions".  If
    C4 observes more than 2 successive congestion events it will drop the
@@ -1453,7 +1453,7 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 2 January 2027                [Page 26]
+Huitema, et al.          Expires 4 January 2027                [Page 26]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -1509,7 +1509,7 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 2 January 2027                [Page 27]
+Huitema, et al.          Expires 4 January 2027                [Page 27]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -1565,7 +1565,7 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 2 January 2027                [Page 28]
+Huitema, et al.          Expires 4 January 2027                [Page 28]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -1621,7 +1621,7 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 2 January 2027                [Page 29]
+Huitema, et al.          Expires 4 January 2027                [Page 29]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -1631,7 +1631,7 @@ Internet-Draft                  C4 Design                      July 2026
    reduce the amount of queuing when that happens.  However, if the
    cascade starts using large increments, the benefits over BBR's
    continous approach are not obvious.  The BBR algorithm is continuous,
-   and when it stops the probe bandwidth always exceed the nominal
+   and when it stops, the probe bandwidth always exceed the nominal
    bandwidth by just 25%. The C4 algorithm is not continuous.  If it
    stops during the first RTT, the excess bandwidth will be at most
    6.125% of the available bandwidth, but up to 25% if it stops in the
@@ -1652,6 +1652,42 @@ Internet-Draft                  C4 Design                      July 2026
       at 25%, remaining in the same state until the measurements stop
       increasing.
 
+9.2.4.  Keeping Probing and Pushing as separate state
+
+   The design recomended in this section separates the Probing and
+   Pushing states.  We considered simplifying the design and merging the
+   two states, and tried that in an experiment: just enter the pushing
+   state and use the 6.125% increase for the first RTT, and then switch
+   to 25% as soon as a measurement shows an increase in rate.
+
+   The results were mixed.  One test out of 22 did improve
+   significantly, i.e., competition with a BBR connection that starts
+   after the C4 connection, showing performance more than 20% better
+   than the previous version.  This is probably because the merging of
+   the two states makes C4 more aggressive.  However, several other
+   tests showed regressions, including the "drop and back" test, which
+   showed a 6% regression.  This is probably due to the reduced agility
+   of the merged state: each cycle of cruising-pushing-recovery lasts 5
+   RTT instead of 4, causing the change in bandwidth to be detected
+   later.
+
+
+
+
+
+
+
+Huitema, et al.          Expires 4 January 2027                [Page 30]
+
+Internet-Draft                  C4 Design                      July 2026
+
+
+   The merged state also caused regressions in the testing of competiton
+   between C4 connections, and in the Wi-Fi scenarios, probably due to
+   the excessive aggressivity of the merged solution.  The separation of
+   Probing and Pushing states appear to be a good compromise between
+   agility and aggressivity.
+
 9.3.  Support for careful resume
 
    The performance measurements of the previous version of C4 showed
@@ -1668,19 +1704,6 @@ Internet-Draft                  C4 Design                      July 2026
    was too tightly enmeshed with the "slow start" logic.  It is simpler
    to treat "resuming" as a state by itself, rather than a complication
    of startup.
-
-
-
-
-
-
-
-
-
-Huitema, et al.          Expires 2 January 2027                [Page 30]
-
-Internet-Draft                  C4 Design                      July 2026
-
 
    The resuming state is entered when the stack sets the seed CWIN, from
    which we deduce the the seed rate.  During that state, pacing rate
@@ -1704,6 +1727,16 @@ Internet-Draft                  C4 Design                      July 2026
    +--------------+---------+---------+---------+------------+---------+
 
                                   Table 3
+
+
+
+
+
+
+Huitema, et al.          Expires 4 January 2027                [Page 31]
+
+Internet-Draft                  C4 Design                      July 2026
+
 
    +==============+=========+=========+=========+============+=========+
    | top 90%      |      c4 |     bbr |   cubic | c4_pushing | This PR |
@@ -1730,14 +1763,6 @@ Internet-Draft                  C4 Design                      July 2026
       "nominal_cwnd" does not increase for 3 consecutive round trips.
       When the connection exits startup, it enters "recovery".
 
-
-
-
-Huitema, et al.          Expires 2 January 2027                [Page 31]
-
-Internet-Draft                  C4 Design                      July 2026
-
-
    *  "resuming": management of careful resume, during which the CWND
       and pacing rate are pegged to the seed values.  The state lasts
       for 2 eras, giving enough time for the rate measurement to
@@ -1759,6 +1784,15 @@ Internet-Draft                  C4 Design                      July 2026
       value of "nominal_cwnd".  Otherwise, the connection will remain in
       "cruising" state until at least 4 RTT and the connection is not
       "app limited".  At that point, it enters "pushing".
+
+
+
+
+
+Huitema, et al.          Expires 4 January 2027                [Page 32]
+
+Internet-Draft                  C4 Design                      July 2026
+
 
    *  "probing": the connection is using a rate and CWND 6.15% larger
       than "nominal_rate" and "nominal_CWND".  After 1 RTT, it moves
@@ -1789,7 +1823,29 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 2 January 2027                [Page 32]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Huitema, et al.          Expires 4 January 2027                [Page 33]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -1821,7 +1877,7 @@ Internet-Draft                  C4 Design                      July 2026
      |  |                v             |          |
      |  |           +----------+       |          |
      |  |           | Cruising |       |          |
-     |  |           +-|--|-----+       |          |
+     |  |           +-|--|-----+       v          |
      |  | Congestion  |  |        +---------+     |
      |  +-------------+  |        | Pushing |     |
      |                   |        +----|--|-+     |
@@ -1835,20 +1891,27 @@ Internet-Draft                  C4 Design                      July 2026
      |                                 |
      +---------------------------------+
 
+   C4 exits the pushing state after one era, or if a congestion signal
+   is received before that.  In an exception to standard congestion
+   processing, the reduction in nominal_rate and nominal_max_RTT are not
+   applied if the congestion signal is tied to a packet sent during the
+   probing or pushing state.
+
+
+
+
+
+Huitema, et al.          Expires 4 January 2027                [Page 34]
+
+Internet-Draft                  C4 Design                      July 2026
+
+
 11.  Security Considerations
 
    We do not believe that C4 introduce new security issues.  Or maybe
    there are, such as what happen if applications can be fooled in going
    to fast and overwhelming the network, or going to slow and
    underwhelming the application.  Discuss!
-
-
-
-
-Huitema, et al.          Expires 2 January 2027                [Page 33]
-
-Internet-Draft                  C4 Design                      July 2026
-
 
 12.  IANA Considerations
 
@@ -1890,21 +1953,18 @@ Internet-Draft                  C4 Design                      July 2026
               RFC 6582, DOI 10.17487/RFC6582, April 2012,
               <https://www.rfc-editor.org/info/rfc6582>.
 
-   [RFC3649]  Floyd, S., "HighSpeed TCP for Large Congestion Windows",
-              RFC 3649, DOI 10.17487/RFC3649, December 2003,
-              <https://www.rfc-editor.org/info/rfc3649>.
 
 
 
 
-
-
-
-
-Huitema, et al.          Expires 2 January 2027                [Page 34]
+Huitema, et al.          Expires 4 January 2027                [Page 35]
 
 Internet-Draft                  C4 Design                      July 2026
 
+
+   [RFC3649]  Floyd, S., "HighSpeed TCP for Large Congestion Windows",
+              RFC 3649, DOI 10.17487/RFC3649, December 2003,
+              <https://www.rfc-editor.org/info/rfc3649>.
 
    [TCP-Vegas]
               Brakmo, L. S. and L. L. Peterson, "TCP Vegas: end to end
@@ -1949,18 +2009,20 @@ Internet-Draft                  C4 Design                      July 2026
               DOI 10.17487/RFC9331, January 2023,
               <https://www.rfc-editor.org/info/rfc9331>.
 
+
+
+
+
+Huitema, et al.          Expires 4 January 2027                [Page 36]
+
+Internet-Draft                  C4 Design                      July 2026
+
+
    [RFC9959]  Kuhn, N., Stephan, E., Fairhurst, G., Secchi, R., and C.
               Huitema, "Careful Resume: Convergence of Congestion
               Control from Retained State", RFC 9959,
               DOI 10.17487/RFC9959, May 2026,
               <https://www.rfc-editor.org/info/rfc9959>.
-
-
-
-Huitema, et al.          Expires 2 January 2027                [Page 35]
-
-Internet-Draft                  C4 Design                      July 2026
-
 
    [I-D.briscoe-iccrg-prague-congestion-control]
               De Schepper, K., Tilmans, O., Briscoe, B., and V. Goel,
@@ -2007,10 +2069,4 @@ Authors' Addresses
 
 
 
-
-
-
-
-
-
-Huitema, et al.          Expires 2 January 2027                [Page 36]
+Huitema, et al.          Expires 4 January 2027                [Page 37]

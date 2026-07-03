@@ -40,6 +40,7 @@ informative:
    RFC9000:
    I-D.ietf-moq-transport:
    RFC9331:
+   RFC9959:
 
 --- abstract
 
@@ -311,7 +312,7 @@ diagram.
   |  |                v             |          |
   |  |           +----------+       |          |
   |  |           | Cruising |       |          |
-  |  |           +-|--|-----+       |          |
+  |  |           +-|--|-----+       v          |
   |  | Congestion  |  |        +---------+     |
   |  +-------------+  |        | Pushing |     |
   |                   |        +----|--|-+     |
@@ -326,7 +327,6 @@ diagram.
   +---------------------------------+
 
 ~~~
-
 
 ## Setting pacing rate, congestion window and quantum {#set_pace}
 

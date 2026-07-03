@@ -1484,7 +1484,7 @@ diagram.
   |  |                v             |          |
   |  |           +----------+       |          |
   |  |           | Cruising |       |          |
-  |  |           +-|--|-----+       |          |
+  |  |           +-|--|-----+       v          |
   |  | Congestion  |  |        +---------+     |
   |  +-------------+  |        | Pushing |     |
   |                   |        +----|--|-+     |
@@ -1498,11 +1498,13 @@ diagram.
   |                                 |
   +---------------------------------+
 
-~~~C4 exits the pushing state after one era, or if a congestion
+~~~
+
+C4 exits the pushing state after one era, or if a congestion
 signal is received before that. In an exception to
 standard congestion processing, the reduction in `nominal_rate` and
 `nominal_max_RTT` are not applied if the congestion signal
-is tied to a packet sent during the Probing state.
+is tied to a packet sent during the probing or pushing state.
   
 
 # Security Considerations

@@ -109,7 +109,7 @@ class report_list:
             top = " average " + metric
         top += " for " + grp + " tests"
 
-        F.write("### " + top + "\n")
+        F.write("### " + top + "\n\n")
         F.write("| " + top + "| c4 | bbr | cubic |")
         for i in range(0, self.nb_alts):
             F.write(" c4_" + str(i+1) + " |")
@@ -143,6 +143,8 @@ class report_list:
                 F.write(sm + '\n')
                 self.reported.add(tc)
 
+        F.write("\n")
+
     def do_case_metrics(self, F, grp, tl, metric_type):
         if metric_type == 'time':
             self.do_metric_report(F, grp, tl,'time', False)
@@ -156,8 +158,8 @@ class report_list:
         F.write("# Statistics\n")
         F.write("Here is a collection of statistics on all test cases.\n\n")
         for tg in test_groups:
-            F.write("## " + tg[0] + "\n")
-            F.write("Here the statistics for the " + tg[3] + " test cases.\n\n")
+            F.write("## " + tg[3] + "\n\n")
+            F.write("Here the statistics for the " + tg[0] + " test cases.\n\n")
             self.do_case_metrics(F, tg[0], tg[1], tg[2])
             F.write("\n")
          

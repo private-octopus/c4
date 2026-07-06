@@ -40,6 +40,7 @@ informative:
    RFC9000:
    I-D.ietf-moq-transport:
    RFC9331:
+   RFC9959:
 
 --- abstract
 
@@ -68,10 +69,12 @@ The two main variables describing the state of a flow are the
 "nominal max RTT" (see {{nominal-max-rtt}}).
 C4 organizes the management of the flow through a series of
 states: Initial, during which the first assessment of nominal-rate
-and nominal max RTT are obtained, Recovery in which a flow is
-stabilized after the Initial or Pushing phase, Cruising during which
-a flow uses the nominal rate, and Pushing during which the flow
-tries to discover if more resource is available -- see {{c4-states}}.
+and nominal max RTT are obtained, Resuming for the implementation
+of careful resume {{RFC9959}}, Recovery in which a flow is
+stabilized after the Initial, Probing or Pushing phase, Cruising during which
+a flow uses the nominal rate, Probing during which the flow
+tries to discover whether more resource mighht be available and Pushing during which the flow
+tries to otain more resource  -- see {{c4-states}}.
 
 C4 divides the duration of the connection in a set of "eras",
 each corresponding to a packet round trip. Transitions between protocol
@@ -208,14 +211,14 @@ next jitter event to happen, at least on Wi-Fi networks.
 In addition to the nominal rate and nominal MAX RTT,
 C4 maintains a set of variables tracking the evolution of the flow:
 
+
+- current state of the algorithm, which can be Initial, Resuming, Recovery,
+  Cruising, Probing or Pushing.
 - running min RTT, an approximation of the min RTT for the flow,
 - number of eras without increase (see {{c4-initial}}),
-- current state of the algorithm, which can be Initial, Recovery,
-  Cruising or Pushing.
-- probe level.
+- the number of successive congestion events and the recent maximum rate,
+  used to detect and manage persistent congestion (see {{persistent-congestion}}).
 
-The probe level determines how aggressive the pushing phase is, and also
-how long to wait between recovery and pushing.
 
 ## Per era variables {#era-variables}
 
@@ -233,25 +236,30 @@ These variables are initialized at the beginning of the era.
 
 # States and Transition {#c4-states}
 
+
 The state machine for C4 has the following states:
 
-* "Initial": the initial state, during which the CWND is
+* "startup": the initial state, during which the CWND is
   set to twice the "nominal_CWND". The connection
   exits startup if the "nominal_cwnd" does not
   increase for 3 consecutive round trips. When the
   connection exits startup, it enters "recovery".
-* "Recovery": the connection enters that state after
-  "Initial", "pushing", or a congestion detection in
+* "resuming": management of careful resume, during which the CWND and pacing rate are
+  pegged to the seed values. The state lasts for 2 eras,
+  giving enough time for the rate measurement to stabilize.
+  The eras are expanded if the connection is app limited,
+  to avoid exiting too early. After two eras, or at any time
+  if congestion is detected, the state transitions to recovery.
+* "recovery": the connection enters that state after
+  "startup", "pushing", or a congestion detection in
   a "cruising" state. It remains in that state for
   at least one roundtrip, until the first packet sent
   in "recovery" is acknowledged. Once that happens,
   the connection goes back
   to "startup" if the last 3 pushing attemps have resulted
-  in increases of "nominal rate", or if it detects high
-  jitter and the previous initial was not run
-  in these conditions (see ). It enters "cruising"
+  in increases of "nominal rate", or enters "cruising"
   otherwise.
-* "Cruising": the connection is sending using the
+* "cruising": the connection is sending using the
   "nominal_rate" and "nominal_max_rtt" value. If congestion is detected,
   the connection exits cruising and enters
   "recovery" after lowering the value of
@@ -260,12 +268,18 @@ The state machine for C4 has the following states:
   remain in "cruising" state until at least 4 RTT and
   the connection is not "app limited". At that
   point, it enters "pushing".
-* "Pushing": the connection is using a rate and CWND 25%
+* "probing": the connection is using a rate and CWND 6.25%
+  larger than "nominal_rate" and "nominal_CWND", or 3.125%
+  if the local gateway is ECN capable. After
+  1 RTT, it moves back to "recovery" in order to assess
+  the results. If the data rate appears to have increased,
+  the connection moves to the "pushing" state.
+* "pushing": the connection is using a rate and CWND 25%
   larger than "nominal_rate" and "nominal_CWND".
-  It remains in that state
-  for one round trip, i.e., until the first packet
-  send while "pushing" is acknowledged. At that point,
-  it enters the "recovery" state.
+  It remains in that state for at least one round trip,
+  and until the measured rate stops growing. If the
+  pushing lasts more than 3 RTT, C4 re-enters the
+  initial state.
 
 These transitions are summarized in the following state
 diagram.
@@ -278,30 +292,39 @@ diagram.
                       |                        |
                       v                        |
                  +----------+                  |
-                 | Initial  |                  |
-                 +----|-----+                  |
-                      |                        |
-                      v                        |
+                 | Startup  |                  |
+                 +-|--|-----+                  |
+         +---------+  |                        | 
+         |            |                        |
+         v            |                        |
+   +----------+       |                        |
+   | Resuming |       |                        |
+   +-----|----+       |                        |
+         +---------+  |                        |
+                   |  |                        |
+                   v  v                        |
                  +------------+                |
   +--+---------->|  Recovery  |                |
   ^  ^           +----|---|---+                |
-  |  |                |   |  First High Jitter |
-  |  |                |   |  or Rapid Increase |
-  |  |                |   +------------------->+
-  |  |                |
-  |  |                v
-  |  |           +----------+
-  |  |           | Cruising |
-  |  |           +-|--|-----+
-  |  | Congestion  |  |
-  |  +-------------+  |
-  |                   |
-  |                   v
-  |              +----------+
-  |              | Pushing  |
-  |              +----|-----+
-  |                   |
-  +<------------------+
+  |  |                |   | Rate increase      |
+  |  |                |   +---------+          |
+  |  |                |             |          |
+  |  |                v             |          |
+  |  |           +----------+       |          |
+  |  |           | Cruising |       |          |
+  |  |           +-|--|-----+       v          |
+  |  | Congestion  |  |        +---------+     |
+  |  +-------------+  |        | Pushing |     |
+  |                   |        +----|--|-+     |
+  |                   v             |  |       |
+  |              +----------+       |  +-------+
+  |              | Probing  |       |   Rapid
+  |              +----|-----+       |   increase
+  |                   |             |
+  +<------------------+             |
+  ^                                 |
+  |                                 |
+  +---------------------------------+
 
 ~~~
 
@@ -342,7 +365,8 @@ state | alpha | comments
 Initial | 2 |
 Recovery | 15/16 |
 Cruising | 1 |
-Pushing | 5/4 or 17/16 | see {{c4-pushing}} for rules on choosing 5/4 or 17/16
+Probing | 33/32 or 17/16 | see {{c4-probing}} for rules on choosing 33/32 or 17/16
+Pushing | 5/4 |
 
 Setting the pacing quantum is a tradeoff between two requirements.
 Using a large quantum enables applications to send large batches of
@@ -398,8 +422,7 @@ assess the loss rate.
 
 On exiting the Initial state, C4 computes an estimate of the nominal
 max RTT as the quotient of the half the last CWND divided by the last
-nominal rate, and updates the "nominal max RTT" accordingly. The probe level
-is set to 1.
+nominal rate, and updates the "nominal max RTT" accordingly.
 
 ### Reentering the initial state
 
@@ -408,9 +431,18 @@ current nominal rate and nominal max RTT. CWND is set to the product of
 nominal rate and nominal max RTT. The initial state then operates as
 specified in {{c4-initial}}.
 
+### Resuming state
+
+The resuming state is entered if the application remembers the CWND and RTT
+of a previous connection between the same endpoints. The resuming state lasts for 2 eras,
+during which the CWND and pacing rate are pegged to the remembered values.
+The first of these eras can be extended if the connection is "application limited",
+to avoid exiting too early. After 2 eras, or if a congestion signal is received before
+that, C4 enters recovery.
+
 ## Recovery state {#c4-recovery}
 
-The recovery state is entered from the Initial or Pushing state,
+The recovery state is entered from the Initial, Resuming, Probing or Pushing state,
 or from the Cruising state in case of congestion. 
 The coefficient `alpha_current` is set to 15/16. Because the multiplier
 is lower than 1, the new value of CWND may well be lower
@@ -426,32 +458,15 @@ by these events will be taken prior to entering recovery, and that
 events arriving during recovery are duplicate of the prior events
 and can be ignored.
 
-Rate increases are detected when acknowledgements received during recovery
-reflect a successful "push" during the Pushing phase. The prior "Pushing"
-is considered successful if it did not trigger any congestion event,
-and if the data rate increases sufficiently
-between the end of previous Recovery and the end of this one, with
-sufficiently being defined as:
+Rate increases are detected if the previous state was Probing, 
+and if acknowledgements received during recovery
+reflect a successful "probe" during the Probing phase, that is if the
+probing did not trigger any congestion event
+and if the data rate did increase.
 
-* Any increase if the prior pushing rate (alpha_prior) was 17/16 or
-less,
-* An increase of at least 1/4th of the expected increase otherwise,
-for example an increase of 1/16th if `alpha_previous` was 5/4.
+If a succesful probing was detected, C4 immediately enters the Pushing state.
 
-The probe level is updated as follow:
-
-* If the prior pushing was successful, and did not trigger an excessive rate of ECN/CE marks,
-  the probe level is increased by 1.
-* If the prior pushing was successful but did trigger an excessive rate of ECN/CE marks,
-  the probe level remains unchanged.
-* If the prior pushing was not successful but did not trigger an excessive rate of ECN/CE marks,
-  the probe level left unchanged if it was 0, set to 1 otherwise.
-* If the prior pushing was not successful and did trigger an excessive rate of ECN/CE marks,
-  the probe level is set to 0.
-
-
-C4 re-enters "Initial" at the end of the recovery period if the probe level
-as reached a value 4 or larger, or if
+C4 re-enters "Initial" at the end of the recovery period if 
 high jitter requires restarting the Initial phase (see
 {{restart-high-jitter}}. Otherwise, C4 enters cruising.
 
@@ -481,31 +496,48 @@ This will be done at most once per flow.
 The Cruising state is entered from the Recovery state. 
 The coefficient `alpha_current` is set to 1.
 
-C4 will transition from Cruising state to Pushing state
-after a number of eras that depend on the probe level:
-
-- 1 era if the probe level is 0,
-- 4 eras if the probe level is 1,
-- 1 era if the probe level is 2 or 3.
+C4 will transition from Cruising state to Probing state
+after 2 eras.
 
 C4 will transition to Recovery before that if
-a congestion signal is received before transition to Pushing.
+a congestion signal is received before transition to Probing.
+
+## Probing state {#c4-probing}
+
+The probing state is entered from the Cruising state.
+
+The coefficient `alpha_current` is set to 17/16, unless ECN-CE
+marks have been received on the path, in which case it is set to 33/32.
+The presence of ECN/CE means that an
+on path router is implementing either L4S ({{RFC9331}}) or another
+ECN marking scheme.
+
+C4 exits the probing state after one era, or if a congestion
+signal is received before that.
 
 ## Pushing state {#c4-pushing}
 
-The Pushing state is entered from the Cruising state.
+The pushing state is entered from the Recovery state if a previous
+probing was successful, as stated in {{c4-recovery}}. 
 
-The coefficient `alpha_current` depend on the probe level:
+The coefficient `alpha-current` is set to 5/4.
 
-- If the probe level is 0, `alpha_current` is set to 33/32.
-- If the probe level is 1, `alpha_current` is set to 17/16.
-- If the probe level is 2 or higher, `alpha_current` is set to 5/4.
+The pushing phase lasts for at least two eras. During the first
+era, measurements correspond to data sent during the recovery
+phase, which are unlikely to result in detection of rate increases.
+After that first phase, C4 assesses whether the new "nominal rate"
+has increased sufficiently druing the previous RTT. If it has, C4
+will continue in the pushing phase. If it has not, the flow will
+transition to recovery.
 
-C4 exits the pushing state after one era, or if a congestion
-signal is received before that. In an exception to
+We define "increased sufficiently" as reaching at least 19/16th of the
+nominal rate at the beginning of the era.
+
+C4 also exits the pushing state if a congestion
+signal is received. In an exception to
 standard congestion processing, the reduction in `nominal_rate` and
 `nominal_max_RTT` are not applied if the congestion signal
-is tied to a packet sent during the Pushing state.
+is tied to a packet sent during the Pushing state. 
 
 # Handling of congestion signals {#congestion-response}
 
@@ -642,7 +674,7 @@ a congestion in the Initial or Pushing state does not cause
 a change in the `nominal_rate` or `nominal_max_RTT`, because
 the pacing rate in these states is larger than the
 `nominal_rate`. Rate reduction only happens if recovery
-was entered from the Cruising state.
+was entered from the Cruising state
 
 ### Rate Reduction on Congestion {#rate-reduction}
 
@@ -675,6 +707,30 @@ to the difference between `ecn_alpha` and `ecn_threshold`, capped to `1/4`:
     beta = min(1/4, (ecn_alpha - ecn_threshold)/ ecn_threshold)
 ~~~
 
+### Reaction to persistent congestion {#persistent-congestion}
+
+C4 makes a distinction between intermittent congestion, which is handled
+by reducing the nominal rate as specified in {{rate-reduction}}, and
+persistent congestion, which is detected if 2 congestion events
+appear in rapid succession.
+
+C4 handles two variables to manage the reaction to persistent congestion:
+the number of successive congestion events and the "recent maximum rate":
+
+- The number of successive congestion events is managed upon exiting
+  a recovery era. It is reset to zero if no congestion signal was received
+  upon entering that era or during that era, and is incremented by 1 otherwise.
+
+- The "recent maximum rate" is the maximum rate measurement observed since
+  the end of the previous recovery period, i.e., the recovery period that
+  preceded the current one.
+
+If the number of successive congestion events is larger than 1, C4 will
+check if at least one rate measurement has been received since the end
+of the previous recovery period, i.e, if the "recent maximum rate" is larger
+than 0. If so, C4 will reset
+the "nominal rate" to the "recent maximum rate".
+
 # Implementation considerations
 
 Implementing C4 ought to be straightforward, but developers need to pay
@@ -699,8 +755,8 @@ implementations should use both strategies.
 
 ## Pacing and CPU load
 
-C4 relies on pacing during to avoid sending data too fast during the
-recovery, cruising and pushing states. Pacing is often implemented
+C4 relies on pacing during to avoid sending data too fast.
+Pacing is often implemented
 using a "leaky bucket" algorithm, which refills the bucket at the
 pacing rate, allows transmission as long as there are enough tokens
 in the bucket, and forces transmission to wait when all tokens are

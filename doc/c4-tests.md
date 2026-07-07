@@ -147,6 +147,27 @@ This short test shows that the initial phase correctly discover
 the path capacity, and that the transmission operates at
 the expected rate after that.
 
+
+### Simulation of a simple 1.5Mbps connection (alone_1_5M)
+
+This scenario simulates a 4MB download over a 1.5 Mbps link,
+with a 40ms RTT, and a bottleneck buffer capacity corresponding
+to 1.25 BDP.
+
+This short test shows that the initial phase correctly discover
+the path capacity, and that the transmission operates at
+the expected rate after that.
+
+### Simulation of a simple 512kbps connection (alone_512k)
+
+This scenario simulates a 1MB download over a 512 kbps link,
+with a 34ms RTT, and a bottleneck buffer capacity corresponding
+to 50ms of transmission.
+
+This short test shows that the initial phase correctly discover
+the path capacity, and that the transmission operates at
+the expected rate after that.
+
 ### Low and up
 
 The "low and up" scenario simulates a sudden increase in the
@@ -513,31 +534,35 @@ and for all results lower time values are considered better.
 
 ## Reaction to network events
 
-Here the statistics for the network events test cases.
+Here are the statistics for the network events test cases.
 
 ###  average time for network events tests
 
-|  average time for network events tests| c4 | bbr | cubic |
-| --------- | ---:| ---:| ---:|
-| alone |  4642195 | 4687549 | 4492758 |
-| alone_200 |  1161980 | 1221731 | 1147122 |
-| low_and_up |  7762235 | 7506642 | 8067973 |
-| drop_and_back |  7697371 | 7627033 | 7629153 |
-| blackhole |  5628028 | 5811312 | 5695731 |
-| short_long |  17537092 | 42152692 | 21386022 |
-| satellite |  6807111 | 7452075 | 6704244 |
+|  average time for network events tests| c4 | bbr | cubic | c4_2026_07_05 |
+| --------- | ---:| ---:| ---:| ---:|
+| alone |  4502913 | 4689260 | 4472465 | 4642195 |
+| alone_200 |  1115776 | 1221630 | 1145722 | 1161980 |
+| alone_1_5M |  21504710 | 21717251 | 21514264 | 21660915 |
+| alone_512k |  16173870 | 16211371 | 16183314 | 16213861 |
+| low_and_up |  7569237 | 7506849 | 8035433 | 7762235 |
+| drop_and_back |  7554195 | 7625693 | 7629764 | 7697371 |
+| blackhole |  5591981 | 5811316 | 5695660 | 5628028 |
+| short_long |  17536781 | 42331541 | 21368101 | 17537092 |
+| satellite |  6807127 | 7492539 | 6704246 | 6807111 |
 
 ###  top 90% time for network events tests
 
-|  top 90% time for network events tests| c4 | bbr | cubic |
-| --------- | ---:| ---:| ---:|
-| alone |  4835141 | 4701306 | 4528876 |
-| alone_200 |  1186067 | 1222109 | 1156831 |
-| low_and_up |  7764215 | 7512100 | 8085544 |
-| drop_and_back |  7698289 | 7631546 | 7632407 |
-| blackhole |  5628156 | 5815444 | 5699325 |
-| short_long |  17538424 | 43393686 | 21547041 |
-| satellite |  6807137 | 7432491 | 6704247 |
+|  top 90% time for network events tests| c4 | bbr | cubic | c4_2026_07_05 |
+| --------- | ---:| ---:| ---:| ---:|
+| alone |  4564480 | 4698415 | 4518852 | 4835141 |
+| alone_200 |  1181668 | 1222012 | 1148423 | 1186067 |
+| alone_1_5M |  21511156 | 21718512 | 21552321 | 21661024 |
+| alone_512k |  16173974 | 16217210 | 16208261 | 16215577 |
+| low_and_up |  7570221 | 7511647 | 8071920 | 7764215 |
+| drop_and_back |  7579428 | 7630825 | 7632455 | 7698289 |
+| blackhole |  5592061 | 5815444 | 5699327 | 5628156 |
+| short_long |  17538429 | 43394841 | 21541922 | 17538424 |
+| satellite |  6807174 | 7834142 | 6704247 | 6807137 |
 
 
 ## Competition
@@ -546,35 +571,35 @@ Here the statistics for the compete test cases.
 
 ###  average time for compete tests
 
-|  average time for compete tests| c4 | bbr | cubic |
-| --------- | ---:| ---:| ---:|
-| vs_bbr |  2964582 | 4507849 | 2849612 |
-| vs_c4 |  4490594 | 6776085 | 6902341 |
-| vs_cubic |  3484869 | 6988975 | 5300570 |
-| after_c4 |  5239798 | 6841587 | 7457755 |
-| before_c4 |  2699206 | 4136358 | 3097226 |
-| vs_c4_lg |  21067859 | 26367492 | 22958382 |
-| vs_c4_lg2 |  21102894 | 21108978 | 21798180 |
-| vs_bbr_lg |  16742530 | 21107935 | 15582257 |
-| vs_bbr_lg2 |  20600335 | 18756082 | 21367106 |
-| vs_cubic_lg |  17578391 | 21478179 | 20929801 |
-| vs_cubic_lg2 |  16969990 | 15533602 | 20733296 |
+|  average time for compete tests| c4 | bbr | cubic | c4_2026_07_05 |
+| --------- | ---:| ---:| ---:| ---:|
+| vs_bbr |  2817663 | 4501471 | 2853022 | 2964582 |
+| vs_c4 |  4361871 | 6813101 | 7891899 | 4490594 |
+| vs_cubic |  3428960 | 6974953 | 5348004 | 3484869 |
+| after_c4 |  6563029 | 6846566 | 7208456 | 5239798 |
+| before_c4 |  2640670 | 4281776 | 3105136 | 2699206 |
+| vs_c4_lg |  21026786 | 32250064 | 23618741 | 21067859 |
+| vs_c4_lg2 |  20979188 | 21139542 | 21818194 | 21102894 |
+| vs_bbr_lg |  15612556 | 21098503 | 15562778 | 16742530 |
+| vs_bbr_lg2 |  16449739 | 18711270 | 21520837 | 20600335 |
+| vs_cubic_lg |  17902039 | 21430554 | 20902893 | 17578391 |
+| vs_cubic_lg2 |  17080952 | 15533300 | 20672401 | 16969990 |
 
 ###  top 90% time for compete tests
 
-|  top 90% time for compete tests| c4 | bbr | cubic |
-| --------- | ---:| ---:| ---:|
-| vs_bbr |  2983881 | 4592446 | 2872270 |
-| vs_c4 |  4864821 | 6841410 | 7345182 |
-| vs_cubic |  3555684 | 7090854 | 5578225 |
-| after_c4 |  6102901 | 7010851 | 7952653 |
-| before_c4 |  3001428 | 5433864 | 3988378 |
-| vs_c4_lg |  21141447 | 31989078 | 24186774 |
-| vs_c4_lg2 |  21174182 | 21186594 | 22376456 |
-| vs_bbr_lg |  16936214 | 21146009 | 15863189 |
-| vs_bbr_lg2 |  21138531 | 19075956 | 22077739 |
-| vs_cubic_lg |  18440982 | 21770804 | 21279706 |
-| vs_cubic_lg2 |  17548782 | 15772770 | 20959969 |
+|  top 90% time for compete tests| c4 | bbr | cubic | c4_2026_07_05 |
+| --------- | ---:| ---:| ---:| ---:|
+| vs_bbr |  2824981 | 4580449 | 2877804 | 2983881 |
+| vs_c4 |  4453585 | 6843240 | 8424848 | 4864821 |
+| vs_cubic |  3761300 | 7089722 | 5580459 | 3555684 |
+| after_c4 |  6742984 | 6991485 | 7494092 | 6102901 |
+| before_c4 |  2734698 | 5404668 | 4163561 | 3001428 |
+| vs_c4_lg |  21139706 | 39556964 | 25105527 | 21141447 |
+| vs_c4_lg2 |  21046812 | 21379953 | 22272580 | 21174182 |
+| vs_bbr_lg |  15808681 | 21131562 | 15839671 | 16936214 |
+| vs_bbr_lg2 |  16522592 | 18954745 | 22323666 | 21138531 |
+| vs_cubic_lg |  20251838 | 21760143 | 21120555 | 18440982 |
+| vs_cubic_lg2 |  17419617 | 15706948 | 20930258 | 17548782 |
 
 
 ## Wi-Fi
@@ -583,25 +608,25 @@ Here the statistics for the wifi test cases.
 
 ###  average time for wifi tests
 
-|  average time for wifi tests| c4 | bbr | cubic |
-| --------- | ---:| ---:| ---:|
-| wifi_bad |  4144883 | 5518835 | 4117296 |
-| wifi_fade |  5203858 | 5401158 | 5341080 |
-| wifi_suspension |  4563252 | 4615927 | 4601001 |
-| wifi_bad_bbr |  7581238 | 7267102 | 7604761 |
-| wifi_bad_c4 |  9347050 | 9527486 | 8721036 |
-| wifi_bad_cubic |  8407363 | 8851061 | 9928339 |
+|  average time for wifi tests| c4 | bbr | cubic | c4_2026_07_05 |
+| --------- | ---:| ---:| ---:| ---:|
+| wifi_bad |  4059372 | 5601202 | 4076699 | 4144883 |
+| wifi_fade |  5065021 | 5403001 | 5341227 | 5203858 |
+| wifi_suspension |  4564740 | 4615871 | 4600118 | 4563252 |
+| wifi_bad_bbr |  7582895 | 7280777 | 6837401 | 7581238 |
+| wifi_bad_c4 |  8750784 | 9650917 | 8426742 | 9347050 |
+| wifi_bad_cubic |  8618719 | 8731338 | 10397119 | 8407363 |
 
 ###  top 90% time for wifi tests
 
-|  top 90% time for wifi tests| c4 | bbr | cubic |
-| --------- | ---:| ---:| ---:|
-| wifi_bad |  4806788 | 7575710 | 4437927 |
-| wifi_fade |  5480744 | 5585208 | 5542744 |
-| wifi_suspension |  4573648 | 4616912 | 4607139 |
-| wifi_bad_bbr |  11985779 | 11799491 | 12840326 |
-| wifi_bad_c4 |  12401707 | 12389220 | 13067528 |
-| wifi_bad_cubic |  11723366 | 12141374 | 13952338 |
+|  top 90% time for wifi tests| c4 | bbr | cubic | c4_2026_07_05 |
+| --------- | ---:| ---:| ---:| ---:|
+| wifi_bad |  4643322 | 7615210 | 4475581 | 4806788 |
+| wifi_fade |  5335174 | 5599818 | 5550898 | 5480744 |
+| wifi_suspension |  4574165 | 4616328 | 4602178 | 4573648 |
+| wifi_bad_bbr |  12112441 | 11626769 | 12533043 | 11985779 |
+| wifi_bad_c4 |  11690859 | 12288047 | 12435459 | 12401707 |
+| wifi_bad_cubic |  11961135 | 12011172 | 13905062 | 11723366 |
 
 
 ## ECN
@@ -610,21 +635,21 @@ Here the statistics for the ecn test cases.
 
 ###  average time for ecn tests
 
-|  average time for ecn tests| c4 | bbr | cubic |
-| --------- | ---:| ---:| ---:|
-| ecn |  4494003 | 4669871 | 4460200 |
-| ecn_c4 |  11422019 | 17079150 | 14190287 |
-| ecn_cubic |  8235549 | 9963937 | 13300675 |
-| ecn_bbr |  13083701 | 13239913 | 16852679 |
+|  average time for ecn tests| c4 | bbr | cubic | c4_2026_07_05 |
+| --------- | ---:| ---:| ---:| ---:|
+| ecn |  4465878 | 4670054 | 4460773 | 4494003 |
+| ecn_c4 |  12286476 | 17269928 | 13977479 | 11422019 |
+| ecn_cubic |  8362141 | 9701695 | 13356991 | 8235549 |
+| ecn_bbr |  13079389 | 13246715 | 16900370 | 13083701 |
 
 ###  top 90% time for ecn tests
 
-|  top 90% time for ecn tests| c4 | bbr | cubic |
-| --------- | ---:| ---:| ---:|
-| ecn |  4494072 | 4670724 | 4457944 |
-| ecn_c4 |  12383356 | 17435154 | 14527298 |
-| ecn_cubic |  8720974 | 10881018 | 13952925 |
-| ecn_bbr |  13345131 | 13370326 | 17523171 |
+|  top 90% time for ecn tests| c4 | bbr | cubic | c4_2026_07_05 |
+| --------- | ---:| ---:| ---:| ---:|
+| ecn |  4466761 | 4671124 | 4457939 | 4494072 |
+| ecn_c4 |  13033989 | 17698371 | 14561797 | 12383356 |
+| ecn_cubic |  9108260 | 10561707 | 13961159 | 8720974 |
+| ecn_bbr |  13342537 | 13372125 | 17458084 | 13345131 |
 
 
 ## Media
@@ -633,33 +658,29 @@ Here the statistics for the media test cases.
 
 ###  average av_latency for media tests
 
-|  average av_latency for media tests| c4 | bbr | cubic |
-| --------- | ---:| ---:| ---:|
-| media |  33511 | 33427 | 33513 |
-| media10 |  45204 | 44997 | 47758 |
-| media_600fr |  33624 | 33545 | 33630 |
-| media_short_long |  101036 | 133981 | 100765 |
-| media_wb |  77485 | 90804 | 83044 |
-| media_wf |  82971 | 86612 | 83811 |
-| media_ws |  22854 | 21644 | 22459 |
-| media_ecn |  34408 | 34481 | 34716 |
+|  average av_latency for media tests| c4 | bbr | cubic | c4_2026_07_05 |
+| --------- | ---:| ---:| ---:| ---:|
+| media |  33511 | 33427 | 33512 | 33511 |
+| media10 |  45378 | 44991 | 47755 | 45204 |
+| media_600fr |  33625 | 33545 | 33629 | 33624 |
+| media_short_long |  100794 | 134059 | 100766 | 101036 |
+| media_wb |  80894 | 85353 | 84391 | 77485 |
+| media_wf |  82547 | 86474 | 83914 | 82971 |
+| media_ws |  22941 | 21645 | 22495 | 22854 |
+| media_ecn |  34413 | 34481 | 34716 | 34408 |
 
 ###  top 90% max_latency for media tests
 
-|  top 90% max_latency for media tests| c4 | bbr | cubic |
-| --------- | ---:| ---:| ---:|
-| media |  43453 | 43453 | 43453 |
-| media10 |  71128 | 71128 | 92163 |
-| media_600fr |  43453 | 43453 | 43453 |
-| media_short_long |  117984 | 334491 | 110426 |
-| media_wb |  269770 | 297718 | 260222 |
-| media_wf |  298762 | 377437 | 313883 |
-| media_ws |  197821 | 195521 | 197821 |
-| media_ecn |  49700 | 50996 | 50996 |
-
-
-
-
+|  top 90% max_latency for media tests| c4 | bbr | cubic | c4_2026_07_05 |
+| --------- | ---:| ---:| ---:| ---:|
+| media |  43453 | 43453 | 43453 | 43453 |
+| media10 |  71128 | 71128 | 92163 | 71128 |
+| media_600fr |  43453 | 43453 | 43453 | 43453 |
+| media_short_long |  111153 | 334491 | 109180 | 117984 |
+| media_wb |  270847 | 304794 | 274677 | 269770 |
+| media_wf |  279458 | 365839 | 298720 | 298762 |
+| media_ws |  197821 | 195521 | 197821 | 197821 |
+| media_ecn |  47975 | 50996 | 50996 | 49700 |
 
 
 # Live Tests {#live-tests}

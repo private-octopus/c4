@@ -40,7 +40,7 @@ algo_dict = {
 # groups of tests
 
 test_groups = [
-    [ "network events", ["alone", "alone_200", "low_and_up", "drop_and_back", "blackhole", "short_long", "satellite"], "time", "Reaction to network events" ],
+    [ "network events", ["alone", "alone_200", "alone_1_5M", "alone_512k", "low_and_up", "drop_and_back", "blackhole", "short_long", "satellite"], "time", "Reaction to network events" ],
     [ "compete", [ "vs_bbr", "vs_c4", "vs_cubic", "after_c4", "before_c4", "vs_c4_lg", "vs_c4_lg2", "vs_bbr_lg", "vs_bbr_lg2", "vs_cubic_lg", "vs_cubic_lg2"], "time", "Competition" ],
     [ "wifi", [ "wifi_bad", "wifi_fade", "wifi_suspension", "wifi_bad_bbr", "wifi_bad_c4", "wifi_bad_cubic" ], "time", "Wi-Fi"],
     [ "ecn", [ "ecn", "ecn_c4", "ecn_cubic", "ecn_bbr" ], "time", "ECN" ],

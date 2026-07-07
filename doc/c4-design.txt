@@ -5,13 +5,13 @@
 Network Working Group                                         C. Huitema
 Internet-Draft                                      Private Octopus Inc.
 Intended status: Informational                             S. Nandakumar
-Expires: 4 January 2027                                      C. Jennings
+Expires: 6 January 2027                                      C. Jennings
                                                                    Cisco
-                                                             3 July 2026
+                                                             5 July 2026
 
 
            Design of Christian's Congestion Control Code (C4)
-                  draft-huitema-ccwg-c4-design-latest
+                    draft-huitema-ccwg-c4-design-04
 
 Abstract
 
@@ -43,7 +43,7 @@ Status of This Memo
    time.  It is inappropriate to use Internet-Drafts as reference
    material or to cite them other than as "work in progress."
 
-   This Internet-Draft will expire on 4 January 2027.
+   This Internet-Draft will expire on 6 January 2027.
 
 Copyright Notice
 
@@ -53,7 +53,7 @@ Copyright Notice
 
 
 
-Huitema, et al.          Expires 4 January 2027                 [Page 1]
+Huitema, et al.          Expires 6 January 2027                 [Page 1]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -109,7 +109,7 @@ Table of Contents
 
 
 
-Huitema, et al.          Expires 4 January 2027                 [Page 2]
+Huitema, et al.          Expires 6 January 2027                 [Page 2]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -165,7 +165,7 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                 [Page 3]
+Huitema, et al.          Expires 6 January 2027                 [Page 3]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -221,7 +221,7 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                 [Page 4]
+Huitema, et al.          Expires 6 January 2027                 [Page 4]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -277,7 +277,7 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                 [Page 5]
+Huitema, et al.          Expires 6 January 2027                 [Page 5]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -333,7 +333,7 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                 [Page 6]
+Huitema, et al.          Expires 6 January 2027                 [Page 6]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -389,7 +389,7 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                 [Page 7]
+Huitema, et al.          Expires 6 January 2027                 [Page 7]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -445,7 +445,7 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                 [Page 8]
+Huitema, et al.          Expires 6 January 2027                 [Page 8]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -501,7 +501,7 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                 [Page 9]
+Huitema, et al.          Expires 6 January 2027                 [Page 9]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -557,7 +557,7 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 10]
+Huitema, et al.          Expires 6 January 2027                [Page 10]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -613,7 +613,7 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 11]
+Huitema, et al.          Expires 6 January 2027                [Page 11]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -669,7 +669,7 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 12]
+Huitema, et al.          Expires 6 January 2027                [Page 12]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -725,7 +725,7 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 13]
+Huitema, et al.          Expires 6 January 2027                [Page 13]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -781,7 +781,7 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 14]
+Huitema, et al.          Expires 6 January 2027                [Page 14]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -837,7 +837,7 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 15]
+Huitema, et al.          Expires 6 January 2027                [Page 15]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -893,7 +893,7 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 16]
+Huitema, et al.          Expires 6 January 2027                [Page 16]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -949,7 +949,7 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 17]
+Huitema, et al.          Expires 6 January 2027                [Page 17]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -1005,7 +1005,7 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 18]
+Huitema, et al.          Expires 6 January 2027                [Page 18]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -1061,7 +1061,7 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 19]
+Huitema, et al.          Expires 6 January 2027                [Page 19]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -1117,7 +1117,7 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 20]
+Huitema, et al.          Expires 6 January 2027                [Page 20]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -1173,7 +1173,7 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 21]
+Huitema, et al.          Expires 6 January 2027                [Page 21]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -1229,7 +1229,7 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 22]
+Huitema, et al.          Expires 6 January 2027                [Page 22]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -1285,7 +1285,7 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 23]
+Huitema, et al.          Expires 6 January 2027                [Page 23]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -1341,7 +1341,7 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 24]
+Huitema, et al.          Expires 6 January 2027                [Page 24]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -1397,7 +1397,7 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 25]
+Huitema, et al.          Expires 6 January 2027                [Page 25]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -1453,7 +1453,7 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 26]
+Huitema, et al.          Expires 6 January 2027                [Page 26]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -1509,7 +1509,7 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 27]
+Huitema, et al.          Expires 6 January 2027                [Page 27]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -1565,7 +1565,7 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 28]
+Huitema, et al.          Expires 6 January 2027                [Page 28]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -1621,7 +1621,7 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 29]
+Huitema, et al.          Expires 6 January 2027                [Page 29]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -1677,7 +1677,7 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 30]
+Huitema, et al.          Expires 6 January 2027                [Page 30]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -1733,7 +1733,7 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 31]
+Huitema, et al.          Expires 6 January 2027                [Page 31]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -1789,7 +1789,7 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 32]
+Huitema, et al.          Expires 6 January 2027                [Page 32]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -1845,7 +1845,7 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 33]
+Huitema, et al.          Expires 6 January 2027                [Page 33]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -1901,7 +1901,7 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 34]
+Huitema, et al.          Expires 6 January 2027                [Page 34]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -1957,7 +1957,7 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 35]
+Huitema, et al.          Expires 6 January 2027                [Page 35]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -2013,7 +2013,7 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 36]
+Huitema, et al.          Expires 6 January 2027                [Page 36]
 
 Internet-Draft                  C4 Design                      July 2026
 
@@ -2069,4 +2069,4 @@ Authors' Addresses
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 37]
+Huitema, et al.          Expires 6 January 2027                [Page 37]

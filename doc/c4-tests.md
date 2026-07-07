@@ -3,7 +3,7 @@ title: "Testing of Christian's Congestion Control Code (C4)"
 abbrev: "C4 Tests"
 category: info
 
-docname: draft-huitema-ccwg-c4-test-latest
+docname: draft-huitema-ccwg-c4-test-03
 submissiontype: IETF
 number:
 date:

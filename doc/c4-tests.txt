@@ -5,13 +5,13 @@
 Network Working Group                                         C. Huitema
 Internet-Draft                                      Private Octopus Inc.
 Intended status: Informational                             S. Nandakumar
-Expires: 4 January 2027                                      C. Jennings
+Expires: 6 January 2027                                      C. Jennings
                                                                    Cisco
-                                                             3 July 2026
+                                                             5 July 2026
 
 
           Testing of Christian's Congestion Control Code (C4)
-                   draft-huitema-ccwg-c4-test-latest
+                     draft-huitema-ccwg-c4-test-03
 
 Abstract
 
@@ -40,7 +40,7 @@ Status of This Memo
    time.  It is inappropriate to use Internet-Drafts as reference
    material or to cite them other than as "work in progress."
 
-   This Internet-Draft will expire on 4 January 2027.
+   This Internet-Draft will expire on 6 January 2027.
 
 Copyright Notice
 
@@ -53,7 +53,7 @@ Copyright Notice
 
 
 
-Huitema, et al.          Expires 4 January 2027                 [Page 1]
+Huitema, et al.          Expires 6 January 2027                 [Page 1]
 
 Internet-Draft                  C4 Tests                       July 2026
 
@@ -109,7 +109,7 @@ Table of Contents
 
 
 
-Huitema, et al.          Expires 4 January 2027                 [Page 2]
+Huitema, et al.          Expires 6 January 2027                 [Page 2]
 
 Internet-Draft                  C4 Tests                       July 2026
 
@@ -165,7 +165,7 @@ Internet-Draft                  C4 Tests                       July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                 [Page 3]
+Huitema, et al.          Expires 6 January 2027                 [Page 3]
 
 Internet-Draft                  C4 Tests                       July 2026
 
@@ -221,7 +221,7 @@ Internet-Draft                  C4 Tests                       July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                 [Page 4]
+Huitema, et al.          Expires 6 January 2027                 [Page 4]
 
 Internet-Draft                  C4 Tests                       July 2026
 
@@ -277,7 +277,7 @@ Internet-Draft                  C4 Tests                       July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                 [Page 5]
+Huitema, et al.          Expires 6 January 2027                 [Page 5]
 
 Internet-Draft                  C4 Tests                       July 2026
 
@@ -333,7 +333,7 @@ Internet-Draft                  C4 Tests                       July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                 [Page 6]
+Huitema, et al.          Expires 6 January 2027                 [Page 6]
 
 Internet-Draft                  C4 Tests                       July 2026
 
@@ -389,7 +389,7 @@ Internet-Draft                  C4 Tests                       July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                 [Page 7]
+Huitema, et al.          Expires 6 January 2027                 [Page 7]
 
 Internet-Draft                  C4 Tests                       July 2026
 
@@ -445,7 +445,7 @@ Internet-Draft                  C4 Tests                       July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                 [Page 8]
+Huitema, et al.          Expires 6 January 2027                 [Page 8]
 
 Internet-Draft                  C4 Tests                       July 2026
 
@@ -501,7 +501,7 @@ Internet-Draft                  C4 Tests                       July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                 [Page 9]
+Huitema, et al.          Expires 6 January 2027                 [Page 9]
 
 Internet-Draft                  C4 Tests                       July 2026
 
@@ -557,7 +557,7 @@ Internet-Draft                  C4 Tests                       July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 10]
+Huitema, et al.          Expires 6 January 2027                [Page 10]
 
 Internet-Draft                  C4 Tests                       July 2026
 
@@ -613,7 +613,7 @@ Internet-Draft                  C4 Tests                       July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 11]
+Huitema, et al.          Expires 6 January 2027                [Page 11]
 
 Internet-Draft                  C4 Tests                       July 2026
 
@@ -669,7 +669,7 @@ Internet-Draft                  C4 Tests                       July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 12]
+Huitema, et al.          Expires 6 January 2027                [Page 12]
 
 Internet-Draft                  C4 Tests                       July 2026
 
@@ -725,7 +725,7 @@ Internet-Draft                  C4 Tests                       July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 13]
+Huitema, et al.          Expires 6 January 2027                [Page 13]
 
 Internet-Draft                  C4 Tests                       July 2026
 
@@ -781,7 +781,7 @@ Internet-Draft                  C4 Tests                       July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 14]
+Huitema, et al.          Expires 6 January 2027                [Page 14]
 
 Internet-Draft                  C4 Tests                       July 2026
 
@@ -837,7 +837,7 @@ Internet-Draft                  C4 Tests                       July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 15]
+Huitema, et al.          Expires 6 January 2027                [Page 15]
 
 Internet-Draft                  C4 Tests                       July 2026
 
@@ -893,7 +893,7 @@ Internet-Draft                  C4 Tests                       July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 16]
+Huitema, et al.          Expires 6 January 2027                [Page 16]
 
 Internet-Draft                  C4 Tests                       July 2026
 
@@ -949,7 +949,7 @@ Internet-Draft                  C4 Tests                       July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 17]
+Huitema, et al.          Expires 6 January 2027                [Page 17]
 
 Internet-Draft                  C4 Tests                       July 2026
 
@@ -1005,7 +1005,7 @@ Internet-Draft                  C4 Tests                       July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 18]
+Huitema, et al.          Expires 6 January 2027                [Page 18]
 
 Internet-Draft                  C4 Tests                       July 2026
 
@@ -1061,4 +1061,4 @@ Authors' Addresses
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 19]
+Huitema, et al.          Expires 6 January 2027                [Page 19]

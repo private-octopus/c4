@@ -338,19 +338,31 @@ pacing quantum to initial values:
 * congestion window: set to the equivalent of 10 packets,
 * congestion quantum: set to zero.
 
+
 If the nominal rate or the nominal max RTT are both
 assessed, C4 sets pacing rate, and congestion window 
 to values that depends on these variables
 and on a coefficient `alpha_current`:
 
 ~~~
+pacing_rate = alpha_current * nominal_rate
+
 if (c4_state == initial):
     margin = 0
 else:
     margin = min(nominal_max_rtt/4, 15_milliseconds)
 
-pacing_rate = alpha_current * nominal_rate
 cwnd = max ((pacing_rate+margin) * nominal_max_rtt, 2*MTU)
+~~~
+
+During the initial phase, the pacing rate is set to a minimum
+of 1,048,576 bps (128 KB/s) to avoid starting at too low a rate.
+In these conditions, the transmission is expected to be limited
+by the value of CWND.
+
+~~~
+if (c4_state == initial and pacing_rate < 1,048,576 bps):
+    pacing_rate = 1,048,576 bps
 ~~~
 
 The "margin" coefficient accounts for errors on the
@@ -431,7 +443,7 @@ current nominal rate and nominal max RTT. CWND is set to the product of
 nominal rate and nominal max RTT. The initial state then operates as
 specified in {{c4-initial}}.
 
-### Resuming state
+## Resuming state
 
 The resuming state is entered if the application remembers the CWND and RTT
 of a previous connection between the same endpoints. The resuming state lasts for 2 eras,

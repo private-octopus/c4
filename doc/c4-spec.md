@@ -37,9 +37,11 @@ normative:
    RFC2119:
    RFC8174:
 informative:
+   RFC6582:
    RFC9000:
    I-D.ietf-moq-transport:
    RFC9331:
+   RFC9406:
    RFC9959:
 
 --- abstract
@@ -403,19 +405,33 @@ which will cause pacing rate to be set to a default
 initial value. The nominal max RTT will be set to the
 first assessed RTT value, but is not otherwise changed
 before the end of the initial phase.
-The CWND will be set to the default initial value,
-corresponding to 10 packets.
 
 During the initial state, the nominal rate is updated
 after receiving acknowledgements, see {{nominal-rate}}.
-The value of CWND is increased after each acknowledgement
-by the number of bytes newly acknowledged by this
-acknowledgement. 
-
+The pacing rate is set to the maximum of the nominal rate
+and a minimum of 1,048,576 bps (128 KB/s) to avoid starting
+at too low a rate.
 C4 will exit the Initial state and enter Recovery if the 
 nominal rate does not increase for 3 consecutive eras,
 omitting the eras for which the transmission was
 "application limited".
+
+During the initial state, C4 maintains an "initial_cwnd" variable,
+which is initialized to the value of CWND at the beginning of the
+initial state, and is incremented aftre each acknowledgement
+using the formula:
+
+initial_cwnd += nb_bytes_acknowledged >> (3 * nb_eras_no_increase)
+
+As long as the `nominal_rate` increases, the `nb_eras_no_increase`
+will be zero, and the increment of `initial_cwnd` will mimic those
+of TCP Reno {{RFC6582}}. When the `nominal_rate` stops increasing, the increment
+will get progressively slower, similar to the reduced increment
+of Hystart++ {{RFC9406}}.
+
+The CWND variable will be set to the maximum of the initial_cwnd
+and the product of the nominal rate times the nominal max RTT times
+`alpha_current`.
 
 C4 exit the Initial when receiving a congestion signal if the
 following conditions are true:

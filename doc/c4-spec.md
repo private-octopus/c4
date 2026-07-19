@@ -3,7 +3,7 @@ title: "Specification of Christian's Congestion Control Code (C4)"
 abbrev: "C4 Specification"
 category: exp
 
-docname: draft-huitema-ccwg-c4-spec-latest
+docname: draft-huitema-ccwg-c4-spec-04
 submissiontype: IETF
 number:
 date:
@@ -824,6 +824,36 @@ TODO acknowledge.
 {:numbered="false"}
 
 This section should be deleted before publication as an RFC
+
+## Changes since draft-huitema-ccwg-c4-spec-03
+{:numbered="false"}
+
+Specified a minimum pacing rate during the initial phase.
+
+## Changes since draft-huitema-ccwg-c4-spec-02
+{:numbered="false"}
+
+Added a "resuming" state for implementing the "careful resume"
+algorithm.
+
+Separate "probing" state, which lasts just one RTT before
+success is evaluated, and a more aggressive "pushing" state,
+which lasts until rate measurements stop growing. This replaces
+the use of "probe level" introduced in draft-02.
+
+Added a faster "reaction to persistent congestion".
+
+## Changes since draft-huitema-ccwg-c4-spec-01
+{:numbered="false"}
+
+Revised the description of the initial state do derive the CWIN
+from a Reno like algorithm, avoiding the need to estimate max RTT
+during the initial startup.
+
+Introduces a "probe level" with progressively increasing rates of
+probing as previous trials succeed.
+
+Added implementation considerations.
 
 ## Changes since draft-huitema-ccwg-c4-spec-00
 {:numbered="false"}

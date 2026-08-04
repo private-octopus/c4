@@ -32,3 +32,4 @@
 /scripts/cclog
 /.vs/
 /.vs/c4/v17/
+/scripts/__pycache__

@@ -55,24 +55,29 @@ class test_report:
         self.test_case = test_case
         self.algo = algo
 
-
     def load(self, file_name):
         self.df = pd.read_csv(file_name)
     
-    def average(self, metric):
-        x = self.df[metric].mean()
+    def average(self, metric, scale=1):
+        x = self.df[metric].mean() * scale
         return int(round(x))
-        
-    def top90(self, metric):
-        x = self.df[metric].quantile(q=0.9, interpolation='linear')
+
+    def top90(self, metric, scale=1):
+        x = self.df[metric].quantile(q=0.9, interpolation='linear') * scale
+        return int(round(x))
+
+    def top90_combo(self, metric_a, metric_b):
+        x = (self.df[metric_a] + self.df[metric_b]).quantile(q=0.9, interpolation='linear')
         return int(round(x))
 
 class test_case_group:
     def __init__(self, tc, nb_alts):
         self.tc = tc
         self.alg_report = [ None, None, None ]
+        self.q_alg_report = [ None, None, None ]
         for i in range(0,nb_alts):
             self.alg_report.append(None)
+            self.q_alg_report.append(None)
 
 # Grouping of reports
 
@@ -85,7 +90,9 @@ class report_list:
     def add_dir(self, dir_path, n):
         for report_name in os.listdir(dir_path):
             if report_name.endswith(".csv"):
-                algo_case = report_name[:-4]
+                is_q = report_name.startswith("q_")
+                base_name = report_name[2:] if is_q else report_name
+                algo_case = base_name[:-4]
                 algo_case_part = algo_case.split("_")
                 if len(algo_case_part) > 1:
                     algo = algo_case_part[0]
@@ -99,15 +106,14 @@ class report_list:
                             algo_rank = algo_dict[algo]
                         else:
                             algo_rank = n+2
-                        self.test_cases[tc].alg_report[algo_rank] = rp
-    
+                        if is_q:
+                            self.test_cases[tc].q_alg_report[algo_rank] = rp
+                        else:
+                            self.test_cases[tc].alg_report[algo_rank] = rp
 
-    def do_metric_report(self, F, grp, tl, metric, use_top_90):
-        if use_top_90:
-            top = " top 90% " + metric
-        else:
-            top = " average " + metric
-        top += " for " + grp + " tests"
+
+    def do_metric_report(self, F, grp, tl, title, report_attr, value_fn):
+        top = " " + title + " for " + grp + " tests"
 
         F.write("### " + top + "\n\n")
         F.write("| " + top + "| c4 | bbr | cubic |")
@@ -124,18 +130,16 @@ class report_list:
             if not tc in self.test_cases:
                 continue
             tc_data = self.test_cases[tc]
+            reports = getattr(tc_data, report_attr)
 
-            sm = "| " + tc + " | " 
+            sm = "| " + tc + " | "
             has_metric = False
             for i in range(0,3 + self.nb_alts):
                 x = 0
-                if tc_data.alg_report[i] == None:
+                if reports[i] == None:
                     sm += " |"
                 else:
-                    if use_top_90:
-                        x = tc_data.alg_report[i].top90(metric)
-                    else:
-                        x = tc_data.alg_report[i].average(metric)
+                    x = value_fn(reports[i])
                     sm += " " + str(x) + " |"
                     if x > 0:
                         has_metric = True
@@ -147,11 +151,16 @@ class report_list:
 
     def do_case_metrics(self, F, grp, tl, metric_type):
         if metric_type == 'time':
-            self.do_metric_report(F, grp, tl,'time', False)
-            self.do_metric_report(F, grp, tl, 'time', True)
+            self.do_metric_report(F, grp, tl, "average time", 'alg_report', lambda rp: rp.average('time'))
+            self.do_metric_report(F, grp, tl, "top 90% time", 'alg_report', lambda rp: rp.top90('time'))
+            self.do_metric_report(F, grp, tl, "average RTT", 'q_alg_report', lambda rp: rp.average('ave_rtt'))
+            self.do_metric_report(F, grp, tl, "top 90% of RTT + standard deviation", 'q_alg_report', lambda rp: rp.top90_combo('ave_rtt', 'std_rtt'))
+            if grp in ('compete', 'wifi'):
+                self.do_metric_report(F, grp, tl, "average load (%)", 'q_alg_report', lambda rp: rp.average('load', 100))
+                self.do_metric_report(F, grp, tl, "top 90% load (%)", 'q_alg_report', lambda rp: rp.top90('load', 100))
         else:
-            self.do_metric_report(F, grp, tl, 'av_latency', False)
-            self.do_metric_report(F, grp, tl, 'max_latency', True)
+            self.do_metric_report(F, grp, tl, "average av_latency", 'alg_report', lambda rp: rp.average('av_latency'))
+            self.do_metric_report(F, grp, tl, "top 90% max_latency", 'alg_report', lambda rp: rp.top90('max_latency'))
 
     def do_report(self, F):
         self.reported = set()

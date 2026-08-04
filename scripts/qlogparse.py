@@ -13,9 +13,9 @@
 
 import sys
 import json
-import pandas as pd
-import matplotlib.pyplot as plt
-import numpy as np
+#import pandas as pd
+#import matplotlib.pyplot as plt
+#import numpy as np
 
 class cc_state:
     def __init__(self):
@@ -73,6 +73,31 @@ class cc_state:
         ]
         return headers
 
+class data_sent:
+    def __init__(self):
+        self.event_time = 0
+        self.bytes_sent = 0
+
+    def data_update(self, event_time, ev_data):
+        self.event_time = event_time
+        self.bytes_sent = 0
+        for x in ev_data:
+            if x == 'byte_length':
+                self.bytes_sent = int(ev_data[x])
+            else:
+                pass
+
+    def data_vector(self):
+        v = [self.event_time, self.bytes_sent]
+        return v
+
+    def data_headers():
+        headers = [
+            'event_time',
+            'bytes_sent'
+        ]
+        return headers
+
 
 class qlog_event:
     def __init__(self):
@@ -101,6 +126,7 @@ class qlog_event:
                     print("Unexpected event element: " + evt + ": " + str(ev[i]))
                     is_good = False
         return is_good
+
     def print_event(self):
         print("[ " + str(self.event_time) + ", " + self.category + ", " + self.event + ", data ]")
 
@@ -111,27 +137,30 @@ class qlog_trace:
         self.events = []
         self.cc_state = cc_state()
         self.cc_log = []
+        self.data_sent = data_sent()
+        self.sent_log = []
 
     def load_event_fields(self, ef):
         self.ef = ef
-        print(str(ef))
+        #print(str(ef))
 
     def load_common(self, cf):
         if "reference_time" in cf:
             self.reference_time = int(cf["reference_time"])
-            print("reference_time:" + str(self.reference_time))
+            #print("reference_time:" + str(self.reference_time))
         else:
-            print(str(cf))
+            #print(str(cf))
+            pass
 
     def load(self, trc):
         for x in trc:
-            print(x)
+            #print(x)
             if x == "event_fields":
                 self.load_event_fields(trc[x])
             elif x == "common_fields":
                 self.load_common(trc[x])
             elif x == "events":
-                print(str(len(trc[x])) + " events")
+                #print(str(len(trc[x])) + " events")
                 evts = trc[x]
                 for i in range(0, len(trc[x])):
                     evx = qlog_event()
@@ -143,10 +172,16 @@ class qlog_trace:
                         if evx.category == "recovery" and evx.event == "metrics_updated":
                             self.cc_state.cc_update(evx.event_time, evx.data)
                             self.cc_log.append(self.cc_state.cc_vector())
-                print("Loaded " + str(len(self.events)) + " events.")
-                print("Loaded " + str(len(self.cc_log)) + " cc_logs.")
+                        elif evx.category == "transport" and evx.event == "datagram_sent":
+                            self.data_sent.data_update(evx.event_time, evx.data)
+                            self.sent_log.append(self.data_sent.data_vector())
+
+                #print("Loaded " + str(len(self.events)) + " events.")
+                #print("Loaded " + str(len(self.cc_log)) + " cc_logs.")
+                #print("Loaded " + str(len(self.sent_log)) + " sent_logs.")
             else:
-                print(str(trc[x]))
+                #print("Other event:" + str(trc[x]))
+                pass
 
 
 def qlog_parse(file_name):
@@ -154,79 +189,72 @@ def qlog_parse(file_name):
     with open(file_name,"r") as F:
         qlog_object = json.load(F)
         for x in qlog_object:
-            print(x)
+            #print(x)
             if x == "qlog_version":
-                print(str(qlog_object[x]))
+                #print(str(qlog_object[x]))
+                pass
             elif x == "title":
-                print(str(qlog_object[x]))
+                #print(str(qlog_object[x]))
+                pass
             elif x == "traces":
                 trcs = qlog_object[x]
                 for i in range(0, len(trcs)):
-                    print("Traces[" + str(i) + "]:")
+                    #print("Traces[" + str(i) + "]:")
                     trace = qlog_trace()
                     trace.load(trcs[i])
                     traces.append(trace)
-    print("Loaded " + str(len(traces)) + " traces")
+    #print("Loaded " + str(len(traces)) + " traces")
     return traces
 
-def trace_one_graph(trace):
-    tdf = pd.DataFrame(trace.cc_log, columns=cc_state.cc_headers())
-    # Prepare a subtrace with cwnd and bytes in flight
-    axa = tdf.plot.scatter(x="event_time", y="cwnd", alpha=0.5, logx=False, logy=False, color="blue")
-    tdf.plot.scatter(ax=axa, x="event_time", y="bytes_in_flight", xlabel="time(us)", ylabel="bytes", alpha=0.5, color="orange")
-    tdf.plot.scatter(ax=axa, x="event_time", y="pacing_rate", xlabel="time(us)", ylabel="rate", alpha=0.5, color="orange")
-    plt.legend(["cwnd", "bytes_in_flight", "pacing_rate"])  
-    plt.show()
 
-def trace_graphs(tdfs, df_names, f_name=""):
-    colors1 = ["blue", "green", "violet", "red", "orange"]
-    colors2 = ["turquoise", "lime", "magenta", "pink", "yellow" ]
-    colors3 = ["black", "gray", "brown", "blue", "magenta" ]
-    dashes = ['solid', 'dashed', 'dashdot', 'dotted', 'dotted' ]
-    markers = [ 'o', '+', 'x', '^', '.' ]
-    i_max = len(tdfs)
-    if i_max > 5:
-        i_max = 5
-    legends = []
-    # Prepare a subtrace with cwnd and bytes in flight
-    fig, axes = plt.subplots(3, gridspec_kw={'height_ratios': [1, 1, 1]}, figsize=(8, 6), sharex=True, layout='constrained')
-    axes.flatten()
-    #fig.tight_layout()
-    for i in range(0, i_max):
-        l1 = "cwin, " + df_names[i]    
-        l2 = "bytes in flight, " + df_names[i]
-        l3 = "rtt, " + df_names[i]
-        l4 = "min rtt, " + df_names[i]
-        l5 = "pacing (B/s), " + df_names[i]
-        tdfs[i].plot.scatter(ax=axes[0], x="event_time", y="bytes_in_flight", s=15, marker=markers[i], xlabel="time(us)", ylabel="bytes", alpha=0.5, color=colors2[i], label=l2)
-        tdfs[i].plot.line(ax=axes[0], x="event_time", y="cwnd", linewidth=2, linestyle=dashes[i], alpha=0.75, xlabel="time(us)", ylabel="bytes", color=colors1[i], label=l1)       
-        tdfs[i].plot.line(ax=axes[1], x="event_time", y="latest_rtt", linewidth=2, linestyle=dashes[i], alpha=0.75, xlabel="time(us)", ylabel="us", color=colors1[i], label=l3)     
-        tdfs[i].plot.line(ax=axes[1], x="event_time", y="min_rtt", linewidth=1, linestyle=dashes[i], alpha=0.75, xlabel="time(us)", ylabel="us", color=colors2[i], label=l4)
-        tdfs[i].plot.line(ax=axes[2], x="event_time", y="pacing_Bps", linewidth=2, linestyle=dashes[i], alpha=0.75, xlabel="time(us)", ylabel="bytes", color=colors1[i], label=l5)       
-    #plt.legend(legends)
-    if len(f_name) == 0:
-        plt.show()
-    else:
-        plt.savefig(f_name)
+# Analyse the qlog to compute the average and max RTT,
+# the duration of the connection and the average send rate in bits per second.
 
+class connection_stats:
+    def __init__(self):
+        self.avg_rtt = 0
+        self.max_rtt = 0
+        self.std_rtt = 0
+        self.duration = 0
+        self.send_rate = 0
 
-# test part of the program
-# assume each argument is a qlog file
+    def load_qlog(self, qlog_file):
+        trc = qlog_parse(qlog_file)
+        rtt_sum2 = 0
+        rtt_sum = 0
+        rtt_nb = 0
+        start = 0
+        end = 0
+        data_sent = 0
+        for tre in trc:
+            for ev in tre.cc_log:
+                rtt = ev[6]  # latest_rtt
+                if rtt > 0:
+                    rtt_nb += 1
+                    rtt_sum += rtt
+                    rtt_sum2 += rtt*rtt
+                if rtt > self.max_rtt:
+                    self.max_rtt = rtt
+            if rtt_nb == 0:
+                self.avg_rtt = 0
+                self.std_rtt = 0
+            else:
+                self.avg_rtt = int(rtt_sum / rtt_nb)
+                v = (rtt_sum2 / rtt_nb) - (self.avg_rtt * self.avg_rtt)
+                if v > 0:
+                    self.std_rtt = int(v ** 0.5)
+                else:
+                    self.std_rtt = 0
 
-tdfs = []
-tdf_names = []
+            for ev in tre.sent_log:
+                if start == 0:
+                    start = ev[0]
+                end = ev[0]
+                data_sent += ev[1]
 
-for i in range(1, len(sys.argv)):
-    trc = qlog_parse(sys.argv[i])
-    tdf = pd.DataFrame(trc[0].cc_log, columns=cc_state.cc_headers())
-    tdf ['pacing_Bps'] = tdf['pacing_rate']/8
+            self.duration = end - start
+            if self.duration > 0:
+                self.send_rate = int(8000000*data_sent / self.duration)
 
-    tdfs.append(tdf)
-    if i == 1:
-        tdf_names.append("main")
-    elif i == 2 and len(sys.argv) == 3:
-        tdf_names.append("background")
-    else:
-        tdf_names.append("background_" + str(i-1))
-trace_graphs(tdfs, tdf_names, f_name="..\\tmp\\image")
-
+            # we only process the first trace in a set
+            break

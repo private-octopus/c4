@@ -112,7 +112,7 @@ class report_list:
                             self.test_cases[tc].alg_report[algo_rank] = rp
 
 
-    def do_metric_report(self, F, grp, tl, title, report_attr, value_fn):
+    def do_metric_report(self, F, grp, tl, title, report_attr, value_fn, suffix=""):
         top = " " + title + " for " + grp + " tests"
 
         F.write("### " + top + "\n\n")
@@ -140,7 +140,7 @@ class report_list:
                     sm += " |"
                 else:
                     x = value_fn(reports[i])
-                    sm += " " + str(x) + " |"
+                    sm += " " + str(x) + suffix + " |"
                     if x > 0:
                         has_metric = True
             if has_metric:
@@ -156,8 +156,8 @@ class report_list:
             self.do_metric_report(F, grp, tl, "average RTT", 'q_alg_report', lambda rp: rp.average('ave_rtt'))
             self.do_metric_report(F, grp, tl, "top 90% of RTT + standard deviation", 'q_alg_report', lambda rp: rp.top90_combo('ave_rtt', 'std_rtt'))
             if grp in ('compete', 'wifi'):
-                self.do_metric_report(F, grp, tl, "average load (%)", 'q_alg_report', lambda rp: rp.average('load', 100))
-                self.do_metric_report(F, grp, tl, "top 90% load (%)", 'q_alg_report', lambda rp: rp.top90('load', 100))
+                self.do_metric_report(F, grp, tl, "average load", 'q_alg_report', lambda rp: rp.average('load', 100), suffix="%")
+                self.do_metric_report(F, grp, tl, "top 90% load", 'q_alg_report', lambda rp: rp.top90('load', 100), suffix="%")
         else:
             self.do_metric_report(F, grp, tl, "average av_latency", 'alg_report', lambda rp: rp.average('av_latency'))
             self.do_metric_report(F, grp, tl, "top 90% max_latency", 'alg_report', lambda rp: rp.top90('max_latency'))

@@ -44,6 +44,8 @@ Despite these good results, we concluded the IETF presentations by listing two i
 we should test additional scenarios, including some that could elicit bufferbloat,
 and we should consider other metrics that raw performance. As a first step, we started
 evaluating the RTT and its variations, as well as the load imposed by C4 on the network.
+We also added "buffer bloat" tests to check C4's behavior in scenarios where the
+amount of network buffers widely exceeds the bandwidth delay product of the path.
 
 Tracking the average RTT gives us an indication of the amount of queuing happening in the
 network. However, we want to also evaluate the impact of RTT variations, to give
@@ -82,31 +84,30 @@ and how it compares with BBr or C4 on the same tests
 |  average load for compete tests| c4 | bbr | cubic |
 | --------- | ---:| ---:| ---:|
 | vs_bbr |  78% | 47% | 78% |
-| vs_c4 |  51% | 31% | 30% |
-| vs_cubic |  64% | 30% | 41% |
-| after_c4 |  36% | 33% | 31% |
-| before_c4 |  67% | 42% | 58% |
-| vs_c4_lg |  60% | 41% | 54% |
-| vs_c4_lg2 |  63% | 60% | 59% |
-| vs_bbr_lg |  80% | 59% | 80% |
-| vs_bbr_lg2 |  76% | 68% | 60% |
-| vs_cubic_lg |  70% | 58% | 60% |
-| vs_cubic_lg2 |  74% | 80% | 62% |
-
+| vs_c4 |  51% | 21% | 30% |
+| vs_cubic |  65% | 18% | 41% |
+| after_c4 |  35% | 17% | 31% |
+| before_c4 |  61% | 38% | 58% |
+| vs_c4_lg |  52% | 21% | 54% |
+| vs_c4_lg2 |  55% | 51% | 59% |
+| vs_bbr_lg |  80% | 50% | 80% |
+| vs_bbr_lg2 |  75% | 67% | 60% |
+| vs_cubic_lg |  70% | 18% | 60% |
+| vs_cubic_lg2 |  72% | 80% | 62% |
 
 |  top 90% load for compete tests| c4 | bbr | cubic |
 | --------- | ---:| ---:| ---:|
 | vs_bbr |  78% | 47% | 79% |
-| vs_c4 |  52% | 31% | 33% |
-| vs_cubic |  66% | 31% | 46% |
-| after_c4 |  40% | 34% | 32% |
-| before_c4 |  72% | 50% | 67% |
-| vs_c4_lg |  61% | 58% | 58% |
-| vs_c4_lg2 |  64% | 61% | 60% |
-| vs_bbr_lg |  81% | 59% | 81% |
-| vs_bbr_lg2 |  78% | 69% | 61% |
-| vs_cubic_lg |  78% | 58% | 60% |
-| vs_cubic_lg2 |  76% | 81% | 63% |
+| vs_c4 |  52% | 21% | 33% |
+| vs_cubic |  70% | 18% | 46% |
+| after_c4 |  36% | 18% | 32% |
+| before_c4 |  65% | 47% | 67% |
+| vs_c4_lg |  54% | 21% | 58% |
+| vs_c4_lg2 |  58% | 53% | 60% |
+| vs_bbr_lg |  81% | 50% | 81% |
+| vs_bbr_lg2 |  76% | 68% | 61% |
+| vs_cubic_lg |  78% | 19% | 60% |
+| vs_cubic_lg2 |  74% | 81% | 63% |
 
 According to [RFC9743](https://datatracker.ietf.org/doc/html/rfc9743),
 _"A proposed congestion control algorithm that has a significantly negative
@@ -119,8 +120,9 @@ be considered good, using more than 70% would be considered bad, and more
 than 80% really bad.
 
 The tables show that C4 often consume more than 70% of the available capacity,
-and sometimes more than 80%. That's definitely not ideal, and is another
-area for improvement.
+and sometimes more than 80%. We see that when BBR competes against C4, it
+sometimes get 20% of the available bandwidth or less. That's definitely not ideal,
+and is another area for improvement.
 
 Another recommendation in [RFC9743](https://datatracker.ietf.org/doc/html/rfc9743)
 is that algorithms _"ought to try to avoid maintaining excessive queues in the network"_,
@@ -136,14 +138,22 @@ in these tests.
 | bbloat_bbr |  160655 | 159931 | 408664 |
 | bbloat_cubic |  859970 | 137306 | 1039625 |
 
+|  average load for buffer bloat tests| c4 | bbr | cubic |
+| --------- | ---:| ---:| ---:|
+| bbloat |  98% | 95% | 98% |
+| bbloat_c4 |  50% | 19% | 60% |
+| bbloat_bbr |  81% | 48% | 86% |
+| bbloat_cubic |  58% | 15% | 60% |
+
 |  top 90% load for buffer bloat tests| c4 | bbr | cubic |
 | --------- | ---:| ---:| ---:|
 | bbloat |  98% | 95% | 98% |
-| bbloat_c4 |  59% | 58% | 60% |
-| bbloat_bbr |  82% | 58% | 86% |
-| bbloat_cubic |  60% | 58% | 60% |
+| bbloat_c4 |  53% | 20% | 60% |
+| bbloat_bbr |  82% | 49% | 86% |
+| bbloat_cubic |  58% | 15% | 60% |
 
-The results show that C4 as in draft 4 contains the RTT somewhat -- definitely
+
+The results show that C4 as in draft 4 conforms to the RTT somewhat -- definitely
 not as well as BBR, but better than Cubic. They also show that while competition with
 itself or with Cubic is handled fairly in buffer boat conditions, competition
 with BBR is rather unfair, probably because C4 generates much larger queues than

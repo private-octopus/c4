@@ -6,7 +6,7 @@ We wanted the algorithm to be simple and easy to implement, while performing wel
 Our initial idea was to develop an algorithm that tracked the evolution of the round trip time, backs off when it detects increased delays, and avoids the building of queues.
 We quickly evolved that design after encountering two majot issues: the need to compete with algorithms like Cubic that do not reactto delay increases;
 and, perhaps more importantly, the need to work well in Wi-Fi networks that often exhibit a high amount of "delay jitter".
-The resulting design focused on tracking the path bandwidth and the maximum RTT:
+The resulting design focused on tracking the path bandwidth and the maximum RTT.
 
 The nominal path bandwidth is tracked by measuring the rate of data delivery over the connection,
 and lowering that nominal rate when congestion is detected.
@@ -121,6 +121,33 @@ than 80% really bad.
 The tables show that C4 often consume more than 70% of the available capacity,
 and sometimes more than 80%. That's definitely not ideal, and is another
 area for improvement.
+
+Another recommendation in [RFC9743](https://datatracker.ietf.org/doc/html/rfc9743)
+is that algorithms _"ought to try to avoid maintaining excessive queues in the network"_,
+which is then developed as the need to somehow address "buffer bloat". To start
+addressing that recommendation, we added a series of "buffer bloat" tests to
+our set of simulations. The following tables present to "top RTT" and "top 90% load" 
+in these tests.
+
+|  top 90% of RTT + standard deviation for buffer bloat tests| c4 | bbr | cubic |
+| --------- | ---:| ---:| ---:|
+| bbloat |  158066 | 95924 | 322642 |
+| bbloat_c4 |  361542 | 118202 | 939834 |
+| bbloat_bbr |  160655 | 159931 | 408664 |
+| bbloat_cubic |  859970 | 137306 | 1039625 |
+
+|  top 90% load for buffer bloat tests| c4 | bbr | cubic |
+| --------- | ---:| ---:| ---:|
+| bbloat |  98% | 95% | 98% |
+| bbloat_c4 |  59% | 58% | 60% |
+| bbloat_bbr |  82% | 58% | 86% |
+| bbloat_cubic |  60% | 58% | 60% |
+
+The results show that C4 as in draft 4 contains the RTT somewhat -- definitely
+not as well as BBR, but better than Cubic. They also show that while competition with
+itself or with Cubic is handled fairly in buffer boat conditions, competition
+with BBR is rather unfair, probably because C4 generates much larger queues than
+BBR can tolerate.
 
 The next months will be busy improving C4 in these two areas: try to
 reduce the RTT variations, and try to improve fairness.

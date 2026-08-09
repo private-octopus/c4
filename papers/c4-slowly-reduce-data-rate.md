@@ -17,7 +17,7 @@ and the transmission in the probing stage was not application limited,
 reduce the nominal data rate to the average of the previous value and the
 highest measurement in the last cycle."
 
-|  top 90% of RTT + standard deviation for network events tests| c4 | bbr | cubic | 1/2th decreasing rate |
+|  top 90% of RTT + standard deviation for network events tests| c4 | bbr | cubic | Trimming 1/2 rate |
 | --------- | ---:| ---:| ---:| ---:|
 | alone |  145798 | 107604 | 167571 | 141307 |
 | alone_200 |  88677 | 57168 | 70772 | 88272 |
@@ -40,7 +40,28 @@ persist a bit longer after a rate increase. The tables of "time spent" do not
 show any preformance decrease in these tests -- some are faster, some are slower, but
 the differences are tiny.
 
-|  top 90% of RTT + standard deviation for compete tests| c4 | bbr | cubic | 1/2th decreasing |
+|  top 90% of RTT + standard deviation for buffer bloat tests| c4 | bbr | cubic | Trimming 1/2 |
+| --------- | ---:| ---:| ---:| ---:|
+| bbloat |  158066 | 95924 | 322642 | 156178 |
+| bbloat_c4 |  361542 | 118202 | 939834 | 345468 |
+| bbloat_bbr |  160655 | 159931 | 408664 | 159903 |
+| bbloat_cubic |  859970 | 137306 | 1039625 | 859395 |
+
+|  top 90% load for buffer bloat tests| c4 | bbr | cubic | c4_1 |
+| --------- | ---:| ---:| ---:| ---:|
+| bbloat |  98% | 95% | 98% | 98% |
+| bbloat_c4 |  59% | 58% | 60% | 59% |
+| bbloat_bbr |  82% | 58% | 86% | 82% |
+| bbloat_cubic |  60% | 58% | 60% | 60% |
+
+Trimming has very little effect on the buffer bloat tests. We do see some small
+reductions in the top RTT for some tests, but these are too small to matter.
+We also do not see any big change in the fairness of copeting under buffer bloat.
+One possibility is that, while trimming prevents the queues from increasing
+too much, it does not by itself drain them. We should probably complement
+trimming by some explicit form of draining.
+
+|  top 90% of RTT + standard deviation for compete tests| c4 | bbr | cubic | Trimming 1/2 |
 | --------- | ---:| ---:| ---:| ---:|
 | vs_bbr |  127906 | 156408 | 163495 | 125994 |
 | vs_c4 |  147578 | 133587 | 154995 | 162418 |
@@ -54,7 +75,7 @@ the differences are tiny.
 | vs_cubic_lg |  151434 | 120204 | 162934 | 150852 |
 | vs_cubic_lg2 |  146843 | 149529 | 159656 | 146035 |
 
-|  top 90% load for compete tests| c4 | bbr | cubic | 1/2th decreasing |
+|  top 90% load for compete tests| c4 | bbr | cubic | Trimming 1/2 |
 | --------- | ---:| ---:| ---:| ---:|
 | vs_bbr |  78% | 47% | 79% | 78% |
 | vs_c4 |  52% | 31% | 33% | 53% |
@@ -73,7 +94,7 @@ but it does improve the top RTT measurements in the competition between C4 and B
 C4 and Cubic, except for the "vs_bbr_lg2" test, where the top RTT is 7.6 ms higher than before.
 We also see a slight degradation in the "internal competition" tests, where C4 competes with itself.
 
-|  top 90% time for wifi tests| c4 | bbr | cubic | 1/2th decreasing |
+|  top 90% time for wifi tests| c4 | bbr | cubic | Trimming 1/2 |
 | --------- | ---:| ---:| ---:| ---:|
 | wifi_bad |  4841982 | 7522796 | 4449644 | 5249372 |
 | wifi_fade |  5351680 | 5649668 | 5550500 | 5244862 |
@@ -82,7 +103,7 @@ We also see a slight degradation in the "internal competition" tests, where C4 c
 | wifi_bad_c4 |  11665740 | 12481659 | 12241907 | 11615184 |
 | wifi_bad_cubic |  11883994 | 12246412 | 13881720 | 11388974 |
 
-|  top 90% of RTT + standard deviation for wifi tests| c4 | bbr | cubic | c4_1 |
+|  top 90% of RTT + standard deviation for wifi tests| c4 | bbr | cubic | Trimming 1/2  |
 | --------- | ---:| ---:| ---:| ---:|
 | wifi_bad |  236990 | 146354 | 149225 | 260841 |
 | wifi_fade |  210684 | 177334 | 187572 | 210766 |
@@ -103,5 +124,7 @@ the queues in general, but may cause queues to drain slower in high jitter situa
 Overall, this change seems to be a good compromise. There is just one important drawback
 in the "bad wifi" scenario. We might be able to address it by having a more subtle
 rule for the "trimming" logic, maybe not trimming so quickly if we recognize a high jitter
-scenario. This will require a separate investigation.
+scenario. This will require a separate investigation. Analysis of the
+buffer bloat scenario also showed that trimming ought to be complemented by
+a more forceful way to drain existing queues.
 

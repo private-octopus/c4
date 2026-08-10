@@ -23,8 +23,7 @@
 # Maybe write all that in markdown.
 #
 
-
-
+import math
 import sys
 import os
 from pathlib import Path
@@ -50,6 +49,14 @@ test_groups = [
 
 
 # Operations on a test report.
+
+def safe_round(x):
+    if math.isnan(x):
+        v = 0
+    else:
+        v = int(round(x))
+    return v
+
 class test_report:
     def __init__(self, test_case, algo):
         self.df = None
@@ -61,15 +68,15 @@ class test_report:
     
     def average(self, metric, scale=1):
         x = self.df[metric].mean() * scale
-        return int(round(x))
+        return safe_round(x)
 
     def top90(self, metric, scale=1):
         x = self.df[metric].quantile(q=0.9, interpolation='linear') * scale
-        return int(round(x))
+        return safe_round(x)
 
     def top90_combo(self, metric_a, metric_b):
         x = (self.df[metric_a] + self.df[metric_b]).quantile(q=0.9, interpolation='linear')
-        return int(round(x))
+        return safe_round(x)
 
 class test_case_group:
     def __init__(self, tc, nb_alts):

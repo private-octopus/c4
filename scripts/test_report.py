@@ -23,8 +23,7 @@
 # Maybe write all that in markdown.
 #
 
-
-
+import math
 import sys
 import os
 from pathlib import Path
@@ -42,6 +41,7 @@ algo_dict = {
 test_groups = [
     [ "network events", ["alone", "alone_200", "alone_1_5M", "alone_512k", "low_and_up", "drop_and_back", "blackhole", "short_long", "satellite"], "time", "Reaction to network events" ],
     [ "compete", [ "vs_bbr", "vs_c4", "vs_cubic", "after_c4", "before_c4", "vs_c4_lg", "vs_c4_lg2", "vs_bbr_lg", "vs_bbr_lg2", "vs_cubic_lg", "vs_cubic_lg2"], "time", "Competition" ],
+    [ "buffer bloat", [ "bbloat", "bbloat_c4", "bbloat_bbr", "bbloat_cubic" ], "time", "Buffer bloat" ],
     [ "wifi", [ "wifi_bad", "wifi_fade", "wifi_suspension", "wifi_bad_bbr", "wifi_bad_c4", "wifi_bad_cubic" ], "time", "Wi-Fi"],
     [ "ecn", [ "ecn", "ecn_c4", "ecn_cubic", "ecn_bbr" ], "time", "ECN" ],
     [ "media", [ "media", "media10", "media_600fr", "media_short_long", "media_wb", "media_wf", "media_ws", "media_ecn" ], "media", "Media" ],
@@ -49,6 +49,14 @@ test_groups = [
 
 
 # Operations on a test report.
+
+def safe_round(x):
+    if math.isnan(x):
+        v = 0
+    else:
+        v = int(round(x))
+    return v
+
 class test_report:
     def __init__(self, test_case, algo):
         self.df = None
@@ -60,15 +68,15 @@ class test_report:
     
     def average(self, metric, scale=1):
         x = self.df[metric].mean() * scale
-        return int(round(x))
+        return safe_round(x)
 
     def top90(self, metric, scale=1):
         x = self.df[metric].quantile(q=0.9, interpolation='linear') * scale
-        return int(round(x))
+        return safe_round(x)
 
     def top90_combo(self, metric_a, metric_b):
         x = (self.df[metric_a] + self.df[metric_b]).quantile(q=0.9, interpolation='linear')
-        return int(round(x))
+        return safe_round(x)
 
 class test_case_group:
     def __init__(self, tc, nb_alts):
@@ -155,7 +163,7 @@ class report_list:
             self.do_metric_report(F, grp, tl, "top 90% time", 'alg_report', lambda rp: rp.top90('time'))
             self.do_metric_report(F, grp, tl, "average RTT", 'q_alg_report', lambda rp: rp.average('ave_rtt'))
             self.do_metric_report(F, grp, tl, "top 90% of RTT + standard deviation", 'q_alg_report', lambda rp: rp.top90_combo('ave_rtt', 'std_rtt'))
-            if grp in ('compete', 'wifi'):
+            if grp in ('compete', 'wifi', 'buffer bloat'):
                 self.do_metric_report(F, grp, tl, "average load", 'q_alg_report', lambda rp: rp.average('load', 100), suffix="%")
                 self.do_metric_report(F, grp, tl, "top 90% load", 'q_alg_report', lambda rp: rp.top90('load', 100), suffix="%")
         else:

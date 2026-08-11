@@ -217,6 +217,9 @@ class connection_stats:
         self.std_rtt = 0
         self.duration = 0
         self.send_rate = 0
+        self.start = 0
+        self.end = 0
+        self.sent_log = []
 
     def load_qlog(self, qlog_file):
         trc = qlog_parse(qlog_file)
@@ -255,6 +258,25 @@ class connection_stats:
             self.duration = end - start
             if self.duration > 0:
                 self.send_rate = int(8000000*data_sent / self.duration)
+            self.start = start
+            self.end = end
+            self.sent_log = tre.sent_log
 
             # we only process the first trace in a set
             break
+
+    # Restrict this connection's send rate to the time window during which
+    # a competing connection (with window [other_start, other_end], on the
+    # same shared qlog clock) was also active. Returns None if the two
+    # connections' active windows do not overlap.
+    def overlap_send_rate(self, other_start, other_end):
+        lo = max(self.start, other_start)
+        hi = min(self.end, other_end)
+        if hi <= lo:
+            return None
+        data_sent = 0
+        for ev in self.sent_log:
+            if lo <= ev[0] <= hi:
+                data_sent += ev[1]
+        duration = hi - lo
+        return int(8000000*data_sent / duration)

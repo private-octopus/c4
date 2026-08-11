@@ -101,12 +101,19 @@ class qlog_trace_data:
         self.spec_name = spec_name
         self.data_rate = data_rate
         self.qlogs = dict()
+        self.bg_qlogs = dict()
 
     def add_qlog(self, qlog_file, rep):
         if rep in self.qlogs:
             print("Duplicate rep: " + str(rep) + " for spec: " + self.spec_name)
         else:
             self.qlogs[rep] = qlog_file
+
+    def add_bg_qlog(self, qlog_file, rep):
+        if rep in self.bg_qlogs:
+            print("Duplicate background rep: " + str(rep) + " for spec: " + self.spec_name)
+        else:
+            self.bg_qlogs[rep] = qlog_file
 
 class qlog_data():
     def __init__(self, qlog_dir, data_dir):
@@ -117,8 +124,13 @@ class qlog_data():
 
     def add_qlogs(self):
         for f in os.listdir(self.qlog_dir):
-            if  len(f) != 16 + len(".server.qlog") or \
-                not f.endswith("00.server.qlog"):
+            if len(f) != 16 + len(".server.qlog"):
+                continue
+            if f.endswith("00.server.qlog"):
+                is_background = False
+            elif f.endswith("01.server.qlog"):
+                is_background = True
+            else:
                 continue
             rep = int(f[12:14],16)
             cid_prefix = f[:8]
@@ -127,7 +139,10 @@ class qlog_data():
                 if not spec.spec_name in self.data_dict:
                     self.data_dict[spec.spec_name] = \
                         qlog_trace_data(spec.spec_name, (int)(spec.data_rate_in_gbps * 1000000000))
-                self.data_dict[spec.spec_name].add_qlog(os.path.join(self.qlog_dir, f), rep)
+                if is_background:
+                    self.data_dict[spec.spec_name].add_bg_qlog(os.path.join(self.qlog_dir, f), rep)
+                else:
+                    self.data_dict[spec.spec_name].add_qlog(os.path.join(self.qlog_dir, f), rep)
 
 class qdb_bucket:
     def __init__(self, qld, bucket_id, spec_name, time_start):
@@ -142,9 +157,22 @@ class qdb_bucket:
         with open(output_file, "wt") as F:
             F.write("rep,time,ave_rtt,std_rtt,load,test\n")
             cst = qlogparse.connection_stats()
+            bg_cst = qlogparse.connection_stats()
             for rep in qtd.qlogs:
                 cst.load_qlog(qtd.qlogs[rep])
-                load = cst.send_rate / qtd.data_rate
+                send_rate = cst.send_rate
+                if rep in qtd.bg_qlogs:
+                    # A background connection competed for bandwidth during part
+                    # of this run. Restrict the send rate used for "load" to the
+                    # window where both connections were active, since the
+                    # solo portions (before/after the background connection)
+                    # aren't representative of competition. RTT stats are left
+                    # over the full connection duration.
+                    bg_cst.load_qlog(qtd.bg_qlogs[rep])
+                    overlap_rate = cst.overlap_send_rate(bg_cst.start, bg_cst.end)
+                    if overlap_rate is not None:
+                        send_rate = overlap_rate
+                load = send_rate / qtd.data_rate
                 F.write(str(rep) + "," +  str(cst.duration) +
                         "," + str(cst.avg_rtt) +
                         "," + str(cst.std_rtt) +

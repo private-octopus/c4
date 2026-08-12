@@ -376,8 +376,9 @@ The coefficient `alpha` for the different states is:
 
 state | alpha | comments
 ------|-------|----------
-Initial | 2 |
-Recovery | 15/16 |
+Initial | 2 | See {{c4-initial}} for the setting of CWND
+Resuming | variable | pacing and CWND are set from remembered values
+Recovery | 15/16 or 3/4 | (set to 3/4 if draining is required, see {{draining}})
 Cruising | 1 |
 Probing | 33/32 or 17/16 | see {{c4-probing}} for rules on choosing 33/32 or 17/16
 Pushing | 5/4 |
@@ -496,9 +497,9 @@ If a succesful probing was detected, C4 immediately enters the Pushing state.
 
 C4 re-enters "Initial" at the end of the recovery period if 
 high jitter requires restarting the Initial phase (see
-{{restart-high-jitter}}. Otherwise, C4 enters cruising.
+{{restart-high-jitter}}). Otherwise, C4 enters cruising.
 
-Reception of a congestion signal during the Initial phase does not
+Receiving of a congestion signal during the Initial phase does not
 cause a change in the `nominal_rate` or `nominal_max_RTT`.
 
 ### Restarting Initial if High Jitter {#restart-high-jitter}
@@ -508,7 +509,7 @@ because doing so would prevent exiting Initial on high delay
 detection. This can lead to underestimation of the "nominal
 rate" if the flow is operating on a path with high jitter.
 
-C4 will reenter the "initial" phase on the first time
+C4 will reenter the "initial" phase if
 high jitter is detected for the flow. The high jitter
 is detected after updating the "nominal max RTT" at the
 end of the recovery era, if:
@@ -516,8 +517,6 @@ end of the recovery era, if:
 ~~~
 running_min_rtt < nominal_max_rtt*2/5
 ~~~
-
-This will be done at most once per flow.
 
 ## Cruising state {#c4-cruising }
 
@@ -759,6 +758,34 @@ of the previous recovery period, i.e, if the "recent maximum rate" is larger
 than 0. If so, C4 will reset
 the "nominal rate" to the "recent maximum rate".
 
+## Trimming an overestimated nominal rate {#trimming}
+
+Despite taking precautions to make the rate estimation reliable, there
+are bound to be mistakes, and the nominal rate may be a little too high.
+This will cause the slow building of queues, and a slow increase of
+the RTT, until the network queues eventually fill up and a congestion
+signal is received.
+
+C4 avoids the slow building of queues by "trimming" the nominal RTT
+before exiting the recovery phase, if:
+
+* The nominal data rate did not grow during the previous cycle,
+* No congestion was notified, and,
+* The connection was not application limited during the pushing phase.
+
+If those conditions are all verified, the "nominal rate" is set to the
+average of its current value and the "recent maximum rate".
+
+## Draining the standing queues {#draining}
+
+Queues may build up if C4 has been sending data at a rate higher than the actual path
+capacity, and if the number of bytes in transit is higher than the bandwidth
+delay product. This can happen during an Initial phase, during a Pushing phase,
+or if the path RTT is reduced. When any of these conditions is detected,
+C4 sets a "draining needed" flag. Upon entering recovery, if this flag is
+set, the coefficient "alpha" is set to 3/4th instead of the default 15/16.
+
+
 # Implementation considerations
 
 Implementing C4 ought to be straightforward, but developers need to pay
@@ -839,7 +866,14 @@ TODO acknowledge.
 # Changes since previous versions
 {:numbered="false"}
 
+## Changes since draft-huitema-ccwg-c4-spec-04
+{:numbered="false"}
+
 This section should be deleted before publication as an RFC
+
+* trimming of the nominal rate if it does not increase for the cycle
+* draining of the network queues if the RTT diminishes
+* make sure that C4 does not stall in bad wifi conditions
 
 ## Changes since draft-huitema-ccwg-c4-spec-03
 {:numbered="false"}

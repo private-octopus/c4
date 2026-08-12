@@ -5,9 +5,9 @@
 Network Working Group                                         C. Huitema
 Internet-Draft                                      Private Octopus Inc.
 Intended status: Informational                             S. Nandakumar
-Expires: 4 January 2027                                      C. Jennings
+Expires: 13 February 2027                                    C. Jennings
                                                                    Cisco
-                                                             3 July 2026
+                                                          12 August 2026
 
 
            Design of Christian's Congestion Control Code (C4)
@@ -43,7 +43,7 @@ Status of This Memo
    time.  It is inappropriate to use Internet-Drafts as reference
    material or to cite them other than as "work in progress."
 
-   This Internet-Draft will expire on 4 January 2027.
+   This Internet-Draft will expire on 13 February 2027.
 
 Copyright Notice
 
@@ -53,9 +53,9 @@ Copyright Notice
 
 
 
-Huitema, et al.          Expires 4 January 2027                 [Page 1]
+Huitema, et al.         Expires 13 February 2027                [Page 1]
 
-Internet-Draft                  C4 Design                      July 2026
+Internet-Draft                  C4 Design                    August 2026
 
 
    This document is subject to BCP 78 and the IETF Trust's Legal
@@ -109,20 +109,24 @@ Table of Contents
 
 
 
-Huitema, et al.          Expires 4 January 2027                 [Page 2]
+Huitema, et al.         Expires 13 February 2027                [Page 2]
 
-Internet-Draft                  C4 Design                      July 2026
+Internet-Draft                  C4 Design                    August 2026
 
 
        9.2.3.  Addind a Pushing state  . . . . . . . . . . . . . . .  30
        9.2.4.  Keeping Probing and Pushing as separate state . . . .  30
      9.3.  Support for careful resume  . . . . . . . . . . . . . . .  31
-   10. State Machine . . . . . . . . . . . . . . . . . . . . . . . .  32
-   11. Security Considerations . . . . . . . . . . . . . . . . . . .  35
-   12. IANA Considerations . . . . . . . . . . . . . . . . . . . . .  35
-   13. Informative References  . . . . . . . . . . . . . . . . . . .  35
-   Acknowledgments . . . . . . . . . . . . . . . . . . . . . . . . .  37
-   Authors' Addresses  . . . . . . . . . . . . . . . . . . . . . . .  37
+   10. Revision after the third design . . . . . . . . . . . . . . .  32
+     10.1.  Trimming excess capacity . . . . . . . . . . . . . . . .  32
+     10.2.  Draining Queues  . . . . . . . . . . . . . . . . . . . .  37
+     10.3.  Revisiting support for Wi-Fi . . . . . . . . . . . . . .  42
+   11. State Machine . . . . . . . . . . . . . . . . . . . . . . . .  42
+   12. Security Considerations . . . . . . . . . . . . . . . . . . .  45
+   13. IANA Considerations . . . . . . . . . . . . . . . . . . . . .  45
+   14. Informative References  . . . . . . . . . . . . . . . . . . .  45
+   Acknowledgments . . . . . . . . . . . . . . . . . . . . . . . . .  47
+   Authors' Addresses  . . . . . . . . . . . . . . . . . . . . . . .  47
 
 1.  Introduction
 
@@ -159,17 +163,16 @@ Internet-Draft                  C4 Design                      July 2026
    RTT", and the current state of the algorithm.  The details on using
    and tracking the min RTT are discussed in Section 2.
 
+
+
+Huitema, et al.         Expires 13 February 2027                [Page 3]
+
+Internet-Draft                  C4 Design                    August 2026
+
+
    The nominal rate is the pacing rate corresponding to the most recent
    estimate of the bandwidth available to the connection.  The nominal
    max RTT is the best estimate of the maximum RTT that can occur on the
-
-
-
-Huitema, et al.          Expires 4 January 2027                 [Page 3]
-
-Internet-Draft                  C4 Design                      July 2026
-
-
    network in the absence of queues.  When we do not observe delay
    jitter, this coincides with the min RTT.  In the presence of jitter,
    it should be the sum of the min RTT and the maximum jitter.  C4 will
@@ -218,12 +221,9 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-
-
-
-Huitema, et al.          Expires 4 January 2027                 [Page 4]
+Huitema, et al.         Expires 13 February 2027                [Page 4]
 
-Internet-Draft                  C4 Design                      July 2026
+Internet-Draft                  C4 Design                    August 2026
 
 
    We also know that if several connection using delay-based algorithms
@@ -277,9 +277,9 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                 [Page 5]
+Huitema, et al.         Expires 13 February 2027                [Page 5]
 
-Internet-Draft                  C4 Design                      July 2026
+Internet-Draft                  C4 Design                    August 2026
 
 
                    +================+=======+==========+
@@ -333,9 +333,9 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                 [Page 6]
+Huitema, et al.         Expires 13 February 2027                [Page 6]
 
-Internet-Draft                  C4 Design                      July 2026
+Internet-Draft                  C4 Design                    August 2026
 
 
    In our initial design, we detected the advent of such "chaotic delay
@@ -389,9 +389,9 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                 [Page 7]
+Huitema, et al.         Expires 13 February 2027                [Page 7]
 
-Internet-Draft                  C4 Design                      July 2026
+Internet-Draft                  C4 Design                    August 2026
 
 
    In our initial design, the connections ensured that their min RTT is
@@ -445,9 +445,9 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                 [Page 8]
+Huitema, et al.         Expires 13 February 2027                [Page 8]
 
-Internet-Draft                  C4 Design                      July 2026
+Internet-Draft                  C4 Design                    August 2026
 
 
    And then we realized that if we do have to set a pacing rate, we can
@@ -501,9 +501,9 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                 [Page 9]
+Huitema, et al.         Expires 13 February 2027                [Page 9]
 
-Internet-Draft                  C4 Design                      July 2026
+Internet-Draft                  C4 Design                    August 2026
 
 
    We solved that by measuring the Max RTT during the "recovery" periods
@@ -557,9 +557,9 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 10]
+Huitema, et al.         Expires 13 February 2027               [Page 10]
 
-Internet-Draft                  C4 Design                      July 2026
+Internet-Draft                  C4 Design                    August 2026
 
 
    Our proposed algorithm limits the Max RTT to at most running_min_rtt
@@ -613,9 +613,9 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 11]
+Huitema, et al.         Expires 13 February 2027               [Page 11]
 
-Internet-Draft                  C4 Design                      July 2026
+Internet-Draft                  C4 Design                    August 2026
 
 
 3.3.1.  Rate measurement
@@ -669,9 +669,9 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 12]
+Huitema, et al.         Expires 13 February 2027               [Page 12]
 
-Internet-Draft                  C4 Design                      July 2026
+Internet-Draft                  C4 Design                    August 2026
 
 
    *  if enough packets are acknowledged, they will cause a rate
@@ -725,9 +725,9 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 13]
+Huitema, et al.         Expires 13 February 2027               [Page 13]
 
-Internet-Draft                  C4 Design                      July 2026
+Internet-Draft                  C4 Design                    August 2026
 
 
 3.4.  Early Congestion Modification
@@ -781,9 +781,9 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 14]
+Huitema, et al.         Expires 13 February 2027               [Page 14]
 
-Internet-Draft                  C4 Design                      July 2026
+Internet-Draft                  C4 Design                    August 2026
 
 
 4.1.  No need for slowdowns
@@ -837,9 +837,9 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 15]
+Huitema, et al.         Expires 13 February 2027               [Page 15]
 
-Internet-Draft                  C4 Design                      July 2026
+Internet-Draft                  C4 Design                    August 2026
 
 
    difference between the measured RTT and the target RTT divided by the
@@ -893,9 +893,9 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 16]
+Huitema, et al.         Expires 13 February 2027               [Page 16]
 
-Internet-Draft                  C4 Design                      July 2026
+Internet-Draft                  C4 Design                    August 2026
 
 
    of the bandwidth*delay product.  It might cause a slight increase of
@@ -949,9 +949,9 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 17]
+Huitema, et al.         Expires 13 February 2027               [Page 17]
 
-Internet-Draft                  C4 Design                      July 2026
+Internet-Draft                  C4 Design                    August 2026
 
 
    We also reduced the default rate increase during Pushing to 6.25%,
@@ -1005,9 +1005,9 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 18]
+Huitema, et al.         Expires 13 February 2027               [Page 18]
 
-Internet-Draft                  C4 Design                      July 2026
+Internet-Draft                  C4 Design                    August 2026
 
 
    *  set sensitivity to 0 if data rate is lower than 50000B/s
@@ -1061,9 +1061,9 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 19]
+Huitema, et al.         Expires 13 February 2027               [Page 19]
 
-Internet-Draft                  C4 Design                      July 2026
+Internet-Draft                  C4 Design                    August 2026
 
 
    the bandwidth after about 68 RTT, or increase from 10 to 65 Mbps
@@ -1117,9 +1117,9 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 20]
+Huitema, et al.         Expires 13 February 2027               [Page 20]
 
-Internet-Draft                  C4 Design                      July 2026
+Internet-Draft                  C4 Design                    August 2026
 
 
    interval coincides with the sending of these reference frames.  If
@@ -1173,9 +1173,9 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 21]
+Huitema, et al.         Expires 13 February 2027               [Page 21]
 
-Internet-Draft                  C4 Design                      July 2026
+Internet-Draft                  C4 Design                    August 2026
 
 
    If the observed ratio of ECN-CE marks is greater than zero, we will
@@ -1229,9 +1229,9 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 22]
+Huitema, et al.         Expires 13 February 2027               [Page 22]
 
-Internet-Draft                  C4 Design                      July 2026
+Internet-Draft                  C4 Design                    August 2026
 
 
 7.4.  Adaptation to ECN/L4S
@@ -1285,9 +1285,9 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 23]
+Huitema, et al.         Expires 13 February 2027               [Page 23]
 
-Internet-Draft                  C4 Design                      July 2026
+Internet-Draft                  C4 Design                    August 2026
 
 
    *  if the previous probe was successful and did not result in a high
@@ -1341,9 +1341,9 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 24]
+Huitema, et al.         Expires 13 February 2027               [Page 24]
 
-Internet-Draft                  C4 Design                      July 2026
+Internet-Draft                  C4 Design                    August 2026
 
 
 8.1.  Why not increasing Max RTT during Initial phase?
@@ -1397,9 +1397,9 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 25]
+Huitema, et al.         Expires 13 February 2027               [Page 25]
 
-Internet-Draft                  C4 Design                      July 2026
+Internet-Draft                  C4 Design                    August 2026
 
 
    "ssthresh" is set to half the CWND value before congestion is
@@ -1453,9 +1453,9 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 26]
+Huitema, et al.         Expires 13 February 2027               [Page 26]
 
-Internet-Draft                  C4 Design                      July 2026
+Internet-Draft                  C4 Design                    August 2026
 
 
     ^
@@ -1509,9 +1509,9 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 27]
+Huitema, et al.         Expires 13 February 2027               [Page 27]
 
-Internet-Draft                  C4 Design                      July 2026
+Internet-Draft                  C4 Design                    August 2026
 
 
    By default, C4 tries small rate increases during pushes, 6.25% by
@@ -1565,9 +1565,9 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 28]
+Huitema, et al.         Expires 13 February 2027               [Page 28]
 
-Internet-Draft                  C4 Design                      July 2026
+Internet-Draft                  C4 Design                    August 2026
 
 
    This leaves a choice for the second level of the cascade.  We tried
@@ -1621,9 +1621,9 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 29]
+Huitema, et al.         Expires 13 February 2027               [Page 29]
 
-Internet-Draft                  C4 Design                      July 2026
+Internet-Draft                  C4 Design                    August 2026
 
 
    The BBR probe BW or the BBR cascade stop when the measured rate stops
@@ -1677,9 +1677,9 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 30]
+Huitema, et al.         Expires 13 February 2027               [Page 30]
 
-Internet-Draft                  C4 Design                      July 2026
+Internet-Draft                  C4 Design                    August 2026
 
 
    The merged state also caused regressions in the testing of competiton
@@ -1733,9 +1733,9 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 31]
+Huitema, et al.         Expires 13 February 2027               [Page 31]
 
-Internet-Draft                  C4 Design                      July 2026
+Internet-Draft                  C4 Design                    August 2026
 
 
    +==============+=========+=========+=========+============+=========+
@@ -1754,9 +1754,605 @@ Internet-Draft                  C4 Design                      July 2026
    nominal rate matches the seed rate.  This might be something for
    further work.
 
-10.  State Machine
+10.  Revision after the third design
+
+   After presentation to the IETF during the meeting in Vienna in July
+   2026 (IETF 126), we received feedback about a number of potential
+   issue, including the need to test C4 in presence of buffer bloat, and
+   the need to analyse competition issues.
+
+   To address this feedback, we added "buffer bloat" tests to the list
+   of simulations used for validating the design, and we also decided to
+   improve the reporting of tests by also reporting the evolution of the
+   RTT, and, for tests involving competition, the share of network
+   capacity claimed by the C4 connection.
+
+   These tests showed that improvements were needed to avoid persisting
+   higher-than-capacity pacing rates in some scenarios, and to quickly
+   reduce network queues if they were built.  We discuss these
+   improvements in Section 10.1 and Section 10.2.  These improvements
+   had the expected result, but they also triggered a performance
+   regression in the "bad WiFi" scenario, which we discuss in
+   Section 10.3.  With these three modification, we obtain a C4 protocol
+   that meets our requirement, providing high performance and low delays
+   with a simple design.
+
+10.1.  Trimming excess capacity
+
+   The new set of measurements showed that in some scenarios, the "third
+   sesign" version of C4 was driving the RTT towards large values.  The
+   large delays that we observe are caused by increased queues, which
+   are caused by sending data too fast for too long.  The design
+   included precautions to avoid keeping excessive max RTT values (see
+   Section 3.2).  These precautions solve the "too long" part of the
+   issue, but there are limits because the long nominal max RTTs are
+
+
+
+Huitema, et al.         Expires 13 February 2027               [Page 32]
+
+Internet-Draft                  C4 Design                    August 2026
+
+
+   necessary in high jitter situations.  In fact, we do see cases where
+   delay jitter causes the data rate estimate to be slightly higher than
+   the actual available bandwidth.  To reduce the queues, we proably
+   need C4 to send a bit slower.
+
+   We tried a simple change: when the data rate does not increase for a
+   whole cycle, and the transmission in the probing stage was not
+   application limited, reduce the nominal data rate to track the
+   measurements -- something that C4 only did before when noticing
+   persistent congestion.  We experimented with different rates of
+   decrease, and found that a 1/2th decrease provided the most
+   interesting results.  The change in specification would be, "if the
+   data rate does not increase for a whole cycle, and the transmission
+   in the probing stage was not application limited, reduce the nominal
+   data rate to the average of the previous value and the highest
+   measurement in the last cycle."
+
+     +========================+========+========+========+==========+
+     | top 90% of RTT +       |     c4 |    bbr |  cubic | Trimming |
+     | standard deviation for |        |        |        | 1/2 rate |
+     | network events tests   |        |        |        |          |
+     +========================+========+========+========+==========+
+     | alone                  | 145798 | 107604 | 167571 |   141307 |
+     +------------------------+--------+--------+--------+----------+
+     | alone_200              |  88677 |  57168 |  70772 |    88272 |
+     +------------------------+--------+--------+--------+----------+
+     | alone_1_5M             |  96662 |  64683 |  90867 |    73264 |
+     +------------------------+--------+--------+--------+----------+
+     | alone_512k             | 105400 | 104226 | 106116 |    90963 |
+     +------------------------+--------+--------+--------+----------+
+     | low_and_up             | 127913 | 134293 | 147216 |   129420 |
+     +------------------------+--------+--------+--------+----------+
+     | drop_and_back          | 148289 | 150347 | 161333 |   149161 |
+     +------------------------+--------+--------+--------+----------+
+     | blackhole              | 479783 | 500638 | 485330 |   432236 |
+     +------------------------+--------+--------+--------+----------+
+     | short_long             | 230005 | 232484 | 409884 |   229986 |
+     +------------------------+--------+--------+--------+----------+
+     | satellite              | 602366 | 830684 | 621278 |   602326 |
+     +------------------------+--------+--------+--------+----------+
+
+                                 Table 5
+
+   The top RTT values are lower in all the network events tests but two,
+   the "low and up" test, with a difference of 1.4 ms, and the "drop and
+   back" test, with a difference of 1.1 ms.  We see significant
+   improvement in the 1.5 Mbps test, with a difference of 23 ms, and in
+   the 512 Kbps test, with a difference of 14 ms.  We seem to see a
+
+
+
+Huitema, et al.         Expires 13 February 2027               [Page 33]
+
+Internet-Draft                  C4 Design                    August 2026
+
+
+   comromise: trimming the nominal rate quickly does reduce the queues
+   in general, but having a slightly lower nominal rate means that
+   queues will persist a bit longer after a rate increase.  The tables
+   of "time spent" do not show any preformance decrease in these tests
+   -- some are faster, some are slower, but the differences are tiny.
+
+     +========================+========+========+=========+==========+
+     | top 90% of RTT +       |     c4 |    bbr |   cubic | Trimming |
+     | standard deviation for |        |        |         |      1/2 |
+     | buffer bloat tests     |        |        |         |          |
+     +========================+========+========+=========+==========+
+     | bbloat                 | 158066 |  95924 |  322642 |   156178 |
+     +------------------------+--------+--------+---------+----------+
+     | bbloat_c4              | 361542 | 118202 |  939834 |   345468 |
+     +------------------------+--------+--------+---------+----------+
+     | bbloat_bbr             | 160655 | 159931 |  408664 |   159903 |
+     +------------------------+--------+--------+---------+----------+
+     | bbloat_cubic           | 859970 | 137306 | 1039625 |   859395 |
+     +------------------------+--------+--------+---------+----------+
+
+                                  Table 6
+
+           +====================+=====+=====+=======+==========+
+           | top 90% load for   |  c4 | bbr | cubic | Trimming |
+           | buffer bloat tests |     |     |       |      1/2 |
+           +====================+=====+=====+=======+==========+
+           | bbloat             | 98% | 95% |   98% |      98% |
+           +--------------------+-----+-----+-------+----------+
+           | bbloat_c4          | 59% | 58% |   60% |      59% |
+           +--------------------+-----+-----+-------+----------+
+           | bbloat_bbr         | 82% | 58% |   86% |      82% |
+           +--------------------+-----+-----+-------+----------+
+           | bbloat_cubic       | 60% | 58% |   60% |      60% |
+           +--------------------+-----+-----+-------+----------+
+
+                                  Table 7
+
+   Trimming has very little effect on the buffer bloat tests.  We do see
+   some small reductions in the top RTT for some tests, but these are
+   too small to matter.  We also do not see any big change in the
+   fairness of copeting under buffer bloat.  One possibility is that,
+   while trimming prevents the queues from increasing too much, it does
+   not by itself drain them.  We should probably complement trimming by
+   some explicit form of draining.
+
+
+
+
+
+
+
+Huitema, et al.         Expires 13 February 2027               [Page 34]
+
+Internet-Draft                  C4 Design                    August 2026
+
+
+   +=============================+========+========+========+==========+
+   | top 90% of RTT +            |     c4 |    bbr |  cubic | Trimming |
+   | standard deviation          |        |        |        |      1/2 |
+   | for compete tests           |        |        |        |          |
+   +=============================+========+========+========+==========+
+   | vs_bbr                      | 127906 | 156408 | 163495 |   125994 |
+   +-----------------------------+--------+--------+--------+----------+
+   | vs_c4                       | 147578 | 133587 | 154995 |   162418 |
+   +-----------------------------+--------+--------+--------+----------+
+   | vs_cubic                    | 161612 | 151990 | 165428 |   160008 |
+   +-----------------------------+--------+--------+--------+----------+
+   | after_c4                    | 150671 | 129600 | 139090 |   150557 |
+   +-----------------------------+--------+--------+--------+----------+
+   | before_c4                   | 109443 |  96827 | 110039 |   108681 |
+   +-----------------------------+--------+--------+--------+----------+
+   | vs_c4_lg                    | 147437 | 112710 | 153852 |   149633 |
+   +-----------------------------+--------+--------+--------+----------+
+   | vs_c4_lg2                   | 158254 | 154662 | 141550 |   157719 |
+   +-----------------------------+--------+--------+--------+----------+
+   | vs_bbr_lg                   | 141010 | 160019 | 162743 |   137970 |
+   +-----------------------------+--------+--------+--------+----------+
+   | vs_bbr_lg2                  | 147211 | 155612 | 149919 |   154808 |
+   +-----------------------------+--------+--------+--------+----------+
+   | vs_cubic_lg                 | 151434 | 120204 | 162934 |   150852 |
+   +-----------------------------+--------+--------+--------+----------+
+   | vs_cubic_lg2                | 146843 | 149529 | 159656 |   146035 |
+   +-----------------------------+--------+--------+--------+----------+
+
+                                  Table 8
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Huitema, et al.         Expires 13 February 2027               [Page 35]
+
+Internet-Draft                  C4 Design                    August 2026
+
+
+   +================================+=====+=====+=======+==============+
+   | top 90% load for compete tests |  c4 | bbr | cubic |     Trimming |
+   |                                |     |     |       |          1/2 |
+   +================================+=====+=====+=======+==============+
+   | vs_bbr                         | 78% | 47% |   79% |          78% |
+   +--------------------------------+-----+-----+-------+--------------+
+   | vs_c4                          | 52% | 31% |   33% |          54% |
+   +--------------------------------+-----+-----+-------+--------------+
+   | vs_cubic                       | 66% | 31% |   46% |          69% |
+   +--------------------------------+-----+-----+-------+--------------+
+   | after_c4                       | 40% | 34% |   32% |          38% |
+   +--------------------------------+-----+-----+-------+--------------+
+   | before_c4                      | 72% | 50% |   67% |          69% |
+   +--------------------------------+-----+-----+-------+--------------+
+   | vs_c4_lg                       | 61% | 58% |   58% |          61% |
+   +--------------------------------+-----+-----+-------+--------------+
+   | vs_c4_lg2                      | 64% | 61% |   60% |          63% |
+   +--------------------------------+-----+-----+-------+--------------+
+   | vs_bbr_lg                      | 81% | 59% |   81% |          81% |
+   +--------------------------------+-----+-----+-------+--------------+
+   | vs_bbr_lg2                     | 78% | 69% |   61% |          80% |
+   +--------------------------------+-----+-----+-------+--------------+
+   | vs_cubic_lg                    | 78% | 58% |   60% |          77% |
+   +--------------------------------+-----+-----+-------+--------------+
+   | vs_cubic_lg2                   | 76% | 81% |   63% |          75% |
+   +--------------------------------+-----+-----+-------+--------------+
+
+                                  Table 9
+
+   Trimming the nominal rate quickly does not seem to improve the
+   fairness of C4 in the compete tests, but it does improve the top RTT
+   measurements in the competition between C4 and BBR, and between C4
+   and Cubic, except for the "vs_bbr_lg2" test, where the top RTT is 7.6
+   ms higher than before.  We also see a slight degradation in the
+   "internal competition" tests, where C4 competes with itself.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Huitema, et al.         Expires 13 February 2027               [Page 36]
+
+Internet-Draft                  C4 Design                    August 2026
+
+
+      +=================+==========+==========+==========+==========+
+      | top 90% time    |       c4 |      bbr |    cubic | Trimming |
+      | for wifi tests  |          |          |          |      1/2 |
+      +=================+==========+==========+==========+==========+
+      | wifi_bad        |  4841982 |  7522796 |  4449644 |  5249372 |
+      +-----------------+----------+----------+----------+----------+
+      | wifi_fade       |  5351680 |  5649668 |  5550500 |  5244862 |
+      +-----------------+----------+----------+----------+----------+
+      | wifi_suspension |  4574262 |  4616911 |  4602102 |  4572601 |
+      +-----------------+----------+----------+----------+----------+
+      | wifi_bad_bbr    | 11014365 | 10730711 | 13129404 | 10454091 |
+      +-----------------+----------+----------+----------+----------+
+      | wifi_bad_c4     | 11665740 | 12481659 | 12241907 | 11615184 |
+      +-----------------+----------+----------+----------+----------+
+      | wifi_bad_cubic  | 11883994 | 12246412 | 13881720 | 11388974 |
+      +-----------------+----------+----------+----------+----------+
+
+                                  Table 10
+
+    +===========================+========+========+========+==========+
+    | top 90% of RTT + standard |     c4 |    bbr |  cubic | Trimming |
+    | deviation for wifi tests  |        |        |        |      1/2 |
+    +===========================+========+========+========+==========+
+    | wifi_bad                  | 236990 | 146354 | 149225 |   260841 |
+    +---------------------------+--------+--------+--------+----------+
+    | wifi_fade                 | 210684 | 177334 | 187572 |   210766 |
+    +---------------------------+--------+--------+--------+----------+
+    | wifi_suspension           |  32878 |  34220 |  45312 |    28783 |
+    +---------------------------+--------+--------+--------+----------+
+    | wifi_bad_bbr              | 335207 | 339723 | 327846 |   332603 |
+    +---------------------------+--------+--------+--------+----------+
+    | wifi_bad_c4               | 331313 | 333343 | 333270 |   331021 |
+    +---------------------------+--------+--------+--------+----------+
+    | wifi_bad_cubic            | 339101 | 357546 | 327358 |   335187 |
+    +---------------------------+--------+--------+--------+----------+
+
+                                  Table 11
+
+   We avoided making similar changes before because of the effect on
+   high jitter situations, in particular "bad wifi" environments.  These
+   are discussed in Section 10.3.
+
+10.2.  Draining Queues
+
+   The results of tests in buffer bloat scenarios show C4 creating
+   shorter queues than Cubic but longer queues than BBR, even after
+   implementing the "trimming" changes.
+
+
+
+
+Huitema, et al.         Expires 13 February 2027               [Page 37]
+
+Internet-Draft                  C4 Design                    August 2026
+
+
+       +====================+========+========+========+==========+
+       | average RTT for    |     c4 |    bbr |  cubic | trimming |
+       | buffer bloat tests |        |        |        |      1/2 |
+       +====================+========+========+========+==========+
+       | bbloat             | 113475 |  84750 | 229647 |   111173 |
+       +--------------------+--------+--------+--------+----------+
+       | bbloat_c4          | 229418 |  92740 | 660442 |   234925 |
+       +--------------------+--------+--------+--------+----------+
+       | bbloat_bbr         | 131826 | 124558 | 266277 |   131812 |
+       +--------------------+--------+--------+--------+----------+
+       | bbloat_cubic       | 551053 |  97505 | 647602 |   551157 |
+       +--------------------+--------+--------+--------+----------+
+
+                                 Table 12
+
+   We analysed "qlog" traces of the BBR and C4 traces in the "buffer
+   bloat" trace, and found that most of the difference in average RTT
+   measurements was due to the more efficient "draining" of the excess
+   queues created in the Initial phase.  BBR enters a "drain" phase
+   after exiting start-up, during which it operates at a small fraction
+   of the estimated bandwidth, and exits that phase when the number of
+   bytes in flight is below the bandwidth-delay product of the path,
+   defined as the product of the estimated bandwidth by the min RTT.
+
+   We don't want to copy BBR's algorithm, because its dependency on the
+   min RTT of the path conflicts with the inherent variation of the RTT
+   in high delay jitter scenarios.  We also want to limit the size of
+   the bandwidth drops when draining, because such drops would add
+   delays to the transmission of real time media.
+
+   Instead, we tried a simple simple change, adding a "draining" option
+   to the recovery phase.  That option will be set if we detected a need
+   to drain during the previous cycle, which we set upon exciting the
+   Initial phase, or if the nominal max RTT was reduced during the
+   previous cycle.  If the draining option is set, the pacing rate
+   during recovery is set to only 3/4th of the nominal rate, instead of
+   the default 15/16th.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Huitema, et al.         Expires 13 February 2027               [Page 38]
+
+Internet-Draft                  C4 Design                    August 2026
+
+
+    +==============+========+========+========+==========+============+
+    | average RTT  |     c4 |    bbr |  cubic | trimming | trim+drain |
+    | for buffer   |        |        |        |      1/2 |            |
+    | bloat tests  |        |        |        |          |            |
+    +==============+========+========+========+==========+============+
+    | bbloat       | 113442 |  84752 | 229647 |   111175 |      99972 |
+    +--------------+--------+--------+--------+----------+------------+
+    | bbloat_c4    | 232427 |  92729 | 660442 |   235607 |     247761 |
+    +--------------+--------+--------+--------+----------+------------+
+    | bbloat_bbr   | 132447 | 124744 | 266277 |   132141 |     113293 |
+    +--------------+--------+--------+--------+----------+------------+
+    | bbloat_cubic | 551412 |  97494 | 647602 |   551335 |     601098 |
+    +--------------+--------+--------+--------+----------+------------+
+
+                                  Table 13
+
+   This simple change has a very positive effect on the average RTT for
+   the buffer bloat tests, except for the C4 compete test.  It also
+   appears to improve the fairness of C4 during the compete tests,
+   probably because all competing connections detect a drop in the RTT
+   and start draining at about the same time:
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Huitema, et al.         Expires 13 February 2027               [Page 39]
+
+Internet-Draft                  C4 Design                    August 2026
+
+
+     +==================+=====+=====+=======+==========+============+
+     | top 90% load for |  c4 | bbr | cubic | trimming | trim+drain |
+     | compete tests    |     |     |       |      1/2 |            |
+     +==================+=====+=====+=======+==========+============+
+     | vs_bbr           | 78% | 47% |   79% |      78% |        77% |
+     +------------------+-----+-----+-------+----------+------------+
+     | vs_c4            | 52% | 21% |   33% |      53% |        53% |
+     +------------------+-----+-----+-------+----------+------------+
+     | vs_cubic         | 70% | 18% |   46% |      70% |        58% |
+     +------------------+-----+-----+-------+----------+------------+
+     | after_c4         | 36% | 18% |   32% |      36% |        43% |
+     +------------------+-----+-----+-------+----------+------------+
+     | before_c4        | 65% | 47% |   67% |      64% |        61% |
+     +------------------+-----+-----+-------+----------+------------+
+     | vs_c4_lg         | 54% | 21% |   58% |      55% |        54% |
+     +------------------+-----+-----+-------+----------+------------+
+     | vs_c4_lg2        | 58% | 53% |   60% |      59% |        62% |
+     +------------------+-----+-----+-------+----------+------------+
+     | vs_bbr_lg        | 81% | 50% |   81% |      81% |        72% |
+     +------------------+-----+-----+-------+----------+------------+
+     | vs_bbr_lg2       | 76% | 68% |   61% |      79% |        77% |
+     +------------------+-----+-----+-------+----------+------------+
+     | vs_cubic_lg      | 78% | 19% |   60% |      76% |        62% |
+     +------------------+-----+-----+-------+----------+------------+
+     | vs_cubic_lg2     | 74% | 81% |   63% |      74% |        68% |
+     +------------------+-----+-----+-------+----------+------------+
+
+                                 Table 14
+
+   The fairness results improve across the board.  We see a remarcable
+   improvement for the "vs_bbr_lg", for which the load passed from a
+   worrying 81% to an acceptable 72%.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Huitema, et al.         Expires 13 February 2027               [Page 40]
+
+Internet-Draft                  C4 Design                    August 2026
+
+
+   +=================+=======+=======+========+==========+============+
+   | average time    |     c4|    bbr|   cubic| trimming | trim+drain |
+   | for wifi tests  |       |       |        |      1/2 |            |
+   +=================+=======+=======+========+==========+============+
+   | wifi_bad        |4070606|5442735| 4134315|  4235194 |    4208666 |
+   +-----------------+-------+-------+--------+----------+------------+
+   | wifi_fade       |5073239|5450844| 5359530|  5046484 |    5062410 |
+   +-----------------+-------+-------+--------+----------+------------+
+   | wifi_suspension |4564955|4615857| 4600733|  4568762 |    4595519 |
+   +-----------------+-------+-------+--------+----------+------------+
+   | wifi_bad_bbr    |7065591|7448910| 7909627|  7067851 |    7063808 |
+   +-----------------+-------+-------+--------+----------+------------+
+   | wifi_bad_c4     |8664120|9786873| 8548230|  8586032 |    8776550 |
+   +-----------------+-------+-------+--------+----------+------------+
+   | wifi_bad_cubic  |8649554|8826107|10820353|  8964709 |    8494418 |
+   +-----------------+-------+-------+--------+----------+------------+
+
+                                 Table 15
+
+      +=================+=====+=====+=======+==========+============+
+      | average load    |  c4 | bbr | cubic | Trimming | Trim+Drain |
+      | for wifi tests  |     |     |       |      1/2 |            |
+      +=================+=====+=====+=======+==========+============+
+      | wifi_bad        | 84% | 67% |   87% |      81% |        82% |
+      +-----------------+-----+-----+-------+----------+------------+
+      | wifi_fade       | 87% | 77% |   80% |      87% |        87% |
+      +-----------------+-----+-----+-------+----------+------------+
+      | wifi_suspension | 91% | 89% |   91% |      91% |        91% |
+      +-----------------+-----+-----+-------+----------+------------+
+      | wifi_bad_bbr    | 64% | 65% |   69% |      64% |        60% |
+      +-----------------+-----+-----+-------+----------+------------+
+      | wifi_bad_c4     | 51% | 48% |   55% |      52% |        52% |
+      +-----------------+-----+-----+-------+----------+------------+
+      | wifi_bad_cubic  | 50% | 69% |   49% |      47% |        49% |
+      +-----------------+-----+-----+-------+----------+------------+
+
+                                  Table 16
+
+   We seem to have a mild performance regression for the "wifi_bad" test
+   -- draining does not compensate the performance regression introduced
+   by trimming.
+
+
+
+
+
+
+
+
+
+
+Huitema, et al.         Expires 13 February 2027               [Page 41]
+
+Internet-Draft                  C4 Design                    August 2026
+
+
+10.3.  Revisiting support for Wi-Fi
+
+   Each of our test runs performs 100 simulations of the "bad Wi-Fi"
+   scenario.  We observe that there is a high variability between the
+   simulations.  Some of that is expected.  The simulation of Wi-Fi
+   jitter is a random process, and we can expect that different
+   simulations will encounter different patterns of jitter, and thus
+   different performances.  The graph of durations shows that, but it
+   also shows that the worse 20 or so simulations are significantly
+   worse "after trim and drain" than with the unmodified "draft-04"
+   implementation.
+
+   Analysis of the logs of the worst simulation results let us see an
+   obvious pattern.  In the "good" case, we see an event about 1.5
+   second into the connection that leads C4 to explore higher RTT and
+   higher data rates, while in the "bad" case the RTT is constrained
+   into a much narrower band and the pacing rate converges on a much
+   lower value.
+
+   The growth pattern of the "good" connection between 1.5 and 2 seconds
+   after the starts corresponds to C4 re-entering the Initial state,
+   following the rule specified in section 4.4.1 of the versio 04 of the
+   specification:
+
+   *  _C4 will reenter the "initial" phase on the first time high jitter
+      is detected for the flow.  The high jitter is detected after
+      updating the "nominal max RTT" at the end of the recovery era, if
+      running_min_rtt < nominal_max_rtt*2/5.  This will be done at most
+      once per flow._
+
+   We discovered that in the worse cases, C4 did re-enter the Initial
+   phase, be reentered it very early.  Draining kept the running_min_rtt
+   low, and thus even a limited jitter would trigger the
+   reinitialization.  The "only once" rule was preventing adaptaion when
+   the larger jitter event occured later.  The solution is thus to
+   remove the "only once" limitation that we added perhaps too
+   cautiously, and let C4 reenter the Initial phase multiple times.
+
+   The performance for the Wi-Fi test improved immediately after this
+   fix, with the average execution time of Wi-Fi tests falling below the
+   value observe in the previous design, and without causing any
+   significant regression in the other scenarios.
+
+11.  State Machine
 
    The state machine for C4 has the following states:
+
+
+
+
+
+Huitema, et al.         Expires 13 February 2027               [Page 42]
+
+Internet-Draft                  C4 Design                    August 2026
+
 
    *  "startup": the initial state, during which the CWND is set to
       twice the "nominal_CWND".  The connection exits startup if the
@@ -1785,15 +2381,6 @@ Internet-Draft                  C4 Design                      July 2026
       "cruising" state until at least 4 RTT and the connection is not
       "app limited".  At that point, it enters "pushing".
 
-
-
-
-
-Huitema, et al.          Expires 4 January 2027                [Page 32]
-
-Internet-Draft                  C4 Design                      July 2026
-
-
    *  "probing": the connection is using a rate and CWND 6.15% larger
       than "nominal_rate" and "nominal_CWND".  After 1 RTT, it moves
       back to "recovery" in order to assess the results.  If the data
@@ -1818,36 +2405,9 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-Huitema, et al.          Expires 4 January 2027                [Page 33]
+Huitema, et al.         Expires 13 February 2027               [Page 43]
 
-Internet-Draft                  C4 Design                      July 2026
+Internet-Draft                  C4 Design                    August 2026
 
 
                        Start
@@ -1901,23 +2461,23 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 34]
+Huitema, et al.         Expires 13 February 2027               [Page 44]
 
-Internet-Draft                  C4 Design                      July 2026
+Internet-Draft                  C4 Design                    August 2026
 
 
-11.  Security Considerations
+12.  Security Considerations
 
    We do not believe that C4 introduce new security issues.  Or maybe
    there are, such as what happen if applications can be fooled in going
    to fast and overwhelming the network, or going to slow and
    underwhelming the application.  Discuss!
 
-12.  IANA Considerations
+13.  IANA Considerations
 
    This document has no IANA actions.
 
-13.  Informative References
+14.  Informative References
 
    [RFC9000]  Iyengar, J., Ed. and M. Thomson, Ed., "QUIC: A UDP-Based
               Multiplexed and Secure Transport", RFC 9000,
@@ -1927,9 +2487,9 @@ Internet-Draft                  C4 Design                      July 2026
    [I-D.ietf-moq-transport]
               Nandakumar, S., Vasiliev, V., Swett, I., and A. Frindell,
               "Media over QUIC Transport", Work in Progress, Internet-
-              Draft, draft-ietf-moq-transport-18, 12 May 2026,
+              Draft, draft-ietf-moq-transport-19, 6 July 2026,
               <https://datatracker.ietf.org/doc/html/draft-ietf-moq-
-              transport-18>.
+              transport-19>.
 
    [RFC9438]  Xu, L., Ha, S., Rhee, I., Goel, V., and L. Eggert, Ed.,
               "CUBIC for Fast and Long-Distance Networks", RFC 9438,
@@ -1939,9 +2499,9 @@ Internet-Draft                  C4 Design                      July 2026
    [I-D.ietf-ccwg-bbr]
               Cardwell, N., Swett, I., and J. Beshay, "BBR Congestion
               Control", Work in Progress, Internet-Draft, draft-ietf-
-              ccwg-bbr-05, 2 March 2026,
+              ccwg-bbr-06, 6 July 2026,
               <https://datatracker.ietf.org/doc/html/draft-ietf-ccwg-
-              bbr-05>.
+              bbr-06>.
 
    [RFC6817]  Shalunov, S., Hazel, G., Iyengar, J., and M. Kuehlewind,
               "Low Extra Delay Background Transport (LEDBAT)", RFC 6817,
@@ -1957,9 +2517,9 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 35]
+Huitema, et al.         Expires 13 February 2027               [Page 45]
 
-Internet-Draft                  C4 Design                      July 2026
+Internet-Draft                  C4 Design                    August 2026
 
 
    [RFC3649]  Floyd, S., "HighSpeed TCP for Large Congestion Windows",
@@ -2013,9 +2573,9 @@ Internet-Draft                  C4 Design                      July 2026
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 36]
+Huitema, et al.         Expires 13 February 2027               [Page 46]
 
-Internet-Draft                  C4 Design                      July 2026
+Internet-Draft                  C4 Design                    August 2026
 
 
    [RFC9959]  Kuhn, N., Stephan, E., Fairhurst, G., Secchi, R., and C.
@@ -2069,4 +2629,4 @@ Authors' Addresses
 
 
 
-Huitema, et al.          Expires 4 January 2027                [Page 37]
+Huitema, et al.         Expires 13 February 2027               [Page 47]

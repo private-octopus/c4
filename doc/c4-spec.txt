@@ -993,7 +993,7 @@ Internet-Draft              C4 Specification                 August 2026
    Initial phase, during a Pushing phase, or if the path RTT is reduced.
    When any of these conditions is detected, C4 sets a "draining needed"
    flag.  Upon entering recovery, if this flag is set, the coefficient
-   "alpha" is set to 3/4th instead of the default 15/16.
+   "alpha" is set to 7/8th instead of the default 15/16.
 
 6.  Implementation considerations
 

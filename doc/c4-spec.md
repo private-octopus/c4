@@ -783,7 +783,7 @@ capacity, and if the number of bytes in transit is higher than the bandwidth
 delay product. This can happen during an Initial phase, during a Pushing phase,
 or if the path RTT is reduced. When any of these conditions is detected,
 C4 sets a "draining needed" flag. Upon entering recovery, if this flag is
-set, the coefficient "alpha" is set to 3/4th instead of the default 15/16.
+set, the coefficient "alpha" is set to 7/8th instead of the default 15/16.
 
 
 # Implementation considerations

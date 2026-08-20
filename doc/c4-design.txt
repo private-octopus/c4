@@ -5,9 +5,9 @@
 Network Working Group                                         C. Huitema
 Internet-Draft                                      Private Octopus Inc.
 Intended status: Informational                             S. Nandakumar
-Expires: 13 February 2027                                    C. Jennings
+Expires: 21 February 2027                                    C. Jennings
                                                                    Cisco
-                                                          12 August 2026
+                                                          20 August 2026
 
 
            Design of Christian's Congestion Control Code (C4)
@@ -43,7 +43,7 @@ Status of This Memo
    time.  It is inappropriate to use Internet-Drafts as reference
    material or to cite them other than as "work in progress."
 
-   This Internet-Draft will expire on 13 February 2027.
+   This Internet-Draft will expire on 21 February 2027.
 
 Copyright Notice
 
@@ -53,7 +53,7 @@ Copyright Notice
 
 
 
-Huitema, et al.         Expires 13 February 2027                [Page 1]
+Huitema, et al.         Expires 21 February 2027                [Page 1]
 
 Internet-Draft                  C4 Design                    August 2026
 
@@ -109,7 +109,7 @@ Table of Contents
 
 
 
-Huitema, et al.         Expires 13 February 2027                [Page 2]
+Huitema, et al.         Expires 21 February 2027                [Page 2]
 
 Internet-Draft                  C4 Design                    August 2026
 
@@ -121,7 +121,7 @@ Internet-Draft                  C4 Design                    August 2026
      10.1.  Trimming excess capacity . . . . . . . . . . . . . . . .  32
      10.2.  Draining Queues  . . . . . . . . . . . . . . . . . . . .  37
      10.3.  Revisiting support for Wi-Fi . . . . . . . . . . . . . .  42
-   11. State Machine . . . . . . . . . . . . . . . . . . . . . . . .  42
+   11. State Machine . . . . . . . . . . . . . . . . . . . . . . . .  43
    12. Security Considerations . . . . . . . . . . . . . . . . . . .  45
    13. IANA Considerations . . . . . . . . . . . . . . . . . . . . .  45
    14. Informative References  . . . . . . . . . . . . . . . . . . .  45
@@ -165,7 +165,7 @@ Internet-Draft                  C4 Design                    August 2026
 
 
 
-Huitema, et al.         Expires 13 February 2027                [Page 3]
+Huitema, et al.         Expires 21 February 2027                [Page 3]
 
 Internet-Draft                  C4 Design                    August 2026
 
@@ -221,7 +221,7 @@ Internet-Draft                  C4 Design                    August 2026
 
 
 
-Huitema, et al.         Expires 13 February 2027                [Page 4]
+Huitema, et al.         Expires 21 February 2027                [Page 4]
 
 Internet-Draft                  C4 Design                    August 2026
 
@@ -277,7 +277,7 @@ Internet-Draft                  C4 Design                    August 2026
 
 
 
-Huitema, et al.         Expires 13 February 2027                [Page 5]
+Huitema, et al.         Expires 21 February 2027                [Page 5]
 
 Internet-Draft                  C4 Design                    August 2026
 
@@ -333,7 +333,7 @@ Internet-Draft                  C4 Design                    August 2026
 
 
 
-Huitema, et al.         Expires 13 February 2027                [Page 6]
+Huitema, et al.         Expires 21 February 2027                [Page 6]
 
 Internet-Draft                  C4 Design                    August 2026
 
@@ -389,7 +389,7 @@ Internet-Draft                  C4 Design                    August 2026
 
 
 
-Huitema, et al.         Expires 13 February 2027                [Page 7]
+Huitema, et al.         Expires 21 February 2027                [Page 7]
 
 Internet-Draft                  C4 Design                    August 2026
 
@@ -445,7 +445,7 @@ Internet-Draft                  C4 Design                    August 2026
 
 
 
-Huitema, et al.         Expires 13 February 2027                [Page 8]
+Huitema, et al.         Expires 21 February 2027                [Page 8]
 
 Internet-Draft                  C4 Design                    August 2026
 
@@ -501,7 +501,7 @@ Internet-Draft                  C4 Design                    August 2026
 
 
 
-Huitema, et al.         Expires 13 February 2027                [Page 9]
+Huitema, et al.         Expires 21 February 2027                [Page 9]
 
 Internet-Draft                  C4 Design                    August 2026
 
@@ -557,7 +557,7 @@ Internet-Draft                  C4 Design                    August 2026
 
 
 
-Huitema, et al.         Expires 13 February 2027               [Page 10]
+Huitema, et al.         Expires 21 February 2027               [Page 10]
 
 Internet-Draft                  C4 Design                    August 2026
 
@@ -613,7 +613,7 @@ Internet-Draft                  C4 Design                    August 2026
 
 
 
-Huitema, et al.         Expires 13 February 2027               [Page 11]
+Huitema, et al.         Expires 21 February 2027               [Page 11]
 
 Internet-Draft                  C4 Design                    August 2026
 
@@ -669,7 +669,7 @@ Internet-Draft                  C4 Design                    August 2026
 
 
 
-Huitema, et al.         Expires 13 February 2027               [Page 12]
+Huitema, et al.         Expires 21 February 2027               [Page 12]
 
 Internet-Draft                  C4 Design                    August 2026
 
@@ -725,7 +725,7 @@ Internet-Draft                  C4 Design                    August 2026
 
 
 
-Huitema, et al.         Expires 13 February 2027               [Page 13]
+Huitema, et al.         Expires 21 February 2027               [Page 13]
 
 Internet-Draft                  C4 Design                    August 2026
 
@@ -781,7 +781,7 @@ Internet-Draft                  C4 Design                    August 2026
 
 
 
-Huitema, et al.         Expires 13 February 2027               [Page 14]
+Huitema, et al.         Expires 21 February 2027               [Page 14]
 
 Internet-Draft                  C4 Design                    August 2026
 
@@ -837,7 +837,7 @@ Internet-Draft                  C4 Design                    August 2026
 
 
 
-Huitema, et al.         Expires 13 February 2027               [Page 15]
+Huitema, et al.         Expires 21 February 2027               [Page 15]
 
 Internet-Draft                  C4 Design                    August 2026
 
@@ -893,7 +893,7 @@ Internet-Draft                  C4 Design                    August 2026
 
 
 
-Huitema, et al.         Expires 13 February 2027               [Page 16]
+Huitema, et al.         Expires 21 February 2027               [Page 16]
 
 Internet-Draft                  C4 Design                    August 2026
 
@@ -949,7 +949,7 @@ Internet-Draft                  C4 Design                    August 2026
 
 
 
-Huitema, et al.         Expires 13 February 2027               [Page 17]
+Huitema, et al.         Expires 21 February 2027               [Page 17]
 
 Internet-Draft                  C4 Design                    August 2026
 
@@ -1005,7 +1005,7 @@ Internet-Draft                  C4 Design                    August 2026
 
 
 
-Huitema, et al.         Expires 13 February 2027               [Page 18]
+Huitema, et al.         Expires 21 February 2027               [Page 18]
 
 Internet-Draft                  C4 Design                    August 2026
 
@@ -1061,7 +1061,7 @@ Internet-Draft                  C4 Design                    August 2026
 
 
 
-Huitema, et al.         Expires 13 February 2027               [Page 19]
+Huitema, et al.         Expires 21 February 2027               [Page 19]
 
 Internet-Draft                  C4 Design                    August 2026
 
@@ -1117,7 +1117,7 @@ Internet-Draft                  C4 Design                    August 2026
 
 
 
-Huitema, et al.         Expires 13 February 2027               [Page 20]
+Huitema, et al.         Expires 21 February 2027               [Page 20]
 
 Internet-Draft                  C4 Design                    August 2026
 
@@ -1173,7 +1173,7 @@ Internet-Draft                  C4 Design                    August 2026
 
 
 
-Huitema, et al.         Expires 13 February 2027               [Page 21]
+Huitema, et al.         Expires 21 February 2027               [Page 21]
 
 Internet-Draft                  C4 Design                    August 2026
 
@@ -1229,7 +1229,7 @@ Internet-Draft                  C4 Design                    August 2026
 
 
 
-Huitema, et al.         Expires 13 February 2027               [Page 22]
+Huitema, et al.         Expires 21 February 2027               [Page 22]
 
 Internet-Draft                  C4 Design                    August 2026
 
@@ -1285,7 +1285,7 @@ Internet-Draft                  C4 Design                    August 2026
 
 
 
-Huitema, et al.         Expires 13 February 2027               [Page 23]
+Huitema, et al.         Expires 21 February 2027               [Page 23]
 
 Internet-Draft                  C4 Design                    August 2026
 
@@ -1341,7 +1341,7 @@ Internet-Draft                  C4 Design                    August 2026
 
 
 
-Huitema, et al.         Expires 13 February 2027               [Page 24]
+Huitema, et al.         Expires 21 February 2027               [Page 24]
 
 Internet-Draft                  C4 Design                    August 2026
 
@@ -1387,9 +1387,9 @@ Internet-Draft                  C4 Design                    August 2026
    the growth of the CWND after the third "non growing" round.  If CWND
    doubles after each round it becomes excessive, buffers fill up, and
    lots of packets are lost.  We dealt with that problem by essentially
-   freezing the increases of after the first "non growing" round.  If a
-   larger measurement happens before 3 RTT, the increases resume,
-   otherwise, C4 exits the initial phase.
+   freezing the increases of the CWND after the first "non growing"
+   round.  If a larger measurement happens before 3 RTT, the increases
+   resume, otherwise, C4 exits the initial phase.
 
    When the initial phase completes, we retain as estimate of the data
    rate the highest value measured so far.  We also want to obtain a
@@ -1397,7 +1397,7 @@ Internet-Draft                  C4 Design                    August 2026
 
 
 
-Huitema, et al.         Expires 13 February 2027               [Page 25]
+Huitema, et al.         Expires 21 February 2027               [Page 25]
 
 Internet-Draft                  C4 Design                    August 2026
 
@@ -1453,7 +1453,7 @@ Internet-Draft                  C4 Design                    August 2026
 
 
 
-Huitema, et al.         Expires 13 February 2027               [Page 26]
+Huitema, et al.         Expires 21 February 2027               [Page 26]
 
 Internet-Draft                  C4 Design                    August 2026
 
@@ -1509,7 +1509,7 @@ Internet-Draft                  C4 Design                    August 2026
 
 
 
-Huitema, et al.         Expires 13 February 2027               [Page 27]
+Huitema, et al.         Expires 21 February 2027               [Page 27]
 
 Internet-Draft                  C4 Design                    August 2026
 
@@ -1565,7 +1565,7 @@ Internet-Draft                  C4 Design                    August 2026
 
 
 
-Huitema, et al.         Expires 13 February 2027               [Page 28]
+Huitema, et al.         Expires 21 February 2027               [Page 28]
 
 Internet-Draft                  C4 Design                    August 2026
 
@@ -1621,7 +1621,7 @@ Internet-Draft                  C4 Design                    August 2026
 
 
 
-Huitema, et al.         Expires 13 February 2027               [Page 29]
+Huitema, et al.         Expires 21 February 2027               [Page 29]
 
 Internet-Draft                  C4 Design                    August 2026
 
@@ -1677,7 +1677,7 @@ Internet-Draft                  C4 Design                    August 2026
 
 
 
-Huitema, et al.         Expires 13 February 2027               [Page 30]
+Huitema, et al.         Expires 21 February 2027               [Page 30]
 
 Internet-Draft                  C4 Design                    August 2026
 
@@ -1733,7 +1733,7 @@ Internet-Draft                  C4 Design                    August 2026
 
 
 
-Huitema, et al.         Expires 13 February 2027               [Page 31]
+Huitema, et al.         Expires 21 February 2027               [Page 31]
 
 Internet-Draft                  C4 Design                    August 2026
 
@@ -1789,7 +1789,7 @@ Internet-Draft                  C4 Design                    August 2026
 
 
 
-Huitema, et al.         Expires 13 February 2027               [Page 32]
+Huitema, et al.         Expires 21 February 2027               [Page 32]
 
 Internet-Draft                  C4 Design                    August 2026
 
@@ -1845,7 +1845,7 @@ Internet-Draft                  C4 Design                    August 2026
 
 
 
-Huitema, et al.         Expires 13 February 2027               [Page 33]
+Huitema, et al.         Expires 21 February 2027               [Page 33]
 
 Internet-Draft                  C4 Design                    August 2026
 
@@ -1901,7 +1901,7 @@ Internet-Draft                  C4 Design                    August 2026
 
 
 
-Huitema, et al.         Expires 13 February 2027               [Page 34]
+Huitema, et al.         Expires 21 February 2027               [Page 34]
 
 Internet-Draft                  C4 Design                    August 2026
 
@@ -1957,7 +1957,7 @@ Internet-Draft                  C4 Design                    August 2026
 
 
 
-Huitema, et al.         Expires 13 February 2027               [Page 35]
+Huitema, et al.         Expires 21 February 2027               [Page 35]
 
 Internet-Draft                  C4 Design                    August 2026
 
@@ -2013,7 +2013,7 @@ Internet-Draft                  C4 Design                    August 2026
 
 
 
-Huitema, et al.         Expires 13 February 2027               [Page 36]
+Huitema, et al.         Expires 21 February 2027               [Page 36]
 
 Internet-Draft                  C4 Design                    August 2026
 
@@ -2069,7 +2069,7 @@ Internet-Draft                  C4 Design                    August 2026
 
 
 
-Huitema, et al.         Expires 13 February 2027               [Page 37]
+Huitema, et al.         Expires 21 February 2027               [Page 37]
 
 Internet-Draft                  C4 Design                    August 2026
 
@@ -2125,7 +2125,7 @@ Internet-Draft                  C4 Design                    August 2026
 
 
 
-Huitema, et al.         Expires 13 February 2027               [Page 38]
+Huitema, et al.         Expires 21 February 2027               [Page 38]
 
 Internet-Draft                  C4 Design                    August 2026
 
@@ -2181,7 +2181,7 @@ Internet-Draft                  C4 Design                    August 2026
 
 
 
-Huitema, et al.         Expires 13 February 2027               [Page 39]
+Huitema, et al.         Expires 21 February 2027               [Page 39]
 
 Internet-Draft                  C4 Design                    August 2026
 
@@ -2237,7 +2237,7 @@ Internet-Draft                  C4 Design                    August 2026
 
 
 
-Huitema, et al.         Expires 13 February 2027               [Page 40]
+Huitema, et al.         Expires 21 February 2027               [Page 40]
 
 Internet-Draft                  C4 Design                    August 2026
 
@@ -2293,7 +2293,7 @@ Internet-Draft                  C4 Design                    August 2026
 
 
 
-Huitema, et al.         Expires 13 February 2027               [Page 41]
+Huitema, et al.         Expires 21 February 2027               [Page 41]
 
 Internet-Draft                  C4 Design                    August 2026
 
@@ -2328,13 +2328,31 @@ Internet-Draft                  C4 Design                    August 2026
       running_min_rtt < nominal_max_rtt*2/5.  This will be done at most
       once per flow._
 
-   We discovered that in the worse cases, C4 did re-enter the Initial
+   We discovered that in the worst cases, C4 did re-enter the Initial
    phase, be reentered it very early.  Draining kept the running_min_rtt
    low, and thus even a limited jitter would trigger the
-   reinitialization.  The "only once" rule was preventing adaptaion when
-   the larger jitter event occured later.  The solution is thus to
-   remove the "only once" limitation that we added perhaps too
-   cautiously, and let C4 reenter the Initial phase multiple times.
+   reinitialization.  The "only once" rule was preventing adaptation
+   when the larger jitter event occured later.  The solution was to
+   remember the time the last initial phase completed, or more precisely
+   the time the recovery that followed the last initial phase completed.
+   We added to the state a variable last_initial_time, initialized at
+   zero when entering the "initial" state, and set to the current time
+   if the first exit of the recovery state after that initial state.
+   Then, we changed the specification to:
+
+   *  _C4 will reenter the "initial" phase on the first time high jitter
+      is detected for the flow.  The high jitter is detected after
+      updating the "nominal max RTT" at the end of the recovery era, if
+      running_min_rtt < nominal_max_rtt*2/5, and if the variable
+      last_initial_time is not zero and if current_time >
+      last_initial_time + 1 second.
+
+
+
+Huitema, et al.         Expires 21 February 2027               [Page 42]
+
+Internet-Draft                  C4 Design                    August 2026
+
 
    The performance for the Wi-Fi test improved immediately after this
    fix, with the average execution time of Wi-Fi tests falling below the
@@ -2344,15 +2362,6 @@ Internet-Draft                  C4 Design                    August 2026
 11.  State Machine
 
    The state machine for C4 has the following states:
-
-
-
-
-
-Huitema, et al.         Expires 13 February 2027               [Page 42]
-
-Internet-Draft                  C4 Design                    August 2026
-
 
    *  "startup": the initial state, during which the CWND is set to
       twice the "nominal_CWND".  The connection exits startup if the
@@ -2393,22 +2402,15 @@ Internet-Draft                  C4 Design                    August 2026
       growing.  If the pushing lasts more than 3 RTT, C4 re-enters the
       initial state.
 
-   These transitions are summarized in the following state diagram.
 
 
 
-
-
-
-
-
-
-
-
-Huitema, et al.         Expires 13 February 2027               [Page 43]
+Huitema, et al.         Expires 21 February 2027               [Page 43]
 
 Internet-Draft                  C4 Design                    August 2026
 
+
+   These transitions are summarized in the following state diagram.
 
                        Start
                          |
@@ -2459,9 +2461,7 @@ Internet-Draft                  C4 Design                    August 2026
 
 
 
-
-
-Huitema, et al.         Expires 13 February 2027               [Page 44]
+Huitema, et al.         Expires 21 February 2027               [Page 44]
 
 Internet-Draft                  C4 Design                    August 2026
 
@@ -2517,7 +2517,7 @@ Internet-Draft                  C4 Design                    August 2026
 
 
 
-Huitema, et al.         Expires 13 February 2027               [Page 45]
+Huitema, et al.         Expires 21 February 2027               [Page 45]
 
 Internet-Draft                  C4 Design                    August 2026
 
@@ -2573,7 +2573,7 @@ Internet-Draft                  C4 Design                    August 2026
 
 
 
-Huitema, et al.         Expires 13 February 2027               [Page 46]
+Huitema, et al.         Expires 21 February 2027               [Page 46]
 
 Internet-Draft                  C4 Design                    August 2026
 
@@ -2629,4 +2629,4 @@ Authors' Addresses
 
 
 
-Huitema, et al.         Expires 13 February 2027               [Page 47]
+Huitema, et al.         Expires 21 February 2027               [Page 47]

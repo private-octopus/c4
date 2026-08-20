@@ -5,9 +5,9 @@
 Network Working Group                                         C. Huitema
 Internet-Draft                                      Private Octopus Inc.
 Intended status: Experimental                              S. Nandakumar
-Expires: 13 February 2027                                    C. Jennings
+Expires: 21 February 2027                                    C. Jennings
                                                                    Cisco
-                                                          12 August 2026
+                                                          20 August 2026
 
 
        Specification of Christian's Congestion Control Code (C4)
@@ -40,7 +40,7 @@ Status of This Memo
    time.  It is inappropriate to use Internet-Drafts as reference
    material or to cite them other than as "work in progress."
 
-   This Internet-Draft will expire on 13 February 2027.
+   This Internet-Draft will expire on 21 February 2027.
 
 Copyright Notice
 
@@ -53,7 +53,7 @@ Copyright Notice
 
 
 
-Huitema, et al.         Expires 13 February 2027                [Page 1]
+Huitema, et al.         Expires 21 February 2027                [Page 1]
 
 Internet-Draft              C4 Specification                 August 2026
 
@@ -109,7 +109,7 @@ Table of Contents
 
 
 
-Huitema, et al.         Expires 13 February 2027                [Page 2]
+Huitema, et al.         Expires 21 February 2027                [Page 2]
 
 Internet-Draft              C4 Specification                 August 2026
 
@@ -165,7 +165,7 @@ Internet-Draft              C4 Specification                 August 2026
 
 
 
-Huitema, et al.         Expires 13 February 2027                [Page 3]
+Huitema, et al.         Expires 21 February 2027                [Page 3]
 
 Internet-Draft              C4 Specification                 August 2026
 
@@ -221,7 +221,7 @@ Internet-Draft              C4 Specification                 August 2026
 
 
 
-Huitema, et al.         Expires 13 February 2027                [Page 4]
+Huitema, et al.         Expires 21 February 2027                [Page 4]
 
 Internet-Draft              C4 Specification                 August 2026
 
@@ -277,7 +277,7 @@ Internet-Draft              C4 Specification                 August 2026
 
 
 
-Huitema, et al.         Expires 13 February 2027                [Page 5]
+Huitema, et al.         Expires 21 February 2027                [Page 5]
 
 Internet-Draft              C4 Specification                 August 2026
 
@@ -333,7 +333,7 @@ Internet-Draft              C4 Specification                 August 2026
 
 
 
-Huitema, et al.         Expires 13 February 2027                [Page 6]
+Huitema, et al.         Expires 21 February 2027                [Page 6]
 
 Internet-Draft              C4 Specification                 August 2026
 
@@ -389,7 +389,7 @@ Internet-Draft              C4 Specification                 August 2026
 
 
 
-Huitema, et al.         Expires 13 February 2027                [Page 7]
+Huitema, et al.         Expires 21 February 2027                [Page 7]
 
 Internet-Draft              C4 Specification                 August 2026
 
@@ -445,7 +445,7 @@ Internet-Draft              C4 Specification                 August 2026
 
 
 
-Huitema, et al.         Expires 13 February 2027                [Page 8]
+Huitema, et al.         Expires 21 February 2027                [Page 8]
 
 Internet-Draft              C4 Specification                 August 2026
 
@@ -501,7 +501,7 @@ Internet-Draft              C4 Specification                 August 2026
 
 
 
-Huitema, et al.         Expires 13 February 2027                [Page 9]
+Huitema, et al.         Expires 21 February 2027                [Page 9]
 
 Internet-Draft              C4 Specification                 August 2026
 
@@ -557,7 +557,7 @@ Internet-Draft              C4 Specification                 August 2026
 
 
 
-Huitema, et al.         Expires 13 February 2027               [Page 10]
+Huitema, et al.         Expires 21 February 2027               [Page 10]
 
 Internet-Draft              C4 Specification                 August 2026
 
@@ -613,7 +613,7 @@ Internet-Draft              C4 Specification                 August 2026
 
 
 
-Huitema, et al.         Expires 13 February 2027               [Page 11]
+Huitema, et al.         Expires 21 February 2027               [Page 11]
 
 Internet-Draft              C4 Specification                 August 2026
 
@@ -669,7 +669,7 @@ Internet-Draft              C4 Specification                 August 2026
 
 
 
-Huitema, et al.         Expires 13 February 2027               [Page 12]
+Huitema, et al.         Expires 21 February 2027               [Page 12]
 
 Internet-Draft              C4 Specification                 August 2026
 
@@ -677,15 +677,20 @@ Internet-Draft              C4 Specification                 August 2026
 4.4.1.  Restarting Initial if High Jitter
 
    The "nominal max RTT" is not updated during the Initial phase,
-   because doing so would prevent exiting Initial on high delay
-   detection.  This can lead to underestimation of the "nominal rate" if
-   the flow is operating on a path with high jitter.
+   because excessive queues can happen, and incorporating these queues
+   in the nominal max RTT would create an undesirable feedback loop.
+   This can lead to underestimation of the "nominal rate" if the flow is
+   operating on a path with high jitter.
 
    C4 will reenter the "initial" phase if high jitter is detected for
    the flow.  The high jitter is detected after updating the "nominal
    max RTT" at the end of the recovery era, if:
 
    running_min_rtt < nominal_max_rtt*2/5
+
+   To avoid spurious r-entry, this re-entry of the initial phase should
+   only happen if at least 1 second has elapsed since the end of the
+   recovery phase that followed the previous initial phase.
 
 4.5.  Cruising state {#c4-cruising }
 
@@ -720,12 +725,7 @@ Internet-Draft              C4 Specification                 August 2026
 
 
 
-
-
-
-
-
-Huitema, et al.         Expires 13 February 2027               [Page 13]
+Huitema, et al.         Expires 21 February 2027               [Page 13]
 
 Internet-Draft              C4 Specification                 August 2026
 
@@ -781,7 +781,7 @@ Internet-Draft              C4 Specification                 August 2026
 
 
 
-Huitema, et al.         Expires 13 February 2027               [Page 14]
+Huitema, et al.         Expires 21 February 2027               [Page 14]
 
 Internet-Draft              C4 Specification                 August 2026
 
@@ -837,7 +837,7 @@ Internet-Draft              C4 Specification                 August 2026
 
 
 
-Huitema, et al.         Expires 13 February 2027               [Page 15]
+Huitema, et al.         Expires 21 February 2027               [Page 15]
 
 Internet-Draft              C4 Specification                 August 2026
 
@@ -893,7 +893,7 @@ Internet-Draft              C4 Specification                 August 2026
 
 
 
-Huitema, et al.         Expires 13 February 2027               [Page 16]
+Huitema, et al.         Expires 21 February 2027               [Page 16]
 
 Internet-Draft              C4 Specification                 August 2026
 
@@ -949,7 +949,7 @@ Internet-Draft              C4 Specification                 August 2026
 
 
 
-Huitema, et al.         Expires 13 February 2027               [Page 17]
+Huitema, et al.         Expires 21 February 2027               [Page 17]
 
 Internet-Draft              C4 Specification                 August 2026
 
@@ -1005,7 +1005,7 @@ Internet-Draft              C4 Specification                 August 2026
 
 
 
-Huitema, et al.         Expires 13 February 2027               [Page 18]
+Huitema, et al.         Expires 21 February 2027               [Page 18]
 
 Internet-Draft              C4 Specification                 August 2026
 
@@ -1061,7 +1061,7 @@ Internet-Draft              C4 Specification                 August 2026
 
 
 
-Huitema, et al.         Expires 13 February 2027               [Page 19]
+Huitema, et al.         Expires 21 February 2027               [Page 19]
 
 Internet-Draft              C4 Specification                 August 2026
 
@@ -1117,7 +1117,7 @@ Internet-Draft              C4 Specification                 August 2026
 
 
 
-Huitema, et al.         Expires 13 February 2027               [Page 20]
+Huitema, et al.         Expires 21 February 2027               [Page 20]
 
 Internet-Draft              C4 Specification                 August 2026
 
@@ -1173,7 +1173,7 @@ Changes since draft-huitema-ccwg-c4-spec-02
 
 
 
-Huitema, et al.         Expires 13 February 2027               [Page 21]
+Huitema, et al.         Expires 21 February 2027               [Page 21]
 
 Internet-Draft              C4 Specification                 August 2026
 
@@ -1229,4 +1229,4 @@ Authors' Addresses
 
 
 
-Huitema, et al.         Expires 13 February 2027               [Page 22]
+Huitema, et al.         Expires 21 February 2027               [Page 22]

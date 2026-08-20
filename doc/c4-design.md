@@ -1174,7 +1174,7 @@ Of course, things are not that simple. The "rate" test only stops the
 growth of the CWND after the third "non growing" round. If CWND doubles
 after each round it becomes excessive, buffers fill up, and lots
 of packets are lost. We dealt with that problem by essentially
-freezing the increases of after the first "non growing" round.
+freezing the increases of the CWND after the first "non growing" round.
 If a larger measurement happens before 3 RTT, the increases
 resume, otherwise, C4 exits the initial phase.
 
@@ -1665,13 +1665,23 @@ is detected after updating the "nominal max RTT" at the
 end of the recovery era, if `running_min_rtt < nominal_max_rtt*2/5`.
 This will be done at most once per flow._
 
-We discovered that in the worse cases, C4 did re-enter the Initial phase,
+We discovered that in the worst cases, C4 did re-enter the Initial phase,
 be reentered it very early. Draining kept the `running_min_rtt` low, and
 thus even a limited jitter would trigger the reinitialization. The "only once"
-rule was preventing adaptaion when the larger jitter event occured later.
-The solution is thus to remove the "only once" limitation that we added
-perhaps too cautiously, and let C4 reenter the Initial phase multiple
-times.
+rule was preventing adaptation when the larger jitter event occured later.
+The solution was to remember the time the last initial phase completed,
+or more precisely the time the recovery that followed the last initial phase
+completed. We added to the state a variable `last_initial_time`, initialized
+at zero when entering the "initial" state, and set to the current time
+if the first exit of the recovery state after that initial state. Then,
+we changed the specification to:
+
+* _C4 will reenter the "initial" phase on the first time
+high jitter is detected for the flow. The high jitter
+is detected after updating the "nominal max RTT" at the
+end of the recovery era, if `running_min_rtt < nominal_max_rtt*2/5`,
+and if the variable `last_initial_time` is not zero and if
+`current_time > last_initial_time + 1 second`.
 
 The performance for the Wi-Fi test improved immediately after this fix,
 with the average execution time of Wi-Fi tests falling below the

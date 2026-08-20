@@ -65,7 +65,7 @@ def trace_graphs(tdfs, df_names, f_name=""):
 tdfs = []
 tdf_names = []
 
-for i in range(1, len(sys.argv)):
+for i in range(2, len(sys.argv)):
     trc = qlogparse.qlog_parse(sys.argv[i])
     tdf = pd.DataFrame(trc[0].cc_log, columns=qlogparse.cc_state.cc_headers())
     tdf ['pacing_Bps'] = tdf['pacing_rate']/8
@@ -77,5 +77,5 @@ for i in range(1, len(sys.argv)):
         tdf_names.append("background")
     else:
         tdf_names.append("background_" + str(i-1))
-trace_graphs(tdfs, tdf_names, f_name="..\\tmp\\image")
+trace_graphs(tdfs, tdf_names, f_name=sys.argv[1])
 

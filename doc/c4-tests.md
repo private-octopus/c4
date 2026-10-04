@@ -85,6 +85,65 @@ in control networks. We describe here these simulations (see {{simulations}}),
 the simulation results for each of the test cases (see {{results}}),
 and the live networking tests (see {{live-tests}}).
 
+# Tests and metrics
+
+For each simulation scenario, we measure up to 4 different metrics:
+
+* The average execution time,defined as the simulated time
+  necessary to execute the scenario, which we express as two numbers:
+
+  - the average execution time of all the simulations for the scenario,
+  - and, the top 90th percentile of that time.
+
+* The RTT observed during the connection, which we express as two numbers:
+
+  - the average RTT value for all RTT measurements, measured for
+    each simulation and averaged over all simulation.
+  - and, the top 90th percentile over all tests of the sum of the average RTT
+    for a connection and the standard deviation of the RTT for that
+    connection.
+
+* The load factor, defined as the share of the bandwidth used
+  by the "main" connection over the period when the two connections
+  compete, or, if there is only one connection, over the duration of
+  the connection. We monitor:
+
+  - the average of the load factor over all simulations for the scenario,
+  - and, the top 90th percentile of that load factor.
+
+* The frame latency, defined as the average time delay between the
+  moment a media frame is scheduled and its arrival at the receiver.
+  We monitor:
+
+  - the average value of the average frame latency per connection,
+  - the top 90th percentile of the max frame latency per connection.
+
+The 4 different metrics and their variants do not make sense for
+all scenarios:
+
+  - we monitor the execution time for all scenarios except the media
+    scenarios, for which the execution time is fixed by the scenario.
+  
+  - we monitor the RTT for all scenarios except the media
+    scenarios, for which the frame latency provides better information.
+  
+  - for the media transmission tests, we only monitor the frame latency;
+    we do not monitor the frame latency for the other test scenarios.
+  
+  - we only monitor the load factor for scenarios that involve multiple
+    competing connections.
+ 
+We do not try to assign fixed target values for the different scenarios.
+Instead, we run three variants for each test: one in which the "main"
+connection uses C4, one in which it uses BBR, and one in which it uses
+Cubic. We want C4 to demonstrate that it is "better" than BBR and Cubic
+for a majority of the scenarios. Depending on the scenario, we may
+discuss whether better means a shorter execution time, a shorter
+RTT, a load factor in the acceptable range, or a shorter frame latency.
+When C4 does not provde the best results, we want to ensure that it
+is not worse than both BBR and Cubic, and that the difference to the
+best scenarios are reasonably small.
+
 # Description of simulation tests  {#simulations}
 
 We test the design by running a series of simulations, which cover:
@@ -92,6 +151,8 @@ We test the design by running a series of simulations, which cover:
 * reaction to network events
 
 * competition with other congestion control algorithms
+
+* handling of buffer bloat
 
 * handling of high jitter environments
 
@@ -146,7 +207,6 @@ to 1 BDP.
 This short test shows that the initial phase correctly discover
 the path capacity, and that the transmission operates at
 the expected rate after that.
-
 
 ### Simulation of a simple 1.5Mbps connection (alone_1_5M)
 
@@ -229,6 +289,66 @@ The scenario also tests the support for careful resume
 the remembered CWND to 18750000 bytes and the
 remembered RTT to 600.123ms.
 
+## Buffer Bloat
+
+The buffer bloat simulations test the behavior of C4 when
+the simulated path is configured with very large network buffers.
+This tests the recommendation in {{RFC9743}} that algorithms
+"ought to try to avoid maintaining excessive queues in the network".
+
+All test variants use the same transmission scenario: The RTT of
+the path is always 80ms.
+
+We use 4 variants of this test: a "single connection" variant,
+and 3 competition scenarios in which the background connection
+uses C4, BBR or Cubic.
+
+### Single connection with Buffer Bloat (bbloat)
+
+The single connection with buffer bloat test simulates a
+single connection trying to download 30 MB of data over a 20Mbit/s path.
+The path has an 80ms RTT, and the network buffers
+are configured to hold up to 20 seconds of traffic. 
+
+The goal is to verify that C4 is about as efficient as Cubic,
+while maintaining reasonably short RTTs.
+
+### Compete with C4 over Buffer Bloat (bbloat_c4)
+
+The compete against C4 with buffer bloat test simulates a
+main connection trying to download 30 MB of data over a 20Mbit/s path,
+while the background connection using C4 that starts at the same
+time is trying to download 20 MB. The path has an 80ms RTT, and the network buffers
+are configured to hold up to 20 seconds of traffic. 
+
+The goal is to verify that C4 competes reasonably against itself
+in the presence of buffer bloat.
+
+### Compete with BBR over Buffer Bloat (bbloat_bbr)
+
+The compete against C4 with buffer bloat test simulates a
+main connection trying to download 30 MB of data over a 20Mbit/s path,
+while the background connection using BBR that starts at the same
+time is trying to download 20 MB. The path has an 80ms RTT, and the network buffers
+are configured to hold up to 20 seconds of traffic. 
+
+The goal is to verify that C4 competes reasonably against BBR
+in the presence of buffer bloat.
+
+### Compete with Cubic over Buffer Bloat (bbloat_cubic)
+
+The compete against C4 with buffer bloat test simulates a
+main connection trying to download 30 MB of data over a 20Mbit/s path,
+while the background connection using Cubic that starts at the same
+time is trying to download 20 MB. The path has an 80ms RTT, and the network buffers
+are configured to hold up to 20 seconds of traffic. 
+
+We already know that the Cubic algorithm only backs off in response
+to packet losses, and thus will essentially never back off during
+our tests. In this test, we want to verify that
+C4 is not "shut off" when competing with Cubic, even if that means
+accepting larger RTTs.
+
 
 ## Competition
 
@@ -239,20 +359,20 @@ a "background" connection. For each test, we run the test using either C4,
 Cubic or BBR for the "main" connection. The test scenario specifies the
 algorithm managing the background connection, as well as scenario details.
 
+We test that the bandwidth is shared reasonably by monitoring the
+"load" of the network, defined as the share of the bandwidth used
+by the "main" connection over the period when the two connections
+compete.
 
-
-
-we design series of tests
-of multiple competing flows all using C4. We want to test
-different conditions, such as data rate and latency,
-and also different scenarios, such as testing whether
-the "background" connection starts at the same time, before
-or after the "main" connection.
-
-We test that the bandwidth is shared reasonably by testing
-the completion time of a download, and setting the target
-value so it can only be achieved if the main connection
-gets "about half" of the bandwidth.
+According to {{RFC9743}}, a proposed congestion control algorithm
+such as C4 shall avoid having a significantly negative
+impact on flows using a standard congestion control. Impact here
+encompasses causing packet losses or long queues, or simply consuming
+too much of the available bandwidth. Using less than 50% of the capacity would
+be considered good, using more than 70% would be considered bad, and more
+than 80% really bad. This has a negative side too: using less
+than 30% of the bandwidth means that algorithm is too during
+competing period, and using less than 20% would be really bad.
 
 ### Short main connection versus C4 (vs_c4)
 
@@ -439,7 +559,7 @@ test passes if the average and max value for the simulated audio and for
 the simulated compressed video measured after the start time
 are below the specified values.
 
-### Media on High Speed Connection (media)
+### Media on High Speed Connection (media) {#media_tests}
 
 The "media" test verifies simulates the handling of media on a 100 Mbps
 connection with a 30ms RTT. The test lasts for 5 video groups of frames,
@@ -515,6 +635,16 @@ The "varying Wi-Fi" media test verifies that media works as expected
 on a path managed using ECN/L4S. The set up is similar to the "ECN" test
 discussed in {{ecn-simulations}}.
 
+### Media with a congested feedback path (media_backload)
+
+The "media backload" test verifies the performance of media transmission
+when the feedback path is congested. The test uses the same network
+characteristics as the "media" test (see {{media_tests}}), but adds
+traffic on the feedback path, simulating a Cubic connection downloading
+10 MB of data, starting 2 seconds into the test. Using Cubic, the
+congestion window of this connection will grows steadily, building a queue
+and increasing the RTT values measured by the media connection.
+
 # Simulation results {#results}
 
 Simulations include random events, such as network jitter or the
@@ -532,37 +662,69 @@ We run these tests for C4, Cubic and BBR, and present the results for these 3
 congestion control algorithms in a set of tables. All times are expressed in microseconds,
 and for all results lower time values are considered better.
 
+# Statistics
+
+Here is a collection of statistics on all test cases.
+
 ## Reaction to network events
 
-Here are the statistics for the network events test cases.
+Here the statistics for the network events test cases.
 
 ###  average time for network events tests
 
-|  average time for network events tests| c4 | bbr | cubic | c4_2026_07_05 |
+|  average time for network events tests| c4 | bbr | cubic | draft-04 |
 | --------- | ---:| ---:| ---:| ---:|
-| alone |  4502913 | 4689260 | 4472465 | 4642195 |
-| alone_200 |  1115776 | 1221630 | 1145722 | 1161980 |
-| alone_1_5M |  21504710 | 21717251 | 21514264 | 21660915 |
-| alone_512k |  16173870 | 16211371 | 16183314 | 16213861 |
-| low_and_up |  7569237 | 7506849 | 8035433 | 7762235 |
-| drop_and_back |  7554195 | 7625693 | 7629764 | 7697371 |
-| blackhole |  5591981 | 5811316 | 5695660 | 5628028 |
-| short_long |  17536781 | 42331541 | 21368101 | 17537092 |
-| satellite |  6807127 | 7492539 | 6704246 | 6807111 |
+| alone |  4613494 | 4686018 | 4477266 | 4502535 |
+| alone_200 |  1141949 | 1221700 | 1170354 | 1120932 |
+| alone_1_5M |  21681840 | 21716731 | 21511031 | 21505342 |
+| alone_512k |  16282164 | 16210308 | 16183796 | 16173448 |
+| low_and_up |  8032672 | 7512638 | 8041482 | 7568928 |
+| drop_and_back |  7913090 | 7628241 | 7630239 | 7549810 |
+| blackhole |  5672068 | 5811630 | 5695751 | 5591990 |
+| short_long |  17798833 | 42366125 | 21513324 | 17536760 |
+| satellite |  7155309 | 7457469 | 6704243 | 6807132 |
 
 ###  top 90% time for network events tests
 
-|  top 90% time for network events tests| c4 | bbr | cubic | c4_2026_07_05 |
+|  top 90% time for network events tests| c4 | bbr | cubic | draft-04 |
 | --------- | ---:| ---:| ---:| ---:|
-| alone |  4564480 | 4698415 | 4518852 | 4835141 |
-| alone_200 |  1181668 | 1222012 | 1148423 | 1186067 |
-| alone_1_5M |  21511156 | 21718512 | 21552321 | 21661024 |
-| alone_512k |  16173974 | 16217210 | 16208261 | 16215577 |
-| low_and_up |  7570221 | 7511647 | 8071920 | 7764215 |
-| drop_and_back |  7579428 | 7630825 | 7632455 | 7698289 |
-| blackhole |  5592061 | 5815444 | 5699327 | 5628156 |
-| short_long |  17538429 | 43394841 | 21541922 | 17538424 |
-| satellite |  6807174 | 7834142 | 6704247 | 6807137 |
+| alone |  4693114 | 4693549 | 4512200 | 4561489 |
+| alone_200 |  1193617 | 1222213 | 1187766 | 1186748 |
+| alone_1_5M |  21681876 | 21718294 | 21537618 | 21511156 |
+| alone_512k |  16284842 | 16216818 | 16210494 | 16173943 |
+| low_and_up |  8039046 | 7517885 | 8072763 | 7570219 |
+| drop_and_back |  7929361 | 7637158 | 7632438 | 7569623 |
+| blackhole |  5672071 | 5815444 | 5697944 | 5592062 |
+| short_long |  17806715 | 43743814 | 21553666 | 17538427 |
+| satellite |  7157368 | 7466390 | 6704245 | 6807184 |
+
+###  average RTT for network events tests
+
+|  average RTT for network events tests| c4 | bbr | cubic | draft-04 |
+| --------- | ---:| ---:| ---:| ---:|
+| alone |  93893 | 95525 | 129732 | 113628 |
+| alone_200 |  57000 | 45838 | 53392 | 59296 |
+| alone_1_5M |  50643 | 54981 | 86187 | 92468 |
+| alone_512k |  62740 | 95307 | 95084 | 98346 |
+| low_and_up |  109615 | 116870 | 118879 | 109493 |
+| drop_and_back |  114943 | 120557 | 129492 | 119770 |
+| blackhole |  135404 | 146345 | 167411 | 140658 |
+| short_long |  195070 | 193564 | 304842 | 193251 |
+| satellite |  601389 | 691995 | 610162 | 601057 |
+
+###  top 90% of RTT + standard deviation for network events tests
+
+|  top 90% of RTT + standard deviation for network events tests| c4 | bbr | cubic | draft-04 |
+| --------- | ---:| ---:| ---:| ---:|
+| alone |  111441 | 107227 | 167142 | 142636 |
+| alone_200 |  83971 | 57169 | 71155 | 88089 |
+| alone_1_5M |  59626 | 64691 | 90869 | 96658 |
+| alone_512k |  74025 | 104215 | 106117 | 105400 |
+| low_and_up |  128061 | 134210 | 147128 | 127962 |
+| drop_and_back |  139173 | 150011 | 161332 | 153647 |
+| blackhole |  460275 | 501249 | 482541 | 479784 |
+| short_long |  234745 | 232490 | 409894 | 230002 |
+| satellite |  602580 | 830447 | 621272 | 602375 |
 
 
 ## Competition
@@ -571,35 +733,158 @@ Here the statistics for the compete test cases.
 
 ###  average time for compete tests
 
-|  average time for compete tests| c4 | bbr | cubic | c4_2026_07_05 |
+|  average time for compete tests| c4 | bbr | cubic | draft-04 |
 | --------- | ---:| ---:| ---:| ---:|
-| vs_bbr |  2817663 | 4501471 | 2853022 | 2964582 |
-| vs_c4 |  4361871 | 6813101 | 7891899 | 4490594 |
-| vs_cubic |  3428960 | 6974953 | 5348004 | 3484869 |
-| after_c4 |  6563029 | 6846566 | 7208456 | 5239798 |
-| before_c4 |  2640670 | 4281776 | 3105136 | 2699206 |
-| vs_c4_lg |  21026786 | 32250064 | 23618741 | 21067859 |
-| vs_c4_lg2 |  20979188 | 21139542 | 21818194 | 21102894 |
-| vs_bbr_lg |  15612556 | 21098503 | 15562778 | 16742530 |
-| vs_bbr_lg2 |  16449739 | 18711270 | 21520837 | 20600335 |
-| vs_cubic_lg |  17902039 | 21430554 | 20902893 | 17578391 |
-| vs_cubic_lg2 |  17080952 | 15533300 | 20672401 | 16969990 |
+| vs_bbr |  2734654 | 4510088 | 2895698 | 2817345 |
+| vs_c4 |  4797707 | 6864251 | 6137515 | 4349648 |
+| vs_cubic |  3675643 | 6982047 | 4944675 | 3418203 |
+| after_c4 |  6204096 | 6876891 | 7062830 | 6599569 |
+| before_c4 |  2712896 | 3082790 | 2647831 | 2633286 |
+| vs_c4_lg |  21362909 | 21327264 | 23837039 | 21024837 |
+| vs_c4_lg2 |  21187158 | 21043844 | 21782706 | 20961838 |
+| vs_bbr_lg |  15161241 | 21096102 | 15853778 | 15608340 |
+| vs_bbr_lg2 |  17651408 | 18756702 | 21412318 | 16501414 |
+| vs_cubic_lg |  17919136 | 21376771 | 20939659 | 17942252 |
+| vs_cubic_lg2 |  15636824 | 15518528 | 20914918 | 17076722 |
 
 ###  top 90% time for compete tests
 
-|  top 90% time for compete tests| c4 | bbr | cubic | c4_2026_07_05 |
+|  top 90% time for compete tests| c4 | bbr | cubic | draft-04 |
 | --------- | ---:| ---:| ---:| ---:|
-| vs_bbr |  2824981 | 4580449 | 2877804 | 2983881 |
-| vs_c4 |  4453585 | 6843240 | 8424848 | 4864821 |
-| vs_cubic |  3761300 | 7089722 | 5580459 | 3555684 |
-| after_c4 |  6742984 | 6991485 | 7494092 | 6102901 |
-| before_c4 |  2734698 | 5404668 | 4163561 | 3001428 |
-| vs_c4_lg |  21139706 | 39556964 | 25105527 | 21141447 |
-| vs_c4_lg2 |  21046812 | 21379953 | 22272580 | 21174182 |
-| vs_bbr_lg |  15808681 | 21131562 | 15839671 | 16936214 |
-| vs_bbr_lg2 |  16522592 | 18954745 | 22323666 | 21138531 |
-| vs_cubic_lg |  20251838 | 21760143 | 21120555 | 18440982 |
-| vs_cubic_lg2 |  17419617 | 15706948 | 20930258 | 17548782 |
+| vs_bbr |  2748101 | 4585444 | 2905722 | 2821436 |
+| vs_c4 |  5274828 | 6994069 | 6490205 | 4521899 |
+| vs_cubic |  3700474 | 7080080 | 5474094 | 3787691 |
+| after_c4 |  6546384 | 6942106 | 7272169 | 6743285 |
+| before_c4 |  2846697 | 3137854 | 2971942 | 2734795 |
+| vs_c4_lg |  21563830 | 21477998 | 24663393 | 21132908 |
+| vs_c4_lg2 |  21255224 | 21120018 | 22127297 | 21040360 |
+| vs_bbr_lg |  15174041 | 21136378 | 15983976 | 15857330 |
+| vs_bbr_lg2 |  17964008 | 18990420 | 22137703 | 16599500 |
+| vs_cubic_lg |  18787945 | 21714984 | 21319925 | 20324018 |
+| vs_cubic_lg2 |  17153986 | 15766724 | 21130606 | 17505908 |
+
+###  average RTT for compete tests
+
+|  average RTT for compete tests| c4 | bbr | cubic | draft-04 |
+| --------- | ---:| ---:| ---:| ---:|
+| vs_bbr |  124152 | 125498 | 130461 | 104812 |
+| vs_c4 |  121181 | 115794 | 131279 | 114721 |
+| vs_cubic |  130949 | 117913 | 143652 | 136494 |
+| after_c4 |  116110 | 106366 | 106921 | 115545 |
+| before_c4 |  71688 | 67291 | 73278 | 76660 |
+| vs_c4_lg |  107783 | 95732 | 114395 | 113389 |
+| vs_c4_lg2 |  117328 | 125640 | 111466 | 124713 |
+| vs_bbr_lg |  135470 | 127682 | 145388 | 117425 |
+| vs_bbr_lg2 |  113089 | 136772 | 115313 | 121149 |
+| vs_cubic_lg |  131754 | 94544 | 131188 | 135951 |
+| vs_cubic_lg2 |  126133 | 131434 | 134371 | 126129 |
+
+###  top 90% of RTT + standard deviation for compete tests
+
+|  top 90% of RTT + standard deviation for compete tests| c4 | bbr | cubic | draft-04 |
+| --------- | ---:| ---:| ---:| ---:|
+| vs_bbr |  153801 | 156475 | 157815 | 128620 |
+| vs_c4 |  153113 | 150423 | 156903 | 146435 |
+| vs_cubic |  156413 | 151313 | 166634 | 161246 |
+| after_c4 |  148563 | 139602 | 133665 | 146628 |
+| before_c4 |  108816 | 88989 | 102215 | 108898 |
+| vs_c4_lg |  143863 | 137830 | 147697 | 146006 |
+| vs_c4_lg2 |  151450 | 154713 | 141154 | 158239 |
+| vs_bbr_lg |  160507 | 160231 | 162198 | 142672 |
+| vs_bbr_lg2 |  141695 | 155567 | 147172 | 147234 |
+| vs_cubic_lg |  152168 | 120065 | 164170 | 151416 |
+| vs_cubic_lg2 |  151032 | 149688 | 158994 | 146915 |
+
+###  average load for compete tests
+
+|  average load for compete tests| c4 | bbr | cubic | draft-04 |
+| --------- | ---:| ---:| ---:| ---:|
+| vs_bbr |  82% | 47% | 77% | 78% |
+| vs_c4 |  47% | 20% | 37% | 51% |
+| vs_cubic |  58% | 18% | 44% | 65% |
+| after_c4 |  38% | 22% | 27% | 35% |
+| before_c4 |  60% | 53% | 61% | 61% |
+| vs_c4_lg |  49% | 21% | 33% | 52% |
+| vs_c4_lg2 |  52% | 57% | 33% | 55% |
+| vs_bbr_lg |  83% | 50% | 79% | 80% |
+| vs_bbr_lg2 |  70% | 67% | 40% | 75% |
+| vs_cubic_lg |  69% | 18% | 50% | 70% |
+| vs_cubic_lg2 |  80% | 81% | 56% | 72% |
+
+###  top 90% load for compete tests
+
+|  top 90% load for compete tests| c4 | bbr | cubic | draft-04 |
+| --------- | ---:| ---:| ---:| ---:|
+| vs_bbr |  82% | 47% | 77% | 78% |
+| vs_c4 |  49% | 31% | 41% | 52% |
+| vs_cubic |  59% | 18% | 46% | 70% |
+| after_c4 |  42% | 26% | 28% | 36% |
+| before_c4 |  63% | 54% | 66% | 65% |
+| vs_c4_lg |  55% | 42% | 38% | 54% |
+| vs_c4_lg2 |  53% | 59% | 34% | 58% |
+| vs_bbr_lg |  84% | 50% | 80% | 81% |
+| vs_bbr_lg2 |  72% | 68% | 45% | 76% |
+| vs_cubic_lg |  72% | 18% | 52% | 78% |
+| vs_cubic_lg2 |  83% | 82% | 57% | 74% |
+
+
+## Buffer bloat
+
+Here the statistics for the buffer bloat test cases.
+
+###  average time for buffer bloat tests
+
+|  average time for buffer bloat tests| c4 | bbr | cubic | draft-04 |
+| --------- | ---:| ---:| ---:| ---:|
+| bbloat |  12796429 | 13007777 | 12629095 | 12642775 |
+| bbloat_c4 |  20994272 | 21421446 | 20716744 | 20935286 |
+| bbloat_bbr |  14811824 | 21343344 | 14588750 | 15320599 |
+| bbloat_cubic |  20647587 | 21585366 | 20719288 | 20736042 |
+
+###  top 90% time for buffer bloat tests
+
+|  top 90% time for buffer bloat tests| c4 | bbr | cubic | draft-04 |
+| --------- | ---:| ---:| ---:| ---:|
+| bbloat |  12794852 | 13007922 | 12629141 | 12645052 |
+| bbloat_c4 |  21066551 | 21529556 | 20716779 | 21006655 |
+| bbloat_bbr |  14866783 | 21419745 | 14612388 | 15431313 |
+| bbloat_cubic |  20701180 | 21841128 | 20720001 | 20761314 |
+
+###  average RTT for buffer bloat tests
+
+|  average RTT for buffer bloat tests| c4 | bbr | cubic | draft-04 |
+| --------- | ---:| ---:| ---:| ---:|
+| bbloat |  91540 | 84752 | 231784 | 113442 |
+| bbloat_c4 |  181516 | 99182 | 661710 | 232427 |
+| bbloat_bbr |  159868 | 124409 | 269224 | 132447 |
+| bbloat_cubic |  667539 | 97432 | 647872 | 551412 |
+
+###  top 90% of RTT + standard deviation for buffer bloat tests
+
+|  top 90% of RTT + standard deviation for buffer bloat tests| c4 | bbr | cubic | draft-04 |
+| --------- | ---:| ---:| ---:| ---:|
+| bbloat |  137102 | 95929 | 322352 | 158066 |
+| bbloat_c4 |  267737 | 144695 | 949873 | 361518 |
+| bbloat_bbr |  208544 | 159163 | 409054 | 160200 |
+| bbloat_cubic |  1027059 | 136664 | 1039050 | 860075 |
+
+###  average load for buffer bloat tests
+
+|  average load for buffer bloat tests| c4 | bbr | cubic | draft-04 |
+| --------- | ---:| ---:| ---:| ---:|
+| bbloat |  97% | 95% | 98% | 98% |
+| bbloat_c4 |  50% | 14% | 30% | 50% |
+| bbloat_bbr |  83% | 48% | 85% | 81% |
+| bbloat_cubic |  62% | 15% | 53% | 58% |
+
+###  top 90% load for buffer bloat tests
+
+|  top 90% load for buffer bloat tests| c4 | bbr | cubic | draft-04 |
+| --------- | ---:| ---:| ---:| ---:|
+| bbloat |  97% | 95% | 98% | 98% |
+| bbloat_c4 |  52% | 15% | 31% | 53% |
+| bbloat_bbr |  84% | 49% | 85% | 82% |
+| bbloat_cubic |  63% | 15% | 54% | 58% |
 
 
 ## Wi-Fi
@@ -608,25 +893,69 @@ Here the statistics for the wifi test cases.
 
 ###  average time for wifi tests
 
-|  average time for wifi tests| c4 | bbr | cubic | c4_2026_07_05 |
+|  average time for wifi tests| c4 | bbr | cubic | draft-04 |
 | --------- | ---:| ---:| ---:| ---:|
-| wifi_bad |  4059372 | 5601202 | 4076699 | 4144883 |
-| wifi_fade |  5065021 | 5403001 | 5341227 | 5203858 |
-| wifi_suspension |  4564740 | 4615871 | 4600118 | 4563252 |
-| wifi_bad_bbr |  7582895 | 7280777 | 6837401 | 7581238 |
-| wifi_bad_c4 |  8750784 | 9650917 | 8426742 | 9347050 |
-| wifi_bad_cubic |  8618719 | 8731338 | 10397119 | 8407363 |
+| wifi_bad |  3569913 | 5617974 | 4135875 | 4070606 |
+| wifi_fade |  5067103 | 5407363 | 5334804 | 5073239 |
+| wifi_suspension |  4581150 | 4616778 | 4600863 | 4564955 |
+| wifi_bad_bbr |  7466055 | 7504090 | 7253324 | 7065591 |
+| wifi_bad_c4 |  10974399 | 12069726 | 11461995 | 8664120 |
+| wifi_bad_cubic |  9103317 | 10368536 | 10584432 | 8649554 |
 
 ###  top 90% time for wifi tests
 
-|  top 90% time for wifi tests| c4 | bbr | cubic | c4_2026_07_05 |
+|  top 90% time for wifi tests| c4 | bbr | cubic | draft-04 |
 | --------- | ---:| ---:| ---:| ---:|
-| wifi_bad |  4643322 | 7615210 | 4475581 | 4806788 |
-| wifi_fade |  5335174 | 5599818 | 5550898 | 5480744 |
-| wifi_suspension |  4574165 | 4616328 | 4602178 | 4573648 |
-| wifi_bad_bbr |  12112441 | 11626769 | 12533043 | 11985779 |
-| wifi_bad_c4 |  11690859 | 12288047 | 12435459 | 12401707 |
-| wifi_bad_cubic |  11961135 | 12011172 | 13905062 | 11723366 |
+| wifi_bad |  3802217 | 7515978 | 4350326 | 4530282 |
+| wifi_fade |  5320143 | 5589219 | 5535225 | 5357776 |
+| wifi_suspension |  4580800 | 4616921 | 4602225 | 4574186 |
+| wifi_bad_bbr |  11820348 | 12224985 | 12931811 | 10736818 |
+| wifi_bad_c4 |  12000236 | 13709443 | 13061178 | 11249655 |
+| wifi_bad_cubic |  12012285 | 12593083 | 14494422 | 11250821 |
+
+###  average RTT for wifi tests
+
+|  average RTT for wifi tests| c4 | bbr | cubic | draft-04 |
+| --------- | ---:| ---:| ---:| ---:|
+| wifi_bad |  146090 | 63244 | 93202 | 109023 |
+| wifi_fade |  141712 | 124524 | 137803 | 145297 |
+| wifi_suspension |  13703 | 13476 | 26521 | 13993 |
+| wifi_bad_bbr |  204669 | 197600 | 223088 | 199724 |
+| wifi_bad_c4 |  227437 | 200742 | 223067 | 234733 |
+| wifi_bad_cubic |  239232 | 222478 | 194471 | 256603 |
+
+###  top 90% of RTT + standard deviation for wifi tests
+
+|  top 90% of RTT + standard deviation for wifi tests| c4 | bbr | cubic | draft-04 |
+| --------- | ---:| ---:| ---:| ---:|
+| wifi_bad |  272650 | 140834 | 148445 | 258484 |
+| wifi_fade |  207707 | 173462 | 185451 | 207083 |
+| wifi_suspension |  31952 | 34186 | 45312 | 32878 |
+| wifi_bad_bbr |  327960 | 324071 | 329762 | 330282 |
+| wifi_bad_c4 |  321167 | 317571 | 330766 | 331655 |
+| wifi_bad_cubic |  325048 | 319429 | 318049 | 337028 |
+
+###  average load for wifi tests
+
+|  average load for wifi tests| c4 | bbr | cubic | draft-04 |
+| --------- | ---:| ---:| ---:| ---:|
+| wifi_bad |  100% | 65% | 87% | 84% |
+| wifi_fade |  88% | 78% | 81% | 87% |
+| wifi_suspension |  90% | 89% | 91% | 91% |
+| wifi_bad_bbr |  62% | 60% | 75% | 64% |
+| wifi_bad_c4 |  38% | 28% | 38% | 51% |
+| wifi_bad_cubic |  45% | 34% | 37% | 50% |
+
+###  top 90% load for wifi tests
+
+|  top 90% load for wifi tests| c4 | bbr | cubic | draft-04 |
+| --------- | ---:| ---:| ---:| ---:|
+| wifi_bad |  107% | 96% | 96% | 95% |
+| wifi_fade |  90% | 79% | 85% | 90% |
+| wifi_suspension |  90% | 89% | 91% | 91% |
+| wifi_bad_bbr |  83% | 80% | 106% | 82% |
+| wifi_bad_c4 |  47% | 39% | 55% | 69% |
+| wifi_bad_cubic |  63% | 58% | 73% | 67% |
 
 
 ## ECN
@@ -635,21 +964,39 @@ Here the statistics for the ecn test cases.
 
 ###  average time for ecn tests
 
-|  average time for ecn tests| c4 | bbr | cubic | c4_2026_07_05 |
+|  average time for ecn tests| c4 | bbr | cubic | draft-04 |
 | --------- | ---:| ---:| ---:| ---:|
-| ecn |  4465878 | 4670054 | 4460773 | 4494003 |
-| ecn_c4 |  12286476 | 17269928 | 13977479 | 11422019 |
-| ecn_cubic |  8362141 | 9701695 | 13356991 | 8235549 |
-| ecn_bbr |  13079389 | 13246715 | 16900370 | 13083701 |
+| ecn |  4651102 | 4670092 | 4462411 | 4465982 |
+| ecn_c4 |  10853952 | 13818503 | 15834000 | 12078995 |
+| ecn_cubic |  9427549 | 9475224 | 13465956 | 8246796 |
+| ecn_bbr |  13321027 | 13255214 | 17009268 | 13089999 |
 
 ###  top 90% time for ecn tests
 
-|  top 90% time for ecn tests| c4 | bbr | cubic | c4_2026_07_05 |
+|  top 90% time for ecn tests| c4 | bbr | cubic | draft-04 |
 | --------- | ---:| ---:| ---:| ---:|
-| ecn |  4466761 | 4671124 | 4457939 | 4494072 |
-| ecn_c4 |  13033989 | 17698371 | 14561797 | 12383356 |
-| ecn_cubic |  9108260 | 10561707 | 13961159 | 8720974 |
-| ecn_bbr |  13342537 | 13372125 | 17458084 | 13345131 |
+| ecn |  4652899 | 4670768 | 4460850 | 4467028 |
+| ecn_c4 |  12183284 | 15806539 | 16492262 | 13032878 |
+| ecn_cubic |  10350619 | 10380144 | 14110049 | 9023342 |
+| ecn_bbr |  13527406 | 13374638 | 17382108 | 13309789 |
+
+###  average RTT for ecn tests
+
+|  average RTT for ecn tests| c4 | bbr | cubic | draft-04 |
+| --------- | ---:| ---:| ---:| ---:|
+| ecn |  84427 | 89464 | 122258 | 84661 |
+| ecn_c4 |  108165 | 97689 | 96664 | 106047 |
+| ecn_cubic |  113894 | 124905 | 113697 | 116735 |
+| ecn_bbr |  109617 | 101618 | 94916 | 114200 |
+
+###  top 90% of RTT + standard deviation for ecn tests
+
+|  top 90% of RTT + standard deviation for ecn tests| c4 | bbr | cubic | draft-04 |
+| --------- | ---:| ---:| ---:| ---:|
+| ecn |  94998 | 101713 | 140764 | 96364 |
+| ecn_c4 |  133382 | 116444 | 117402 | 129210 |
+| ecn_cubic |  131850 | 136061 | 137898 | 134465 |
+| ecn_bbr |  133640 | 123363 | 114492 | 136495 |
 
 
 ## Media
@@ -658,29 +1005,31 @@ Here the statistics for the media test cases.
 
 ###  average av_latency for media tests
 
-|  average av_latency for media tests| c4 | bbr | cubic | c4_2026_07_05 |
+|  average av_latency for media tests| c4 | bbr | cubic | draft-04 |
 | --------- | ---:| ---:| ---:| ---:|
-| media |  33511 | 33427 | 33512 | 33511 |
-| media10 |  45378 | 44991 | 47755 | 45204 |
-| media_600fr |  33625 | 33545 | 33629 | 33624 |
-| media_short_long |  100794 | 134059 | 100766 | 101036 |
-| media_wb |  80894 | 85353 | 84391 | 77485 |
-| media_wf |  82547 | 86474 | 83914 | 82971 |
-| media_ws |  22941 | 21645 | 22495 | 22854 |
-| media_ecn |  34413 | 34481 | 34716 | 34408 |
+| media |  30495 | 30480 | 30430 | 33512 |
+| media10 |  44871 | 44986 | 46180 | 45369 |
+| media_600fr |  30786 | 30491 | 30439 | 33625 |
+| media_short_long |  100827 | 294674 | 100809 | 100792 |
+| media_wb |  82685 | 88758 | 83937 | 80315 |
+| media_wf |  83730 | 92464 | 83480 | 82068 |
+| media_ws |  21788 | 21646 | 22146 | 22955 |
+| media_ecn |  32261 | 32365 | 32278 | 34413 |
+| media_backload |  31719 | 43223 | 32827 | |
 
 ###  top 90% max_latency for media tests
 
-|  top 90% max_latency for media tests| c4 | bbr | cubic | c4_2026_07_05 |
+|  top 90% max_latency for media tests| c4 | bbr | cubic | draft-04 |
 | --------- | ---:| ---:| ---:| ---:|
-| media |  43453 | 43453 | 43453 | 43453 |
-| media10 |  71128 | 71128 | 92163 | 71128 |
-| media_600fr |  43453 | 43453 | 43453 | 43453 |
-| media_short_long |  111153 | 334491 | 109180 | 117984 |
-| media_wb |  270847 | 304794 | 274677 | 269770 |
-| media_wf |  279458 | 365839 | 298720 | 298762 |
-| media_ws |  197821 | 195521 | 197821 | 197821 |
-| media_ecn |  47975 | 50996 | 50996 | 49700 |
+| media |  41012 | 35415 | 33110 | 43453 |
+| media10 |  87527 | 71128 | 92163 | 71128 |
+| media_600fr |  42514 | 35415 | 33151 | 43453 |
+| media_short_long |  112263 | 905943 | 110563 | 111153 |
+| media_wb |  285830 | 293333 | 273384 | 265337 |
+| media_wf |  282064 | 373247 | 316833 | 290560 |
+| media_ws |  197834 | 195534 | 197834 | 197821 |
+| media_ecn |  50966 | 50996 | 50996 | 47975 |
+| media_backload |  88598 | 315784 | 85804 | |
 
 
 # Live Tests {#live-tests}

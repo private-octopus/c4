@@ -399,7 +399,7 @@ The number of bytes in flight will be limited by the product
 of the pacing rate by the actual RTT. We are thus free to
 set the CWND to a large value.
 
-## Monitoring the nominal max RTT
+## Monitoring the nominal max RTT {#monitoring-max-rtt}
 
 The observation on chaotic jitter leads to the idea of monitoring
 the maximum RTT. There is some difficulty here, because the
@@ -461,7 +461,7 @@ packets sent during the recovery period.
 
 The `gamma` coefficient is set to `1/8` in our initial trials.
 
-### Preventing Runaway Max RTT
+### Preventing Runaway Max RTT {#preventing-runaway-max-RTT}
 
 Computing Max RTT the way we do bears the risk of "run away increase"
 of Max RTT:
@@ -480,7 +480,7 @@ will increase, causing the algorithm to allow for corresponding increases in `ma
 This would not happen as fast as without the capping to `running_min_rtt + max_jitter`,
 but it would still increase.
 
-### Initial Phase and Max RTT
+### Initial Phase and Max RTT {#initial-and-max-rtt}
 
 During the initial phase, the nominal max RTT and the running min RTT are
 set to the first RTT value that is measured. This is not great in presence
@@ -1174,7 +1174,7 @@ Of course, things are not that simple. The "rate" test only stops the
 growth of the CWND after the third "non growing" round. If CWND doubles
 after each round it becomes excessive, buffers fill up, and lots
 of packets are lost. We dealt with that problem by essentially
-freezing the increases of after the first "non growing" round.
+freezing the increases of the CWND after the first "non growing" round.
 If a larger measurement happens before 3 RTT, the increases
 resume, otherwise, C4 exits the initial phase.
 
@@ -1407,6 +1407,268 @@ set for that test:
 It might be possible to improve a bit more by some further tuning, for example
 exiting directly to cruising instead of recovery if the nominal rate matches the
 seed rate. This might be something for further work.
+
+# Revision after the third design {#revision-after-third-design}
+
+After presentation to the IETF during the meeting in Vienna in July 2026 (IETF 126),
+we received feedback about a number of potential issue, including the need to
+test C4 in presence of buffer bloat, and the need to analyse competition
+issues.
+
+To address this feedback, we added "buffer bloat" tests to the list of simulations
+used for validating the design, and we also decided to improve the reporting
+of tests by also reporting the evolution of the RTT, and, for tests involving
+competition, the share of network capacity claimed by the C4 connection.
+
+These tests showed that improvements were needed to avoid persisting
+higher-than-capacity pacing rates in some scenarios, and to quickly reduce
+network queues if they were built. We discuss these improvements in
+{{trimming}} and {{draining}}. These improvements had the expected
+result, but they also triggered a performance regression in the
+"bad WiFi" scenario, which we discuss in {{revisiting-wifi}}.
+With these three modification, we obtain a C4 protocol that meets our
+requirement, providing high performance and low delays with
+a simple design.
+
+## Trimming excess capacity {#trimming}
+
+The new set of measurements showed that in some scenarios, the "third design" version of
+C4 was driving the RTT towards large values.
+The large delays that we observe are caused by increased queues, which are caused by
+sending data too fast for too long.
+The design included precautions to avoid keeping excessive max RTT values
+(see {{monitoring-max-rtt}}). These precautions solve the "too long" part of the
+issue, but there are limits because the long nominal max RTTs are necessary in high
+jitter situations. In fact, we do see cases where delay jitter causes the data rate
+estimate to be slightly higher than the actual available bandwidth.
+To reduce the queues, we probably need C4 to send a bit slower.
+
+We tried a simple change: when the data rate does not increase for a whole cycle, and the
+transmission in the probing stage was not application limited, reduce the
+nominal data rate to track the measurements -- something that C4 only did
+before when noticing persistent congestion. We experimented with different rates of decrease,
+and found that a 1/2th decrease provided the most interesting results. The change in
+specification would be, "if the data rate does not increase for a whole cycle,
+and the transmission in the probing stage was not application limited,
+reduce the nominal data rate to the average of the previous value and the
+highest measurement in the last cycle."
+
+|  top 90% of RTT + standard deviation for network events tests| c4 | bbr | cubic | Trimming 1/2 rate |
+| --------- | ---:| ---:| ---:| ---:|
+| alone |  145798 | 107604 | 167571 | 141307 |
+| alone_200 |  88677 | 57168 | 70772 | 88272 |
+| alone_1_5M |  96662 | 64683 | 90867 | 73264 |
+| alone_512k |  105400 | 104226 | 106116 | 90963 |
+| low_and_up |  127913 | 134293 | 147216 | 129420 |
+| drop_and_back |  148289 | 150347 | 161333 | 149161 |
+| blackhole |  479783 | 500638 | 485330 | 432236 |
+| short_long |  230005 | 232484 | 409884 | 229986 |
+| satellite |  602366 | 830684 | 621278 | 602326 |
+
+The top RTT values are lower in all the
+network events tests but two, the "low and up" test, with a difference of
+1.4 ms, and the "drop and back" test, with a difference of 1.1 ms.
+We see significant improvement in the 1.5 Mbps test, with a difference of 23 ms,
+and in the 512 Kbps test, with a difference of 14 ms. We seem to see a
+compromise: trimming the nominal rate quickly does reduce the queues in
+general, but having a slightly lower nominal rate means that queues will
+persist a bit longer after a rate increase. The tables of "time spent" do not
+show any preformance decrease in these tests -- some are faster, some are slower, but
+the differences are tiny.
+
+
+|  top 90% of RTT + standard deviation for buffer bloat tests| c4 | bbr | cubic | Trimming 1/2 |
+| --------- | ---:| ---:| ---:| ---:|
+| bbloat |  158066 | 95924 | 322642 | 156178 |
+| bbloat_c4 |  361542 | 118202 | 939834 | 345468 |
+| bbloat_bbr |  160655 | 159931 | 408664 | 159903 |
+| bbloat_cubic |  859970 | 137306 | 1039625 | 859395 |
+
+|  top 90% load for buffer bloat tests| c4 | bbr | cubic | Trimming 1/2 |
+| --------- | ---:| ---:| ---:| ---:|
+| bbloat |  98% | 95% | 98% | 98% |
+| bbloat_c4 |  59% | 58% | 60% | 59% |
+| bbloat_bbr |  82% | 58% | 86% | 82% |
+| bbloat_cubic |  60% | 58% | 60% | 60% |
+
+Trimming has very little effect on the buffer bloat tests. We do see some small
+reductions in the top RTT for some tests, but these are too small to matter.
+We also do not see any big change in the fairness of competing under buffer bloat.
+One possibility is that, while trimming prevents the queues from increasing
+too much, it does not by itself drain them. We will complement
+trimming by some explicit form of draining.
+
+|  top 90% of RTT + standard deviation for compete tests| c4 | bbr | cubic | Trimming 1/2 |
+| --------- | ---:| ---:| ---:| ---:|
+| vs_bbr |  127906 | 156408 | 163495 | 125994 |
+| vs_c4 |  147578 | 133587 | 154995 | 162418 |
+| vs_cubic |  161612 | 151990 | 165428 | 160008 |
+| after_c4 |  150671 | 129600 | 139090 | 150557 |
+| before_c4 |  109443 | 96827 | 110039 | 108681 |
+| vs_c4_lg |  147437 | 112710 | 153852 | 149633 |
+| vs_c4_lg2 |  158254 | 154662 | 141550 | 157719 |
+| vs_bbr_lg |  141010 | 160019 | 162743 | 137970 |
+| vs_bbr_lg2 |  147211 | 155612 | 149919 | 154808 |
+| vs_cubic_lg |  151434 | 120204 | 162934 | 150852 |
+| vs_cubic_lg2 |  146843 | 149529 | 159656 | 146035 |
+
+|  top 90% load for compete tests| c4 | bbr | cubic | Trimming 1/2 |
+| --------- | ---:| ---:| ---:| ---:|
+| vs_bbr |  78% | 47% | 79% | 78% |
+| vs_c4 |  52% | 31% | 33% | 54% |
+| vs_cubic |  66% | 31% | 46% | 69% |
+| after_c4 |  40% | 34% | 32% | 38% |
+| before_c4 |  72% | 50% | 67% | 69% |
+| vs_c4_lg |  61% | 58% | 58% | 61% |
+| vs_c4_lg2 |  64% | 61% | 60% | 63% |
+| vs_bbr_lg |  81% | 59% | 81% | 81% |
+| vs_bbr_lg2 |  78% | 69% | 61% | 80% |
+| vs_cubic_lg |  78% | 58% | 60% | 77% |
+| vs_cubic_lg2 |  76% | 81% | 63% | 75% |
+
+Trimming the nominal rate quickly does not seem to improve the fairness of C4 in the compete tests,
+but it does improve the top RTT measurements in the competition between C4 and BBR, and between
+C4 and Cubic, except for the "vs_bbr_lg2" test, where the top RTT is 7.6 ms higher than before.
+We also see a slight degradation in the "internal competition" tests, where C4 competes with itself.
+
+|  top 90% time for wifi tests| c4 | bbr | cubic | Trimming 1/2 |
+| --------- | ---:| ---:| ---:| ---:|
+| wifi_bad |  4841982 | 7522796 | 4449644 | 5249372 |
+| wifi_fade |  5351680 | 5649668 | 5550500 | 5244862 |
+| wifi_suspension |  4574262 | 4616911 | 4602102 | 4572601 |
+| wifi_bad_bbr |  11014365 | 10730711 | 13129404 | 10454091 |
+| wifi_bad_c4 |  11665740 | 12481659 | 12241907 | 11615184 |
+| wifi_bad_cubic |  11883994 | 12246412 | 13881720 | 11388974 |
+
+|  top 90% of RTT + standard deviation for wifi tests| c4 | bbr | cubic | Trimming 1/2  |
+| --------- | ---:| ---:| ---:| ---:|
+| wifi_bad |  236990 | 146354 | 149225 | 260841 |
+| wifi_fade |  210684 | 177334 | 187572 | 210766 |
+| wifi_suspension |  32878 | 34220 | 45312 | 28783 |
+| wifi_bad_bbr |  335207 | 339723 | 327846 | 332603 |
+| wifi_bad_c4 |  331313 | 333343 | 333270 | 331021 |
+| wifi_bad_cubic |  339101 | 357546 | 327358 | 335187 |
+
+We avoided making similar changes before because of the effect on high jitter situations,
+in particular "bad wifi" environments. These are discussed in {{revisiting-wifi}}.
+
+## Draining the backlog {#draining}
+
+The results of tests in buffer bloat scenarios show C4 creating shorter queues than
+Cubic but longer queues than BBR, even after implementing the "trimming" changes.
+
+|  average RTT for buffer bloat tests| c4 | bbr | cubic | trimming 1/2 |
+| --------- | ---:| ---:| ---:| ---:|
+| bbloat |  113475 | 84750 | 229647 | 111173 |
+| bbloat_c4 |  229418 | 92740 | 660442 | 234925 |
+| bbloat_bbr |  131826 | 124558 | 266277 | 131812 |
+| bbloat_cubic |  551053 | 97505 | 647602 | 551157 |
+
+We analysed "qlog" traces of the BBR and C4 traces in the "buffer bloat" trace,
+and found that most of the difference in average RTT measurements was due to
+the more efficient "draining" of the excess queues created in the Initial
+phase. BBR enters a "drain" phase after exiting start-up, during which it
+operates at a small fraction of the estimated bandwidth, and exits that
+phase when the number of bytes in flight is below the bandwidth-delay product
+of the path, defined as the product of the estimated bandwidth by the min RTT.
+
+We don't want to copy BBR's algorithm, because its dependency on the
+min RTT of the path conflicts with the inherent variation of the RTT in high
+delay jitter scenarios. We also want to limit the size of the bandwidth drops
+when draining, because such drops would add delays to the transmission
+of real time media.
+
+Instead, we first tried a simple change, adding a "draining" option to the
+recovery phase. If the draining option is set, the pacing
+rate during recovery is set to only 7/8th of the nominal rate, instead
+of the default 15/16th. We would set this option on exiting the Initial
+or the pushing phase, and perhaps also if some other condition detected
+the presence of a backlog. This provided promising initial results, and also
+reduced the aggressiveness of C4 during the compete tests, which improved its fairness.
+However, we noticed that we could improve the results with a simple change:
+instead of maintaing just one flag, maintain an estimate of the backlog.
+
+The estimate of the backlog is set to 1 full RTT of data after the Initial phase,
+because during that phase the pacing rate is twice the nominal rate. It is set to
+a quarter of the RTT of data after the pushing phase, because during that phase
+the pacing rate is 5/4 of the nominal rate.
+
+Upon entering recovery, the pacing rate is set as a function of the backlog:
+
+- if the backlog estimate is less than 1/16, set the pacing rate to 15/16th of the nominal rate;
+- else if the backlog estimate is less than 1/8, set the pacing rate to 7/8th of the nominal rate;
+- else set the pacing rate to 3/4th of the nominal rate.
+
+At the end of the recovery phase, the backlog will be 1/16th, 1/8th, or 1/4th, depending
+of the reduction in the pacing rate -- or set to zero if the reduction would result in a negative
+value.
+
+|  average RTT for buffer bloat tests| c4 | bbr | cubic | draft-04 |
+| --------- | ---:| ---:| ---:| ---:|
+| bbloat |  91540 | 84752 | 231784 | 113442 |
+| bbloat_c4 |  181516 | 99182 | 661710 | 232427 |
+| bbloat_bbr |  159868 | 124409 | 269224 | 132447 |
+| bbloat_cubic |  667539 | 97432 | 647872 | 551412 |
+
+This simple change has a very positive effect on the average RTT for
+the buffer bloat test. The average RTT is only 8% larger than what we
+get with BBR, but BBR uses the min RTT of the path to determine the
+congestion window, while C4 avoids building a dependency on the min RTT.
+When competing in the buffer bloat scenario, C4 is more aggressive than BBR,
+and the average RTT observed when competing with C4 or with BBR is larger
+that what BBR achieves. On the other hand, when competing with Cubic, BBR is
+shut down, while C4 keeps competing.
+
+The backlog algorithm is promising, but it may need additional tuning.
+
+## Revisiting support for Wi-Fi {#revisiting-wifi}
+
+Each of our test runs performs 100 simulations of the "bad Wi-Fi" scenario.
+We observe that there is a high variability between the simulations.
+Some of that is expected. The simulation of Wi-Fi jitter is a random
+process, and we can expect that different simulations will encounter different
+patterns of jitter, and thus different performances. The graph of durations shows
+that, but it also shows that the worse 20 or so simulations are significantly
+worse "after trim and drain" than with the unmodified "draft-04" implementation.
+
+Analysis of the logs of the worst simulation results let us
+see an obvious pattern. In the "good" case, we see an event about 1.5 second into
+the connection that leads C4 to explore higher RTT and higher data rates, while in the "bad"
+case the RTT is constrained into a much narrower band and the pacing rate converges on a
+much lower value.
+
+The growth pattern of the "good" connection between 1.5 and 2 seconds after the
+starts corresponds to C4 re-entering the Initial state, following the rule
+specified in section 4.4.1 of the version 04 of the specification:
+
+* _C4 will reenter the "initial" phase on the first time
+high jitter is detected for the flow. The high jitter
+is detected after updating the "nominal max RTT" at the
+end of the recovery era, if `running_min_rtt < nominal_max_rtt*2/5`.
+This will be done at most once per flow._
+
+We discovered that in the worst cases, C4 did re-enter the Initial phase,
+be reentered it very early. Draining kept the `running_min_rtt` low, and
+thus even a limited jitter would trigger the reinitialization. The "only once"
+rule was preventing adaptation when the larger jitter event occured later.
+The solution was to remember the time the last initial phase completed,
+or more precisely the time the recovery that followed the last initial phase
+completed. We added to the state a variable `last_initial_time`, initialized
+at zero when entering the "initial" state, and set to the current time
+if the first exit of the recovery state after that initial state. Then,
+we changed the specification to:
+
+* C4 will reenter the "initial" phase on the first time
+high jitter is detected for the flow. The high jitter
+is detected after updating the "nominal max RTT" at the
+end of the recovery era, if `running_min_rtt < nominal_max_rtt*2/5`,
+and if the variable `last_initial_time` is not zero and if
+`current_time > last_initial_time + 1 second`.
+
+The performance for the Wi-Fi test improved immediately after this fix,
+with the average execution time of Wi-Fi tests falling below the
+value observe in the previous design, and without causing any significant
+regression in the other scenarios.
 
 # State Machine
 

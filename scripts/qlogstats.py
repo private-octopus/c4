@@ -197,7 +197,8 @@ if __name__ == "__main__":
         buckets.append(bucket)
         bucket_id += 1
     nb_buckets = bucket_id
-    with concurrent.futures.ProcessPoolExecutor(max_workers = nb_buckets) as executor:
+    nb_workers = min(nb_buckets, 16)
+    with concurrent.futures.ProcessPoolExecutor(max_workers = nb_workers) as executor:
         future_to_bucket = {executor.submit(load_qdb_bucket, bucket):bucket for bucket in buckets }
         for future in concurrent.futures.as_completed(future_to_bucket):
             bucket = future_to_bucket[future]

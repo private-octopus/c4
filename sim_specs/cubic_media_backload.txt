@@ -1,0 +1,18 @@
+main_cc_algo: cubic
+main_start_time: 0
+main_scenario_text: =a0:d50:p2:S:n100:80;=a1:=a0:d50:p2:S:n500:80;=vlow:s30:p4:S:n360:1600:G30:I16000;=vmid:s30:p6:S:n360:6250:G30:I62500:D250000;
+nb_connections: 2
+background_cc_algo: cubic
+background_start_time: 2000000
+background_scenario_text: =b1:10000000:128;
+main_target_time: 13000000
+data_rate_in_gbps: 0.02
+latency: 10000
+queue_delay_max: 100000
+icid: edb1cb00
+qlog_dir: cclog
+qperf_log: cubic_media_backload_qperflog.csv
+media_stats_start: 200000
+media_latency_average: 37500
+media_latency_max: 90000
+media_excluded: vhigh, vmid, vlast

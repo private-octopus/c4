@@ -44,7 +44,7 @@ test_groups = [
     [ "buffer bloat", [ "bbloat", "bbloat_c4", "bbloat_bbr", "bbloat_cubic" ], "time", "Buffer bloat" ],
     [ "wifi", [ "wifi_bad", "wifi_fade", "wifi_suspension", "wifi_bad_bbr", "wifi_bad_c4", "wifi_bad_cubic" ], "time", "Wi-Fi"],
     [ "ecn", [ "ecn", "ecn_c4", "ecn_cubic", "ecn_bbr" ], "time", "ECN" ],
-    [ "media", [ "media", "media10", "media_600fr", "media_short_long", "media_wb", "media_wf", "media_ws", "media_ecn" ], "media", "Media" ],
+    [ "media", [ "media", "media10", "media_600fr", "media_short_long", "media_wb", "media_wf", "media_ws", "media_ecn", "media_backload" ], "media", "Media" ],
 ]
 
 

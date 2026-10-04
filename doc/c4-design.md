@@ -1495,7 +1495,7 @@ Trimming has very little effect on the buffer bloat tests. We do see some small
 reductions in the top RTT for some tests, but these are too small to matter.
 We also do not see any big change in the fairness of copeting under buffer bloat.
 One possibility is that, while trimming prevents the queues from increasing
-too much, it does not by itself drain them. We should probably complement
+too much, it does not by itself drain them. We will complement
 trimming by some explicit form of draining.
 
 |  top 90% of RTT + standard deviation for compete tests| c4 | bbr | cubic | Trimming 1/2 |
@@ -1552,7 +1552,7 @@ We also see a slight degradation in the "internal competition" tests, where C4 c
 We avoided making similar changes before because of the effect on high jitter situations,
 in particular "bad wifi" environments. These are discussed in {{revisiting-wifi}}.
 
-## Draining Queues {#draining}
+## Draining the backlog {#draining}
 
 The results of tests in buffer bloat scenarios show C4 creating shorter queues than
 Cubic but longer queues than BBR, even after implementing the "trimming" changes.
@@ -1578,66 +1578,48 @@ delay jitter scenarios. We also want to limit the size of the bandwidth drops
 when draining, because such drops would add delays to the transmission
 of real time media.
 
-Instead, we tried a simple simple change, adding a "draining" option to the
-recovery phase. That option will be set if we detected a need to drain
-during the previous cycle, which we set upon exciting the Initial
-phase, or if the nominal max RTT was
-reduced during the previous cycle. If the draining option is set, the pacing
-rate during recovery is set to only 3/4th of the nominal rate, instead
-of the default 15/16th.
+Instead, we first tried a simple change, adding a "draining" option to the
+recovery phase. If the draining option is set, the pacing
+rate during recovery is set to only 7/8th of the nominal rate, instead
+of the default 15/16th. We would set this option on exiting the Initial
+or the pushing phase, and perhaps also if some other condition detected
+the presence of a backlog. This provided promising initial results, and also
+reduced the aggressiveness of C4 during the compete tests, which improved its fairness.
+However, we noticed that we could improve the results with a simple change:
+instead of maintaing just one flag, maintain an estimate of the backlog.
 
-|  average RTT for buffer bloat tests| c4 | bbr | cubic | trimming 1/2 | trim+drain |
-| --------- | ---:| ---:| ---:| ---:| ---:|
-| bbloat |  113442 | 84752 | 229647 | 111175 | 99972 |
-| bbloat_c4 |  232427 | 92729 | 660442 | 235607 | 247761 |
-| bbloat_bbr |  132447 | 124744 | 266277 | 132141 | 113293 |
-| bbloat_cubic |  551412 | 97494 | 647602 | 551335 | 601098 |
+The estimate of the backlog is set to 1 full RTT of data after the Initial phase,
+because during that phase the pacing rate is twice the nominal rate. It is set to
+a quarter of the RTT of data after the pushing phase, because during that phase
+the pacing rate is 5/4 of the nominal rate.
+
+Upon entering recovery, the pacing rate is set as a function of the backlog:
+
+- if the backlog estimate is less than 1/16, set the pacing rate to 15/16th of the nominal rate;
+- else if the backlog estimate is less than 1/8, set the pacing rate to 7/8th of the nominal rate;
+- else set the pacing rate to 3/4th of the nominal rate.
+
+At the end of the recovery phase, the backlog will be 1/16th, 1/8th, or 1/4th, depending
+of the reduction in the pacing rate -- or set to zero if the reduction would result in a negative
+value.
+
+|  average RTT for buffer bloat tests| c4 | bbr | cubic | draft-04 |
+| --------- | ---:| ---:| ---:| ---:|
+| bbloat |  91540 | 84752 | 231784 | 113442 |
+| bbloat_c4 |  181516 | 99182 | 661710 | 232427 |
+| bbloat_bbr |  159868 | 124409 | 269224 | 132447 |
+| bbloat_cubic |  667539 | 97432 | 647872 | 551412 |
 
 This simple change has a very positive effect on the average RTT for
-the buffer bloat tests, except for the C4 compete test. It also appears
-to improve the fairness of C4 during the compete tests, probably
-because all competing connections detect a drop in the RTT and start
-draining at about the same time:
+the buffer bloat test. The average RTT is only 8% larger than what we
+get with BBR, but BBR uses the min RTT of the path to determine the
+congestion window, while C4 avoids building a dependency on the min RTT.
+When competing in the buffer bloat scenario, C4 is more aggressive than BBR,
+and the average RTT observed when competing with C4 or with BBR is larger
+that what BBR achieves. On the other hand, when competing with Cubic, BBR is
+shut down, while C4 keeps competing.
 
-|  top 90% load for compete tests| c4 | bbr | cubic | trimming 1/2 | trim+drain |
-| --------- | ---:| ---:| ---:| ---:| ---:|
-| vs_bbr |  78% | 47% | 79% | 78% | 77% |
-| vs_c4 |  52% | 21% | 33% | 53% | 53% |
-| vs_cubic |  70% | 18% | 46% | 70% | 58% |
-| after_c4 |  36% | 18% | 32% | 36% | 43% |
-| before_c4 |  65% | 47% | 67% | 64% | 61% |
-| vs_c4_lg |  54% | 21% | 58% | 55% | 54% |
-| vs_c4_lg2 |  58% | 53% | 60% | 59% | 62% |
-| vs_bbr_lg |  81% | 50% | 81% | 81% | 72% |
-| vs_bbr_lg2 |  76% | 68% | 61% | 79% | 77% |
-| vs_cubic_lg |  78% | 19% | 60% | 76% | 62% |
-| vs_cubic_lg2 |  74% | 81% | 63% | 74% | 68% |
-
-The fairness results improve across the board. We see a remarcable improvement
-for the "vs_bbr_lg", for which the load passed from a worrying 81% to an
-acceptable 72%.
-
-|  average time for wifi tests| c4 | bbr | cubic | trimming 1/2 | trim+drain |
-| --------- | ---:| ---:| ---:| ---:| ---:|
-| wifi_bad |  4070606 | 5442735 | 4134315 | 4235194 | 4208666 |
-| wifi_fade |  5073239 | 5450844 | 5359530 | 5046484 | 5062410 |
-| wifi_suspension |  4564955 | 4615857 | 4600733 | 4568762 | 4595519 |
-| wifi_bad_bbr |  7065591 | 7448910 | 7909627 | 7067851 | 7063808 |
-| wifi_bad_c4 |  8664120 | 9786873 | 8548230 | 8586032 | 8776550 |
-| wifi_bad_cubic |  8649554 | 8826107 | 10820353 | 8964709 | 8494418 |
-
-|  average load for wifi tests| c4 | bbr | cubic | Trimming 1/2 | Trim+Drain |
-| --------- | ---:| ---:| ---:| ---:| ---:|
-| wifi_bad |  84% | 67% | 87% | 81% | 82% |
-| wifi_fade |  87% | 77% | 80% | 87% | 87% |
-| wifi_suspension |  91% | 89% | 91% | 91% | 91% |
-| wifi_bad_bbr |  64% | 65% | 69% | 64% | 60% |
-| wifi_bad_c4 |  51% | 48% | 55% | 52% | 52% |
-| wifi_bad_cubic |  50% | 69% | 49% | 47% | 49% |
-
-We seem to have a mild performance regression for the "wifi_bad" test --
-draining does not compensate the performance regression introduced by
-trimming.
+The backlog algorithm is promising, but it may need additional tuning.
 
 ## Revisiting support for Wi-Fi {#revisiting-wifi}
 
@@ -1657,7 +1639,7 @@ much lower value.
 
 The growth pattern of the "good" connection between 1.5 and 2 seconds after the
 starts corresponds to C4 re-entering the Initial state, following the rule
-specified in section 4.4.1 of the versio 04 of the specification:
+specified in section 4.4.1 of the version 04 of the specification:
 
 * _C4 will reenter the "initial" phase on the first time
 high jitter is detected for the flow. The high jitter
@@ -1676,7 +1658,7 @@ at zero when entering the "initial" state, and set to the current time
 if the first exit of the recovery state after that initial state. Then,
 we changed the specification to:
 
-* _C4 will reenter the "initial" phase on the first time
+* C4 will reenter the "initial" phase on the first time
 high jitter is detected for the flow. The high jitter
 is detected after updating the "nominal max RTT" at the
 end of the recovery era, if `running_min_rtt < nominal_max_rtt*2/5`,

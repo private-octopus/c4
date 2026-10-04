@@ -219,7 +219,8 @@ C4 maintains a set of variables tracking the evolution of the flow:
 - running min RTT, an approximation of the min RTT for the flow,
 - number of eras without increase (see {{c4-initial}}),
 - the number of successive congestion events and the recent maximum rate,
-  used to detect and manage persistent congestion (see {{persistent-congestion}}).
+  used to detect and manage persistent congestion (see {{persistent-congestion}}),
+- the estimate of the backlog, as a fraction between 0 and 1 (see {{draining}}).
 
 
 ## Per era variables {#era-variables}
@@ -378,7 +379,7 @@ state | alpha | comments
 ------|-------|----------
 Initial | 2 | See {{c4-initial}} for the setting of CWND
 Resuming | variable | pacing and CWND are set from remembered values
-Recovery | 15/16 or 3/4 | (set to 3/4 if draining is required, see {{draining}})
+Recovery | 15/16, 7/8 or 3/4 | (see {{draining}})
 Cruising | 1 |
 Probing | 33/32 or 17/16 | see {{c4-probing}} for rules on choosing 33/32 or 17/16
 Pushing | 5/4 |
@@ -787,9 +788,22 @@ average of its current value and the "recent maximum rate".
 Queues may build up if C4 has been sending data at a rate higher than the actual path
 capacity, and if the number of bytes in transit is higher than the bandwidth
 delay product. This can happen during an Initial phase, during a Pushing phase,
-or if the path RTT is reduced. When any of these conditions is detected,
-C4 sets a "draining needed" flag. Upon entering recovery, if this flag is
-set, the coefficient "alpha" is set to 7/8th instead of the default 15/16.
+or if the path RTT is reduced. C4 manages these events using two variables,
+the "backlog" fraction and the "draining needed" flag.
+
+The backlog fraction is initialized to zero. It is set to 1 (100%) upon exit of the
+Initial phase, and incremented by 0.25 (25%) upon exit of the Pushing phase.
+The "draining needed" flag is set if the RTT is reduced.
+
+Upon entering the recovery phase, the coefficient "alpha" is set
+to:
+
+- 15/16 if the backlog value is lower or equal to 1/16th
+- else, 7/8th if the backlog value is lower or equal to 1/8th
+- else, 3/4th.
+
+Upon exiting the recovery phase, the backlog fraction is reduced by
+(1 - alpha), or set to zero if the backlog is less than (1 - alpha).
 
 # Implementation considerations
 

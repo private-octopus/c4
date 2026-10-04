@@ -1470,7 +1470,7 @@ network events tests but two, the "low and up" test, with a difference of
 1.4 ms, and the "drop and back" test, with a difference of 1.1 ms.
 We see significant improvement in the 1.5 Mbps test, with a difference of 23 ms,
 and in the 512 Kbps test, with a difference of 14 ms. We seem to see a
-comromise: trimming the nominal rate quickly does reduce the queues in
+compromise: trimming the nominal rate quickly does reduce the queues in
 general, but having a slightly lower nominal rate means that queues will
 persist a bit longer after a rate increase. The tables of "time spent" do not
 show any preformance decrease in these tests -- some are faster, some are slower, but

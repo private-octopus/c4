@@ -1432,7 +1432,7 @@ a simple design.
 
 ## Trimming excess capacity {#trimming}
 
-The new set of measurements showed that in some scenarios, the "third sesign" version of
+The new set of measurements showed that in some scenarios, the "third design" version of
 C4 was driving the RTT towards large values.
 The large delays that we observe are caused by increased queues, which are caused by
 sending data too fast for too long.

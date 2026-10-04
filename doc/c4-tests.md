@@ -559,7 +559,7 @@ test passes if the average and max value for the simulated audio and for
 the simulated compressed video measured after the start time
 are below the specified values.
 
-### Media on High Speed Connection (media) {{#media}}
+### Media on High Speed Connection (media) {#media_tests}
 
 The "media" test verifies simulates the handling of media on a 100 Mbps
 connection with a 30ms RTT. The test lasts for 5 video groups of frames,
@@ -639,7 +639,7 @@ discussed in {{ecn-simulations}}.
 
 The "media backload" test verifies the performance of media transmission
 when the feedback path is congested. The test uses the same network
-characteristics as the "media" test (see {{media}}), but adds
+characteristics as the "media" test (see {{media_tests}}), but adds
 traffic on the feedback path, simulating a Cubic connection downloading
 10 MB of data, starting 2 seconds into the test. Using Cubic, the
 congestion window of this connection will grows steadily, building a queue

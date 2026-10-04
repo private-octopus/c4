@@ -891,7 +891,7 @@ TODO acknowledge.
 This section should be deleted before publication as an RFC
 
 * trimming of the nominal rate if it does not increase for the cycle
-* draining of the network queues if the RTT diminishes
+* draining of the network queues and managing backlog
 * make sure that C4 does not stall in bad wifi conditions
 
 ## Changes since draft-huitema-ccwg-c4-spec-03

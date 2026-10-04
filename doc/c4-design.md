@@ -1493,7 +1493,7 @@ the differences are tiny.
 
 Trimming has very little effect on the buffer bloat tests. We do see some small
 reductions in the top RTT for some tests, but these are too small to matter.
-We also do not see any big change in the fairness of copeting under buffer bloat.
+We also do not see any big change in the fairness of competing under buffer bloat.
 One possibility is that, while trimming prevents the queues from increasing
 too much, it does not by itself drain them. We will complement
 trimming by some explicit form of draining.

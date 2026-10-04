@@ -1441,7 +1441,7 @@ The design included precautions to avoid keeping excessive max RTT values
 issue, but there are limits because the long nominal max RTTs are necessary in high
 jitter situations. In fact, we do see cases where delay jitter causes the data rate
 estimate to be slightly higher than the actual available bandwidth.
-To reduce the queues, we proably need C4 to send a bit slower.
+To reduce the queues, we probably need C4 to send a bit slower.
 
 We tried a simple change: when the data rate does not increase for a whole cycle, and the
 transmission in the probing stage was not application limited, reduce the

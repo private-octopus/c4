@@ -1670,6 +1670,31 @@ with the average execution time of Wi-Fi tests falling below the
 value observe in the previous design, and without causing any significant
 regression in the other scenarios.
 
+## Revising the trimming pattern
+
+In the discussion of trimming (see {{trimming}}), we recommended
+evaluating the maximum bandwidth measurement over a cycle of
+cruising, probing and recovery, and trimming the nominal rate
+to the midpoint between the nominal rate and that measurement.
+Once all the previous changes were made, we reevaluated that
+decision and considered three variants:
+
+1. Drop to the middle of the nominal rate and the measured rate,
+2. Drop to the measured rate,
+3. Drop to the maximum of the current measured rate and the
+   rate measured in the previous cycle.
+
+The second option was quickly ruled out because the "top 90%" media latency
+in the "bad wifi" scenario was 100ms higher than in the "middle" scenario.
+When we observe heavy jitter as in the "bad wifi" scenario, rate measurements
+become noisy. The "middle" and "max of 2" methods will filter out
+that noise, but the immediate drop will not, and the performance can suffer.
+
+The "max of two" option provides performance roughly on par with the "middle"
+scenario, generally with lower measured RTT. It does provide significantly
+better performance in the ECN scenario, and slghtly more fair results
+in competition scenarios. We adopted it in the specification.
+
 # State Machine
 
 The state machine for C4 has the following states:

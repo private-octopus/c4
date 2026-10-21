@@ -781,7 +781,8 @@ before exiting the recovery phase, if:
 * The connection was not application limited during the pushing phase.
 
 If those conditions are all verified, the "nominal rate" is set to the
-average of its current value and the "recent maximum rate".
+maximum the "maximum rate" for this cycle and for the previous
+non-application-limited cycle.
 
 ## Draining the standing queues {#draining}
 
@@ -885,10 +886,10 @@ TODO acknowledge.
 # Changes since previous versions
 {:numbered="false"}
 
+This section should be deleted before publication as an RFC
+
 ## Changes since draft-huitema-ccwg-c4-spec-04
 {:numbered="false"}
-
-This section should be deleted before publication as an RFC
 
 * trimming of the nominal rate if it does not increase for the cycle
 * draining of the network queues and managing backlog
